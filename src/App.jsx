@@ -19,6 +19,7 @@ FROM sys.databases;
 const EMPTY_TABLES = { status: 'idle', database: null, tables: [], error: null }
 const IDLE_QUERY = { status: 'idle', result: null, error: null }
 const EDITOR_DEFAULT_HEIGHT = 320
+const BROWSE_ROWS = 300
 
 function pickDatabase(databases, configured) {
   const names = databases.map((database) => database.name)
@@ -29,6 +30,16 @@ function pickDatabase(databases, configured) {
 
 function quoteIdentifier(name) {
   return `[${String(name).replace(/]/g, ']]')}]`
+}
+
+function qualifiedName(table) {
+  return `${quoteIdentifier(table.schema)}.${quoteIdentifier(table.name)}`
+}
+
+function browseSql(table) {
+  const order = table.primaryKey.map((column) => `${quoteIdentifier(column)} DESC`).join(', ')
+  const orderBy = order ? `\nORDER BY ${order}` : ''
+  return `SELECT TOP (${BROWSE_ROWS}) *\nFROM ${qualifiedName(table)}${orderBy};`
 }
 
 export default function App() {
@@ -161,7 +172,7 @@ export default function App() {
     }
   }, [showBanner])
 
-  const handleRun = useCallback(async () => {
+  const execute = useCallback(async (sql) => {
     const current = sessionRef.current
     if (!current) {
       showBanner('warn', 'Open a connection before running a query.')
@@ -178,7 +189,7 @@ export default function App() {
       const result = await api.runQuery({
         connectionId: current.connectionId,
         database: activeDatabase,
-        sql: sqlRef.current,
+        sql,
       })
       setQueryState({ status: 'success', result, error: null })
     } catch (error) {
@@ -197,12 +208,29 @@ export default function App() {
     }
   }, [activeDatabase, showBanner])
 
-  const handleQueryTable = useCallback((table) => {
+  const handleRun = useCallback(() => execute(sqlRef.current), [execute])
+
+  const seedEditor = useCallback((sql) => {
     seedIdRef.current += 1
-    const sql = `SELECT TOP (1000) *\nFROM ${quoteIdentifier(table.schema)}.${quoteIdentifier(table.name)};`
     sqlRef.current = sql
     setQuery({ id: seedIdRef.current, value: sql })
   }, [])
+
+  const handleBrowseTable = useCallback(
+    (table) => {
+      const sql = browseSql(table)
+      seedEditor(sql)
+      execute(sql)
+    },
+    [execute, seedEditor],
+  )
+
+  const handleQueryTable = useCallback(
+    (table) => {
+      seedEditor(`SELECT TOP (1000) *\nFROM ${qualifiedName(table)};`)
+    },
+    [seedEditor],
+  )
 
   const handleSqlChange = useCallback((value) => {
     sqlRef.current = value
@@ -293,6 +321,7 @@ export default function App() {
           appVersion={appVersion}
           onConnect={handleConnect}
           onSelectDatabase={handleSelectDatabase}
+          onBrowseTable={handleBrowseTable}
           onQueryTable={handleQueryTable}
           onNewConnection={() => setDialog({ mode: 'create' })}
           onEditConnection={(connection) => setDialog({ mode: 'edit', connection })}

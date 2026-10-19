@@ -238,18 +238,35 @@ export async function listTables({ connectionId, database }) {
   const pool = await getDatabasePool(connectionId, database)
 
   const result = await pool.request().query(
-    `SELECT TABLE_SCHEMA AS schemaName, TABLE_NAME AS tableName
-       FROM INFORMATION_SCHEMA.TABLES
-      WHERE TABLE_TYPE = 'BASE TABLE'
-      ORDER BY TABLE_SCHEMA, TABLE_NAME`,
+    `SELECT s.name AS schemaName,
+            t.name AS tableName,
+            c.name AS columnName
+       FROM sys.tables t
+       JOIN sys.schemas s ON s.schema_id = t.schema_id
+       LEFT JOIN sys.indexes i ON i.object_id = t.object_id AND i.is_primary_key = 1
+       LEFT JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+       LEFT JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+      ORDER BY s.name, t.name, ic.key_ordinal`,
   )
 
-  const tables = (result.recordset || []).map((row) => ({
-    schema: String(row.schemaName),
-    name: String(row.tableName),
-  }))
+  const tables = new Map()
 
-  return { database: database || null, tables }
+  for (const row of result.recordset || []) {
+    const schema = String(row.schemaName)
+    const name = String(row.tableName)
+    const key = JSON.stringify([schema, name])
+
+    let table = tables.get(key)
+    if (!table) {
+      table = { schema, name, primaryKey: [] }
+      tables.set(key, table)
+    }
+    if (row.columnName !== null && row.columnName !== undefined) {
+      table.primaryKey.push(String(row.columnName))
+    }
+  }
+
+  return { database: database || null, tables: Array.from(tables.values()) }
 }
 
 function columnNames(recordset) {

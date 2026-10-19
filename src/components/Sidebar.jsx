@@ -1,5 +1,18 @@
 import { useEffect, useState } from 'react'
+import ContextMenu from './ContextMenu.jsx'
 import Icon, { BrandMark, Spinner } from './Icon.jsx'
+
+const TABLE_MENU_ITEMS = [
+  'Copy object name',
+  'Copy structure',
+  'Open structure',
+  'Rename',
+  'New table',
+  'Pin to top',
+  'Clone',
+  'Truncate',
+  'Delete',
+]
 
 export default function Sidebar({
   connections,
@@ -10,6 +23,7 @@ export default function Sidebar({
   appVersion,
   onConnect,
   onSelectDatabase,
+  onBrowseTable,
   onQueryTable,
   onNewConnection,
   onEditConnection,
@@ -19,6 +33,7 @@ export default function Sidebar({
   const [expandedId, setExpandedId] = useState(null)
   const [expandedDatabase, setExpandedDatabase] = useState(null)
   const [selectedTable, setSelectedTable] = useState(null)
+  const [menu, setMenu] = useState(null)
 
   useEffect(() => {
     if (session?.connectionId) setExpandedId(session.connectionId)
@@ -41,6 +56,12 @@ export default function Sidebar({
     const isOpen = expandedDatabase === name
     setExpandedDatabase(isOpen ? null : name)
     onSelectDatabase(name)
+  }
+
+  const handleTableContextMenu = (event, table) => {
+    event.preventDefault()
+    setSelectedTable(`${table.schema}.${table.name}`)
+    setMenu({ x: event.clientX, y: event.clientY })
   }
 
   return (
@@ -208,6 +229,8 @@ export default function Sidebar({
                                       return (
                                         <div
                                           key={key}
+                                          onDoubleClick={() => onBrowseTable(table)}
+                                          onContextMenu={(event) => handleTableContextMenu(event, table)}
                                           className="group/table flex items-center gap-1.5 rounded px-2 py-[3px] text-[12px] text-slate-400 hover:bg-white/[0.04]"
                                         >
                                           <Icon name="table" size={11} className="shrink-0 text-slate-600" />
@@ -254,6 +277,15 @@ export default function Sidebar({
         <span>Microsoft SQL Server</span>
         <span>{appVersion ? `v${appVersion}` : ''}</span>
       </div>
+
+      {menu ? (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          items={TABLE_MENU_ITEMS.map((label) => ({ id: label, label }))}
+          onClose={() => setMenu(null)}
+        />
+      ) : null}
     </aside>
   )
 }
