@@ -7,6 +7,7 @@ import QueryEditor from './components/QueryEditor.jsx'
 import ResultsPanel from './components/ResultsPanel.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import StatusBar from './components/StatusBar.jsx'
+import TabBar from './components/TabBar.jsx'
 import WorkspaceHeader from './components/WorkspaceHeader.jsx'
 
 const STARTER_SQL = `-- Nova Tables
@@ -20,6 +21,10 @@ const EMPTY_TABLES = { status: 'idle', database: null, tables: [], error: null }
 const IDLE_QUERY = { status: 'idle', result: null, error: null }
 const EDITOR_DEFAULT_HEIGHT = 320
 const BROWSE_ROWS = 300
+
+function createTab(id, title, sql) {
+  return { id, title, sql, state: IDLE_QUERY, activeSet: 0 }
+}
 
 function pickDatabase(databases, configured) {
   const names = databases.map((database) => database.name)
@@ -42,14 +47,20 @@ function browseSql(table) {
   return `SELECT TOP (${BROWSE_ROWS}) *\nFROM ${qualifiedName(table)}${orderBy};`
 }
 
+function queryTitle(index) {
+  return `Query ${index}`
+}
+
+const FIRST_TAB = createTab('tab-1', queryTitle(1), STARTER_SQL)
+
 export default function App() {
   const [connections, setConnections] = useState([])
   const [session, setSession] = useState(null)
   const [activeDatabase, setActiveDatabase] = useState(null)
   const [tablesState, setTablesState] = useState(EMPTY_TABLES)
+  const [tabs, setTabs] = useState([FIRST_TAB])
+  const [activeTabId, setActiveTabId] = useState(FIRST_TAB.id)
   const [query, setQuery] = useState({ id: 0, value: STARTER_SQL })
-  const [queryState, setQueryState] = useState(IDLE_QUERY)
-  const [activeSet, setActiveSet] = useState(0)
   const [banner, setBanner] = useState(null)
   const [connectingId, setConnectingId] = useState(null)
   const [dialog, setDialog] = useState(null)
@@ -61,6 +72,8 @@ export default function App() {
   const sqlRef = useRef(STARTER_SQL)
   const sessionRef = useRef(null)
   const seedIdRef = useRef(0)
+  const tabIdRef = useRef(1)
+  const queryIdRef = useRef(1)
   const splitRef = useRef(null)
   const tablesRequestIdRef = useRef(0)
 
@@ -172,43 +185,51 @@ export default function App() {
     }
   }, [showBanner])
 
-  const execute = useCallback(async (sql) => {
-    const current = sessionRef.current
-    if (!current) {
-      showBanner('warn', 'Open a connection before running a query.')
-      return
-    }
-    if (!activeDatabase) {
-      showBanner('warn', 'Select a database before running a query.')
-      return
-    }
+  const updateTab = useCallback((tabId, patch) => {
+    setTabs((prev) => prev.map((tab) => (tab.id === tabId ? { ...tab, ...patch } : tab)))
+  }, [])
 
-    setQueryState({ status: 'running', result: null, error: null })
-    setActiveSet(0)
-    try {
-      const result = await api.runQuery({
-        connectionId: current.connectionId,
-        database: activeDatabase,
-        sql,
-      })
-      setQueryState({ status: 'success', result, error: null })
-    } catch (error) {
-      setQueryState({
-        status: 'error',
-        result: null,
-        error: {
-          message: error.message,
-          code: error.code,
-          number: error.number,
-          lineNumber: error.lineNumber,
-          severity: error.severity,
-          state: error.state,
-        },
-      })
-    }
-  }, [activeDatabase, showBanner])
+  const execute = useCallback(
+    async (sql, tabId) => {
+      const current = sessionRef.current
+      if (!current) {
+        showBanner('warn', 'Open a connection before running a query.')
+        return
+      }
+      if (!activeDatabase) {
+        showBanner('warn', 'Select a database before running a query.')
+        return
+      }
 
-  const handleRun = useCallback(() => execute(sqlRef.current), [execute])
+      updateTab(tabId, { state: { status: 'running', result: null, error: null }, activeSet: 0 })
+      try {
+        const result = await api.runQuery({
+          connectionId: current.connectionId,
+          database: activeDatabase,
+          sql,
+        })
+        updateTab(tabId, { state: { status: 'success', result, error: null } })
+      } catch (error) {
+        updateTab(tabId, {
+          state: {
+            status: 'error',
+            result: null,
+            error: {
+              message: error.message,
+              code: error.code,
+              number: error.number,
+              lineNumber: error.lineNumber,
+              severity: error.severity,
+              state: error.state,
+            },
+          },
+        })
+      }
+    },
+    [activeDatabase, showBanner, updateTab],
+  )
+
+  const handleRun = useCallback(() => execute(sqlRef.current, activeTabId), [activeTabId, execute])
 
   const seedEditor = useCallback((sql) => {
     seedIdRef.current += 1
@@ -216,25 +237,94 @@ export default function App() {
     setQuery({ id: seedIdRef.current, value: sql })
   }, [])
 
+  const openTab = useCallback(
+    (title, sql) => {
+      tabIdRef.current += 1
+      const id = `tab-${tabIdRef.current}`
+      const liveSql = sqlRef.current
+      setTabs((prev) => [
+        ...prev.map((tab) => (tab.id === activeTabId ? { ...tab, sql: liveSql } : tab)),
+        createTab(id, title, sql),
+      ])
+      setActiveTabId(id)
+      seedEditor(sql)
+      return id
+    },
+    [activeTabId, seedEditor],
+  )
+
   const handleBrowseTable = useCallback(
     (table) => {
       const sql = browseSql(table)
-      seedEditor(sql)
-      execute(sql)
+      const tabId = openTab(table.name, sql)
+      execute(sql, tabId)
     },
-    [execute, seedEditor],
+    [execute, openTab],
   )
 
   const handleQueryTable = useCallback(
     (table) => {
-      seedEditor(`SELECT TOP (1000) *\nFROM ${qualifiedName(table)};`)
+      const sql = `SELECT TOP (1000) *\nFROM ${qualifiedName(table)};`
+      updateTab(activeTabId, { sql })
+      seedEditor(sql)
     },
-    [seedEditor],
+    [activeTabId, seedEditor, updateTab],
   )
 
   const handleSqlChange = useCallback((value) => {
     sqlRef.current = value
   }, [])
+
+  const handleSelectTab = useCallback(
+    (tabId) => {
+      if (tabId === activeTabId) return
+      const next = tabs.find((tab) => tab.id === tabId)
+      if (!next) return
+      const liveSql = sqlRef.current
+      setTabs((prev) => prev.map((tab) => (tab.id === activeTabId ? { ...tab, sql: liveSql } : tab)))
+      setActiveTabId(tabId)
+      seedEditor(next.sql)
+    },
+    [activeTabId, seedEditor, tabs],
+  )
+
+  const handleCloseTab = useCallback(
+    (tabId) => {
+      const index = tabs.findIndex((tab) => tab.id === tabId)
+      if (index === -1) return
+
+      const remaining = tabs.filter((tab) => tab.id !== tabId)
+
+      if (remaining.length === 0) {
+        queryIdRef.current += 1
+        tabIdRef.current += 1
+        const tab = createTab(`tab-${tabIdRef.current}`, queryTitle(queryIdRef.current), '')
+        setTabs([tab])
+        setActiveTabId(tab.id)
+        seedEditor(tab.sql)
+        return
+      }
+
+      setTabs(remaining)
+
+      if (tabId === activeTabId) {
+        const neighbour = remaining[Math.min(index, remaining.length - 1)]
+        setActiveTabId(neighbour.id)
+        seedEditor(neighbour.sql)
+      }
+    },
+    [activeTabId, seedEditor, tabs],
+  )
+
+  const handleNewTab = useCallback(() => {
+    queryIdRef.current += 1
+    openTab(queryTitle(queryIdRef.current), '')
+  }, [openTab])
+
+  const handleSelectSet = useCallback(
+    (index) => updateTab(activeTabId, { activeSet: index }),
+    [activeTabId, updateTab],
+  )
 
   const handleSaveConnection = useCallback(
     async (input) => {
@@ -303,7 +393,8 @@ export default function App() {
     window.addEventListener('pointerup', stop)
   }, [])
 
-  const running = queryState.status === 'running'
+  const activeTab = tabs.find((tab) => tab.id === activeTabId)
+  const running = activeTab.state.status === 'running'
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -339,6 +430,14 @@ export default function App() {
             onDisconnect={closeSession}
           />
 
+          <TabBar
+            tabs={tabs}
+            activeTabId={activeTabId}
+            onSelect={handleSelectTab}
+            onClose={handleCloseTab}
+            onNewTab={handleNewTab}
+          />
+
           <div ref={splitRef} className="flex min-h-0 flex-1 flex-col">
             <div style={{ height: editorHeight }} className="min-h-[140px] shrink-0 overflow-hidden">
               <QueryEditor seed={query} onChange={handleSqlChange} onRun={handleRun} />
@@ -353,10 +452,15 @@ export default function App() {
               <span className="h-px w-full bg-line transition-colors group-hover:bg-accent/60" />
             </div>
 
-            <ResultsPanel state={queryState} activeSet={activeSet} onSelectSet={setActiveSet} />
+            <ResultsPanel
+              key={activeTab.id}
+              state={activeTab.state}
+              activeSet={activeTab.activeSet}
+              onSelectSet={handleSelectSet}
+            />
           </div>
 
-          <StatusBar session={session} activeDatabase={activeDatabase} queryStatus={queryState.status} />
+          <StatusBar session={session} activeDatabase={activeDatabase} queryStatus={activeTab.state.status} />
         </main>
       </div>
 

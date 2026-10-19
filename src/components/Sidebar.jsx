@@ -61,7 +61,7 @@ export default function Sidebar({
   const handleTableContextMenu = (event, table) => {
     event.preventDefault()
     setSelectedTable(`${table.schema}.${table.name}`)
-    setMenu({ x: event.clientX, y: event.clientY })
+    setMenu({ x: event.clientX, y: event.clientY, table })
   }
 
   return (
@@ -282,7 +282,14 @@ export default function Sidebar({
         <ContextMenu
           x={menu.x}
           y={menu.y}
-          items={TABLE_MENU_ITEMS.map((label) => ({ id: label, label }))}
+          items={[
+            {
+              id: 'open-new-tab',
+              label: 'Open new tab',
+              onSelect: () => onBrowseTable(menu.table),
+            },
+            ...TABLE_MENU_ITEMS.map((label) => ({ id: label, label })),
+          ]}
           onClose={() => setMenu(null)}
         />
       ) : null}

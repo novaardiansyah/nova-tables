@@ -35,6 +35,7 @@ export default function QueryEditor({ seed, onChange, onRun }) {
   const editorRef = useRef(null)
   const handlersRef = useRef({ onChange, onRun })
   const lastSeedRef = useRef(null)
+  const seedingRef = useRef(false)
 
   useEffect(() => {
     handlersRef.current = { onChange, onRun }
@@ -49,7 +50,9 @@ export default function QueryEditor({ seed, onChange, onRun }) {
 
     const editor = editorRef.current
     if (!editor) return
+    seedingRef.current = true
     editor.setValue(seed.value)
+    seedingRef.current = false
     editor.setPosition({ lineNumber: 1, column: 1 })
     editor.focus()
   }, [seed])
@@ -72,7 +75,10 @@ export default function QueryEditor({ seed, onChange, onRun }) {
         theme={NOVA_THEME}
         defaultValue={seed.value}
         onMount={handleMount}
-        onChange={(value) => handlersRef.current.onChange?.(value ?? '')}
+        onChange={(value) => {
+          if (seedingRef.current) return
+          handlersRef.current.onChange?.(value ?? '')
+        }}
         options={EDITOR_OPTIONS}
         loading={
           <div className="flex items-center gap-2 p-4 text-[12px] text-slate-500">

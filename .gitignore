@@ -27,3 +27,5 @@ AGENTS.md
 *.njsproj
 *.sln
 *.sw?
+
+obsidian/*
