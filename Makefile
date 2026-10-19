@@ -7,6 +7,7 @@ ENTRY := dist-electron/main.js
 .PHONY: help install dev run compile build package lint verify clean distclean
 
 help:
+	@echo
 	@echo "Nova Tables — available targets:"
 	@echo
 	@printf '  %-10s %s\n' \
