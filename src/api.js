@@ -1,6 +1,3 @@
-// Thin, typed-ish wrapper around the IPC bridge exposed by the preload script.
-// The renderer only ever talks to this module — it never sees Node.js APIs,
-// the mssql driver, or connection secrets.
 function bridge() {
   const api = typeof window !== 'undefined' ? window.nova : undefined
   if (!api) {

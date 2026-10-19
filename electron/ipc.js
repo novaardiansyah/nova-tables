@@ -17,8 +17,6 @@ import { toErrorPayload } from './serialize.js'
 const ok = (data) => ({ ok: true, ...(data || {}) })
 const fail = (error) => ({ ok: false, error: toErrorPayload(error) })
 
-// Every handler answers with { ok: true, ...data } or { ok: false, error } so
-// the renderer never has to deal with raw exceptions crossing IPC.
 function handle(channel, handler) {
   ipcMain.handle(channel, async (_event, payload) => {
     try {

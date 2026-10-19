@@ -7,14 +7,10 @@ import {
 } from './connectionStore.js'
 import { toPlainValue } from './serialize.js'
 
-// Maximum number of rows handed to the renderer per result set.
 const MAX_ROWS = 20000
 
-// connectionId -> { connection, password, pool }
 const runtimeConnections = new Map()
-// `${connectionId}::${database}` -> pool
 const databasePools = new Map()
-// `${connectionId}::${database}` -> promise, while the pool is being created
 const pendingPools = new Map()
 
 function codedError(code, message) {
@@ -45,8 +41,6 @@ function buildConfig(connection, password, database) {
 function resolvePassword({ id, password }) {
   if (password !== undefined && password !== null) return password
   if (id) {
-    // getPassword() also covers a cipher that can no longer be decrypted
-    // (for example when the OS keyring changed), so the user is asked again.
     const stored = getPassword(id)
     if (stored !== null) return stored
     throw codedError(
@@ -59,7 +53,6 @@ function resolvePassword({ id, password }) {
 
 async function createPool(connection, password, database) {
   const pool = new sql.ConnectionPool(buildConfig(connection, password, database))
-  // Background socket errors must never crash the main process.
   pool.on('error', () => {})
   await pool.connect()
   return pool
@@ -68,9 +61,7 @@ async function createPool(connection, password, database) {
 async function closePool(pool) {
   try {
     await pool.close()
-  } catch {
-    // Pool may already be closed, nothing to do.
-  }
+  } catch {}
 }
 
 async function getRuntime(connectionId) {
@@ -86,7 +77,6 @@ async function getDatabasePool(connectionId, database) {
   const baseName = String(runtime.connection.database || 'master')
   const name = database || baseName
 
-  // The pool opened by connect() already points at that database.
   if (String(name).toLowerCase() === baseName.toLowerCase()) return runtime.pool
 
   const key = `${connectionId}::${String(name).toLowerCase()}`
@@ -94,14 +84,11 @@ async function getDatabasePool(connectionId, database) {
   const cached = databasePools.get(key)
   if (cached) return cached
 
-  // Reuse an in-flight connection attempt instead of opening a second pool
-  // when the same database is requested twice in a row.
   const pending = pendingPools.get(key)
   if (pending) return pending
 
   const promise = createPool(runtime.connection, runtime.password, name)
     .then((pool) => {
-      // The connection may have been closed while the pool was opening.
       if (!runtimeConnections.has(connectionId)) {
         closePool(pool)
         throw codedError('NOT_CONNECTED', 'This connection is not open. Connect to it first.')
@@ -202,9 +189,7 @@ export async function connect({ id, password }) {
   try {
     databases = await readDatabases(pool)
     info = await readServerInfo(pool)
-  } catch {
-    // Databases/server info are nice to have but must not fail the connection.
-  }
+  } catch {}
 
   return {
     connectionId: id,

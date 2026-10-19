@@ -8,8 +8,6 @@ const SYSTEM_DATABASES = ['master', 'model', 'msdb', 'tempdb']
 
 let storeFile = null
 let cache = null
-// Passwords are also kept in memory for the current session. This keeps
-// connections usable even when the OS keyring is unavailable.
 const sessionPasswords = new Map()
 
 function getStoreFile() {
@@ -138,8 +136,6 @@ export function setPassword(id, plain) {
   sessionPasswords.set(id, plain)
   const connection = getConnection(id)
   if (!connection) return
-  // Never write plaintext to disk. When the OS keyring is unavailable the
-  // password simply lives for the current session only.
   connection.passwordCipher = encryptPassword(plain)
   connection.updatedAt = new Date().toISOString()
   writeStore()

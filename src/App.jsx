@@ -84,8 +84,6 @@ export default function App() {
   }, [showBanner])
 
   const loadTables = useCallback(async (connectionId, database) => {
-    // Only the newest request may write to the tree, otherwise a slow answer
-    // for a database the user already left would replace the current one.
     const requestId = ++tablesRequestIdRef.current
     setTablesState({ status: 'loading', database, tables: [], error: null })
     try {
@@ -104,9 +102,7 @@ export default function App() {
     if (current) {
       try {
         await api.disconnect(current.connectionId)
-      } catch {
-        // Closing a connection is best-effort.
-      }
+      } catch {}
     }
     setSession(null)
     setActiveDatabase(null)
@@ -118,7 +114,6 @@ export default function App() {
       setConnectingId(connection.id)
       setBanner(null)
       try {
-        // Only one connection is open at a time, so release the previous one.
         if (sessionRef.current && sessionRef.current.connectionId !== connection.id) {
           await closeSession()
         }

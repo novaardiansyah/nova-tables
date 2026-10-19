@@ -2,13 +2,10 @@ import * as monaco from 'monaco-editor'
 import { loader } from '@monaco-editor/react'
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 
-// Monaco ships a web worker for the editor core. SQL highlighting itself is
-// done in-process by the "sql" built-in language, so only this worker is needed.
 self.MonacoEnvironment = {
   getWorker: () => new editorWorker(),
 }
 
-// Use the local monaco build instead of a CDN, the app must work offline.
 loader.config({ monaco })
 
 export const NOVA_THEME = 'nova-dark'

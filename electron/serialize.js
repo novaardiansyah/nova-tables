@@ -1,5 +1,3 @@
-// Converts values returned by the SQL Server driver into plain values that can
-// safely cross the Electron IPC boundary (structured clone).
 export function toPlainValue(value) {
   if (value === null || value === undefined) return null
 

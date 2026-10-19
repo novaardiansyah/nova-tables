@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Icon from './Icon.jsx'
 
-// Small dark dropdown used for database switching.
 export default function Select({ value, options, onChange, disabled = false, className = '' }) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef(null)

@@ -80,7 +80,6 @@ export default function ConnectionDialog({
       trustServerCertificate: form.trustServerCertificate,
     }
     if (isEdit) data.id = connection.id
-    // An empty password on an existing connection means "keep the saved one".
     if (!isEdit || form.password !== '') data.password = form.password
     return data
   }

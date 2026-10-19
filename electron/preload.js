@@ -1,7 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
-// Every channel the renderer may talk to is listed here, so the renderer can
-// never invoke an arbitrary IPC channel that was not designed for it.
 contextBridge.exposeInMainWorld('nova', {
   connections: {
     list: () => ipcRenderer.invoke('connections:list'),

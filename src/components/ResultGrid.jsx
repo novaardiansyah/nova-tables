@@ -1,7 +1,5 @@
 import { useMemo } from 'react'
 
-// Rendering every row of a large result set would freeze the UI. The full data
-// still crosses IPC, only the DOM is limited.
 const RENDER_LIMIT = 2000
 const DATE_RE = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/
 
