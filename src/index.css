@@ -1,0 +1,153 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-base font-sans text-[13px] text-slate-200 antialiased;
+    overflow: hidden;
+    margin: 0;
+  }
+
+  ::selection {
+    background: rgba(79, 140, 255, 0.32);
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  input,
+  select {
+    @apply bg-transparent;
+  }
+
+  input:focus,
+  select:focus {
+    outline: none;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-[12.5px] font-medium transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply btn bg-accent text-white hover:bg-accent-hover;
+  }
+
+  .btn-soft {
+    @apply btn border border-line-strong bg-elevated text-slate-200 hover:border-accent/50 hover:text-white;
+  }
+
+  .btn-ghost {
+    @apply btn text-slate-400 hover:bg-white/5 hover:text-slate-200;
+  }
+
+  .btn-danger {
+    @apply btn bg-rose-500 text-white hover:bg-rose-500/85;
+  }
+
+  .icon-btn {
+    @apply inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-500 transition-colors duration-150 hover:bg-white/5 hover:text-slate-200;
+  }
+
+  .field {
+    @apply w-full rounded-md border border-line-strong bg-[#0a0d12] px-2.5 py-[7px] text-[13px] text-slate-200 transition-colors placeholder:text-slate-600 focus:border-accent/70 focus:ring-2 focus:ring-accent/20;
+  }
+
+  .field-label {
+    @apply mb-1.5 block text-[11.5px] font-medium uppercase tracking-wide text-slate-500;
+  }
+
+  .kbd {
+    @apply inline-flex h-[17px] min-w-[17px] items-center justify-center rounded border border-line-strong bg-black/25 px-1 font-mono text-[10px] text-slate-500;
+  }
+
+  .tree-row {
+    @apply flex w-full items-center gap-1.5 rounded px-2 py-[5px] text-left text-[12.5px] text-slate-400 transition-colors duration-100 hover:bg-white/[0.04] hover:text-slate-200;
+  }
+
+  .tree-row-active {
+    @apply bg-accent-soft text-slate-100 hover:bg-accent-soft;
+  }
+}
+
+/* Thin, consistent scrollbars everywhere. */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #232a35;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #333d4c;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.progress-track {
+  position: relative;
+  overflow: hidden;
+  height: 2px;
+  width: 100%;
+  background: rgba(79, 140, 255, 0.12);
+}
+
+.progress-track::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  border-radius: 999px;
+  background: #4f8cff;
+  animation: indeterminate 1.1s ease-in-out infinite;
+}
+
+@keyframes indeterminate {
+  0% {
+    transform: translateX(-40%);
+  }
+
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+/* Monaco uses the same visual language as the rest of the app. */
+.monaco-editor,
+.monaco-editor .overflow-guard {
+  border-radius: 0 0 0 0;
+}
+
+.monaco-editor .scroll-decoration {
+  display: none;
+}

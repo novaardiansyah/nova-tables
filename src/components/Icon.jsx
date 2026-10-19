@@ -1,0 +1,176 @@
+const ICONS = {
+  'chevron-right': <path d="M9 6l6 6-6 6" />,
+  'chevron-down': <path d="M6 9l6 6 6-6" />,
+  plus: (
+    <>
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </>
+  ),
+  pencil: (
+    <>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 013 3L7.5 18.5 3 20l1.5-4.5z" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M18.5 6l-1 14h-11l-1-14" />
+      <path d="M10 11v6M14 11v6" />
+    </>
+  ),
+  refresh: (
+    <>
+      <path d="M20.5 12a8.5 8.5 0 01-14.6 5.9L3.5 15.5" />
+      <path d="M3.5 12a8.5 8.5 0 0114.6-5.9L20.5 8.5" />
+      <path d="M20.5 3.5v5h-5" />
+      <path d="M3.5 20.5v-5h5" />
+    </>
+  ),
+  power: (
+    <>
+      <path d="M12 3v9" />
+      <path d="M6.6 6.6a8 8 0 1010.8 0" />
+    </>
+  ),
+  database: (
+    <>
+      <ellipse cx="12" cy="5.5" rx="7.5" ry="2.8" />
+      <path d="M4.5 5.5v13c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8v-13" />
+      <path d="M4.5 12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8" />
+    </>
+  ),
+  table: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 9.5h18" />
+      <path d="M9.5 9.5V20" />
+    </>
+  ),
+  play: (
+    <>
+      <path d="M7.5 4.5l11 7.5-11 7.5z" />
+    </>
+  ),
+  x: (
+    <>
+      <path d="M18 6L6 18" />
+      <path d="M6 6l12 12" />
+    </>
+  ),
+  'alert-triangle': (
+    <>
+      <path d="M10.3 3.9L1.9 18a2 2 0 001.7 3h16.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+    </>
+  ),
+  'check-circle': (
+    <>
+      <path d="M21.5 11.1V12a9.5 9.5 0 11-5.6-8.7" />
+      <path d="M21.5 4.5l-9.5 9.4-3-3" />
+    </>
+  ),
+  info: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 16.5v-5" />
+      <path d="M12 8h.01" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z" />
+      <circle cx="12" cy="12" r="3.2" />
+    </>
+  ),
+  'eye-off': (
+    <>
+      <path d="M17.9 17.9A10.2 10.2 0 0112 19.5C5.5 19.5 1.5 12.5 1.5 12.5a18.6 18.6 0 014.6-5.4" />
+      <path d="M9.6 4.6A10 10 0 0112 4.5c6.5 0 10.5 7 10.5 7a18.4 18.4 0 01-2.6 3.6" />
+      <path d="M9.9 9.9a3.2 3.2 0 004.3 4.3" />
+      <path d="M2 2l20 20" />
+    </>
+  ),
+  server: (
+    <>
+      <rect x="3" y="4" width="18" height="7" rx="2" />
+      <rect x="3" y="13" width="18" height="7" rx="2" />
+      <path d="M7 7.5h.01M7 16.5h.01" />
+    </>
+  ),
+  grid: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
+    </>
+  ),
+  key: (
+    <>
+      <circle cx="7.5" cy="15.5" r="3.5" />
+      <path d="M10.5 13.5L19 5" />
+      <path d="M16 8l2.5 2.5" />
+    </>
+  ),
+}
+
+export default function Icon({ name, size = 15, className = '', strokeWidth = 1.7 }) {
+  const shape = ICONS[name]
+  if (!shape) return null
+
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      {shape}
+    </svg>
+  )
+}
+
+export function Spinner({ size = 14, className = '' }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      className={`animate-spin ${className}`}
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2.5" />
+      <path
+        d="M21 12a9 9 0 00-9-9"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+export function BrandMark({ size = 26, className = '' }) {
+  return (
+    <svg viewBox="0 0 64 64" width={size} height={size} className={className} aria-hidden="true">
+      <defs>
+        <linearGradient id="nova-brand" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#4f8cff" />
+          <stop offset="1" stopColor="#8b5cf6" />
+        </linearGradient>
+      </defs>
+      <rect x="6" y="8" width="52" height="48" rx="9" fill="none" stroke="url(#nova-brand)" strokeWidth="4" />
+      <path d="M6 24h52" stroke="url(#nova-brand)" strokeWidth="4" />
+      <path d="M25 24v32M41 24v32" stroke="url(#nova-brand)" strokeWidth="4" />
+    </svg>
+  )
+}
