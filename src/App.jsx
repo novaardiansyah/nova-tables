@@ -111,17 +111,24 @@ function cloneDesign(structure, name) {
   }
 }
 
-const FIRST_TAB = createTab('tab-1', queryTitle(1), STARTER_SQL)
+function createSession(result, connection, database, tab) {
+  return {
+    ...result,
+    connection,
+    activeDatabase: database,
+    tables: EMPTY_TABLES,
+    tabs: [tab],
+    activeTabId: tab.id,
+    selectedTable: null,
+  }
+}
 
 export default function App() {
   const [connections, setConnections] = useState([])
   const [folders, setFolders] = useState([])
-  const [session, setSession] = useState(null)
+  const [sessions, setSessions] = useState({})
+  const [activeConnectionId, setActiveConnectionId] = useState(null)
   const [screen, setScreen] = useState('connections')
-  const [activeDatabase, setActiveDatabase] = useState(null)
-  const [tablesState, setTablesState] = useState(EMPTY_TABLES)
-  const [tabs, setTabs] = useState([FIRST_TAB])
-  const [activeTabId, setActiveTabId] = useState(FIRST_TAB.id)
   const [query, setQuery] = useState({ id: 0, value: STARTER_SQL })
   const [banner, setBanner] = useState(null)
   const [connectingId, setConnectingId] = useState(null)
@@ -130,26 +137,72 @@ export default function App() {
   const [deleting, setDeleting] = useState(false)
   const [editorHeight, setEditorHeight] = useState(EDITOR_DEFAULT_HEIGHT)
   const [appVersion, setAppVersion] = useState('')
-  const [selectedTable, setSelectedTable] = useState(null)
   const [tablePrompt, setTablePrompt] = useState(null)
   const [dropTarget, setDropTarget] = useState(null)
   const [tableBusy, setTableBusy] = useState(false)
   const [pinnedTables, setPinnedTables] = useState([])
 
   const sqlRef = useRef(STARTER_SQL)
-  const sessionRef = useRef(null)
+  const sessionsRef = useRef({})
+  const activeIdRef = useRef(null)
   const seedIdRef = useRef(0)
   const tabIdRef = useRef(1)
   const queryIdRef = useRef(1)
   const splitRef = useRef(null)
-  const tablesRequestIdRef = useRef(0)
+  const tablesRequestRef = useRef({})
 
   useEffect(() => {
-    sessionRef.current = session
-  }, [session])
+    sessionsRef.current = sessions
+  }, [sessions])
+
+  useEffect(() => {
+    activeIdRef.current = activeConnectionId
+  }, [activeConnectionId])
 
   const showBanner = useCallback((type, message) => {
     setBanner({ type, message })
+  }, [])
+
+  const activeSession = useCallback(() => {
+    const id = activeIdRef.current
+    return id ? sessionsRef.current[id] || null : null
+  }, [])
+
+  const patchSession = useCallback((connectionId, patch) => {
+    setSessions((prev) => {
+      const current = prev[connectionId]
+      if (!current) return prev
+      return { ...prev, [connectionId]: { ...current, ...patch } }
+    })
+  }, [])
+
+  const updateTab = useCallback((connectionId, tabId, patch) => {
+    setSessions((prev) => {
+      const current = prev[connectionId]
+      if (!current) return prev
+      return {
+        ...prev,
+        [connectionId]: {
+          ...current,
+          tabs: current.tabs.map((tab) => (tab.id === tabId ? { ...tab, ...patch } : tab)),
+        },
+      }
+    })
+  }, [])
+
+  const syncLiveSql = useCallback((connectionId, tabId) => {
+    const sql = sqlRef.current
+    setSessions((prev) => {
+      const current = prev[connectionId]
+      if (!current) return prev
+      return {
+        ...prev,
+        [connectionId]: {
+          ...current,
+          tabs: current.tabs.map((tab) => (tab.id === tabId ? { ...tab, sql } : tab)),
+        },
+      }
+    })
   }, [])
 
   useEffect(() => {
@@ -181,56 +234,99 @@ export default function App() {
     }
   }, [showBanner])
 
-  const loadTables = useCallback(async (connectionId, database) => {
-    const requestId = ++tablesRequestIdRef.current
-    setTablesState({ status: 'loading', database, tables: [], error: null })
-    try {
-      const tables = await api.listTables(connectionId, database)
-      if (requestId !== tablesRequestIdRef.current) return
-      setTablesState({ status: 'ready', database, tables, error: null })
-    } catch (error) {
-      if (requestId !== tablesRequestIdRef.current) return
-      setTablesState({ status: 'error', database, tables: [], error: error.message })
-    }
-  }, [])
-
-  const closeSession = useCallback(async () => {
-    const current = sessionRef.current
-    sessionRef.current = null
-    if (current) {
+  const loadTables = useCallback(
+    async (connectionId, database) => {
+      const requestId = (tablesRequestRef.current[connectionId] || 0) + 1
+      tablesRequestRef.current[connectionId] = requestId
+      patchSession(connectionId, { tables: { status: 'loading', database, tables: [], error: null } })
       try {
-        await api.disconnect(current.connectionId)
-      } catch {}
-    }
-    setSession(null)
-    setActiveDatabase(null)
-    setTablesState(EMPTY_TABLES)
+        const tables = await api.listTables(connectionId, database)
+        if (tablesRequestRef.current[connectionId] !== requestId) return
+        patchSession(connectionId, { tables: { status: 'ready', database, tables, error: null } })
+      } catch (error) {
+        if (tablesRequestRef.current[connectionId] !== requestId) return
+        patchSession(connectionId, { tables: { status: 'error', database, tables: [], error: error.message } })
+      }
+    },
+    [patchSession],
+  )
+
+  const seedEditor = useCallback((sql) => {
+    seedIdRef.current += 1
+    sqlRef.current = sql
+    setQuery({ id: seedIdRef.current, value: sql })
   }, [])
 
-  const openConnectionScreen = useCallback(() => {
-    setScreen('connections')
-    setBanner(null)
-  }, [])
+  const seedSessionEditor = useCallback(
+    (target) => {
+      if (!target) return
+      const tab = target.tabs.find((item) => item.id === target.activeTabId) || target.tabs[0]
+      if (tab) seedEditor(tab.sql)
+    },
+    [seedEditor],
+  )
+
+  const closeSession = useCallback(
+    async (connectionId) => {
+      const target = connectionId || activeIdRef.current
+      if (!target) return
+
+      try {
+        await api.disconnect(target)
+      } catch {}
+
+      const remaining = { ...sessionsRef.current }
+      delete remaining[target]
+      sessionsRef.current = remaining
+      setSessions(remaining)
+
+      if (activeIdRef.current !== target) return
+
+      const nextId = Object.keys(remaining)[0] || null
+      activeIdRef.current = nextId
+      setActiveConnectionId(nextId)
+      if (nextId) seedSessionEditor(remaining[nextId])
+      else setScreen('connections')
+    },
+    [seedSessionEditor],
+  )
+
+  const activateSession = useCallback(
+    (connectionId) => {
+      if (!sessionsRef.current[connectionId]) return
+      const current = activeSession()
+      if (current && current.connectionId !== connectionId) {
+        syncLiveSql(current.connectionId, current.activeTabId)
+      }
+      setActiveConnectionId(connectionId)
+      setScreen('workspace')
+      seedSessionEditor(sessionsRef.current[connectionId])
+    },
+    [activeSession, seedSessionEditor, syncLiveSql],
+  )
 
   const handleConnect = useCallback(
     async (connection) => {
+      if (sessionsRef.current[connection.id]) {
+        activateSession(connection.id)
+        return
+      }
+
       setConnectingId(connection.id)
       setBanner(null)
       try {
-        if (sessionRef.current?.connectionId === connection.id) {
-          setScreen('workspace')
-          return
-        }
-
-        if (sessionRef.current) {
-          await closeSession()
-        }
-
         const result = await api.connect({ id: connection.id })
-        setSession({ ...result, connection })
         const database = pickDatabase(result.databases, result.database)
-        setActiveDatabase(database)
+
+        tabIdRef.current += 1
+        queryIdRef.current += 1
+        const tab = createTab(`tab-${tabIdRef.current}`, queryTitle(queryIdRef.current), STARTER_SQL)
+        const created = createSession(result, connection, database, tab)
+
+        setSessions((prev) => ({ ...prev, [connection.id]: created }))
+        setActiveConnectionId(connection.id)
         setScreen('workspace')
+        seedEditor(tab.sql)
         await loadTables(connection.id, database)
       } catch (error) {
         if (error.code === 'PASSWORD_MISSING') {
@@ -246,56 +342,73 @@ export default function App() {
         setConnectingId(null)
       }
     },
-    [closeSession, loadTables, showBanner],
+    [activateSession, loadTables, seedEditor, showBanner],
   )
+
+  const openConnectionScreen = useCallback(() => {
+    setScreen('connections')
+    setBanner(null)
+  }, [])
 
   const handleSelectDatabase = useCallback(
     async (database) => {
-      if (!sessionRef.current || !database) return
-      setActiveDatabase(database)
-      await loadTables(sessionRef.current.connectionId, database)
+      const current = activeSession()
+      if (!current || !database) return
+      patchSession(current.connectionId, { activeDatabase: database })
+      await loadTables(current.connectionId, database)
     },
-    [loadTables],
+    [activeSession, loadTables, patchSession],
   )
 
-  const handleRefreshDatabases = useCallback(async () => {
-    const current = sessionRef.current
-    if (!current) return
-    try {
-      const databases = await api.listDatabases(current.connectionId)
-      setSession((prev) => (prev ? { ...prev, databases } : prev))
-      showBanner('success', `Refreshed databases (${databases.length}).`)
-    } catch (error) {
-      showBanner('error', error.message)
-    }
-  }, [showBanner])
+  const handleRefreshDatabases = useCallback(
+    async (connectionId) => {
+      const current = sessionsRef.current[connectionId]
+      if (!current) return
+      try {
+        const databases = await api.listDatabases(connectionId)
+        patchSession(connectionId, { databases })
+        showBanner('success', `Refreshed databases (${databases.length}).`)
+      } catch (error) {
+        showBanner('error', error.message)
+      }
+    },
+    [patchSession, showBanner],
+  )
 
-  const updateTab = useCallback((tabId, patch) => {
-    setTabs((prev) => prev.map((tab) => (tab.id === tabId ? { ...tab, ...patch } : tab)))
-  }, [])
+  const handleSelectTable = useCallback(
+    (key) => {
+      const current = activeSession()
+      if (!current) return
+      patchSession(current.connectionId, { selectedTable: key })
+    },
+    [activeSession, patchSession],
+  )
 
   const execute = useCallback(
     async (sql, tabId) => {
-      const current = sessionRef.current
+      const current = activeSession()
       if (!current) {
         showBanner('warn', 'Open a connection before running a query.')
         return
       }
-      if (!activeDatabase) {
+      if (!current.activeDatabase) {
         showBanner('warn', 'Select a database before running a query.')
         return
       }
 
-      updateTab(tabId, { state: { status: 'running', result: null, error: null }, activeSet: 0 })
+      updateTab(current.connectionId, tabId, {
+        state: { status: 'running', result: null, error: null },
+        activeSet: 0,
+      })
       try {
         const result = await api.runQuery({
           connectionId: current.connectionId,
-          database: activeDatabase,
+          database: current.activeDatabase,
           sql,
         })
-        updateTab(tabId, { state: { status: 'success', result, error: null } })
+        updateTab(current.connectionId, tabId, { state: { status: 'success', result, error: null } })
       } catch (error) {
-        updateTab(tabId, {
+        updateTab(current.connectionId, tabId, {
           state: {
             status: 'error',
             result: null,
@@ -311,73 +424,90 @@ export default function App() {
         })
       }
     },
-    [activeDatabase, showBanner, updateTab],
+    [activeSession, showBanner, updateTab],
   )
 
-  const handleRun = useCallback(() => execute(sqlRef.current, activeTabId), [activeTabId, execute])
-
-  const seedEditor = useCallback((sql) => {
-    seedIdRef.current += 1
-    sqlRef.current = sql
-    setQuery({ id: seedIdRef.current, value: sql })
-  }, [])
+  const handleRun = useCallback(() => {
+    const current = activeSession()
+    if (!current) {
+      showBanner('warn', 'Open a connection before running a query.')
+      return
+    }
+    execute(sqlRef.current, current.activeTabId)
+  }, [activeSession, execute, showBanner])
 
   const openTab = useCallback(
-    (title, sql) => {
+    (connectionId, title, sql) => {
       tabIdRef.current += 1
       const id = `tab-${tabIdRef.current}`
       const liveSql = sqlRef.current
-      setTabs((prev) => [
-        ...prev.map((tab) => (tab.id === activeTabId ? { ...tab, sql: liveSql } : tab)),
-        createTab(id, title, sql),
-      ])
-      setActiveTabId(id)
+      setSessions((prev) => {
+        const current = prev[connectionId]
+        if (!current) return prev
+        return {
+          ...prev,
+          [connectionId]: {
+            ...current,
+            tabs: [
+              ...current.tabs.map((tab) => (tab.id === current.activeTabId ? { ...tab, sql: liveSql } : tab)),
+              createTab(id, title, sql),
+            ],
+            activeTabId: id,
+          },
+        }
+      })
       seedEditor(sql)
       return id
     },
-    [activeTabId, seedEditor],
+    [seedEditor],
   )
 
   const loadRelations = useCallback(
     async (tabId, table) => {
-      const current = sessionRef.current
-      if (!current || !activeDatabase) return
+      const current = activeSession()
+      if (!current || !current.activeDatabase) return
       try {
         const relations = await api.tableRelations(
           current.connectionId,
-          activeDatabase,
+          current.activeDatabase,
           table.schema,
           table.name,
         )
-        updateTab(tabId, { relations })
+        updateTab(current.connectionId, tabId, { relations })
       } catch {}
     },
-    [activeDatabase, updateTab],
+    [activeSession, updateTab],
   )
 
   const handleOpenRelation = useCallback(
     (relation, value) => {
+      const current = activeSession()
+      if (!current) return
       const sql = relatedSql(relation, value)
-      const tabId = openTab(relation.referencedTable, sql)
-      setSelectedTable(`${relation.referencedSchema}.${relation.referencedTable}`)
+      const tabId = openTab(current.connectionId, relation.referencedTable, sql)
+      patchSession(current.connectionId, {
+        selectedTable: `${relation.referencedSchema}.${relation.referencedTable}`,
+      })
       execute(sql, tabId)
       loadRelations(tabId, {
         schema: relation.referencedSchema,
         name: relation.referencedTable,
       })
     },
-    [execute, loadRelations, openTab],
+    [activeSession, execute, loadRelations, openTab, patchSession],
   )
 
   const handleBrowseTable = useCallback(
     (table) => {
+      const current = activeSession()
+      if (!current) return
       const sql = browseSql(table)
-      const tabId = openTab(table.name, sql)
-      setSelectedTable(`${table.schema}.${table.name}`)
+      const tabId = openTab(current.connectionId, table.name, sql)
+      patchSession(current.connectionId, { selectedTable: `${table.schema}.${table.name}` })
       execute(sql, tabId)
       loadRelations(tabId, table)
     },
-    [execute, loadRelations, openTab],
+    [activeSession, execute, loadRelations, openTab, patchSession],
   )
 
   const handleCopyObjectName = useCallback(
@@ -393,19 +523,19 @@ export default function App() {
 
   const handleCopyStructure = useCallback(
     async (table) => {
-      const current = sessionRef.current
+      const current = activeSession()
       if (!current) {
         showBanner('warn', 'Open a connection before copying a structure.')
         return
       }
-      if (!activeDatabase) {
+      if (!current.activeDatabase) {
         showBanner('warn', 'Select a database before copying a structure.')
         return
       }
       try {
         const structure = await api.tableStructure(
           current.connectionId,
-          activeDatabase,
+          current.activeDatabase,
           table.schema,
           table.name,
         )
@@ -415,30 +545,45 @@ export default function App() {
         showBanner('error', error.message)
       }
     },
-    [activeDatabase, showBanner],
+    [activeSession, showBanner],
   )
 
   const openDesignTab = useCallback(
-    (title, target) => {
+    (connectionId, title, target) => {
       tabIdRef.current += 1
       const id = `tab-${tabIdRef.current}`
       const liveSql = sqlRef.current
-      setTabs((prev) => [
-        ...prev.map((tab) => (tab.id === activeTabId ? { ...tab, sql: liveSql } : tab)),
-        createDesignTab(id, title, target),
-      ])
-      setActiveTabId(id)
+      setSessions((prev) => {
+        const current = prev[connectionId]
+        if (!current) return prev
+        return {
+          ...prev,
+          [connectionId]: {
+            ...current,
+            tabs: [
+              ...current.tabs.map((tab) => (tab.id === current.activeTabId ? { ...tab, sql: liveSql } : tab)),
+              createDesignTab(id, title, target),
+            ],
+            activeTabId: id,
+          },
+        }
+      })
       return id
     },
-    [activeTabId],
+    [],
   )
 
   const reloadDesign = useCallback(
     async (tabId, schema, table) => {
-      const current = sessionRef.current
-      if (!current || !activeDatabase) return
-      const structure = await api.tableStructure(current.connectionId, activeDatabase, schema, table)
-      updateTab(tabId, {
+      const current = activeSession()
+      if (!current || !current.activeDatabase) return
+      const structure = await api.tableStructure(
+        current.connectionId,
+        current.activeDatabase,
+        schema,
+        table,
+      )
+      updateTab(current.connectionId, tabId, {
         loading: false,
         error: null,
         title: `Design ${table}`,
@@ -455,22 +600,22 @@ export default function App() {
         },
       })
     },
-    [activeDatabase, updateTab],
+    [activeSession, updateTab],
   )
 
   const handleOpenStructure = useCallback(
     async (table) => {
-      const current = sessionRef.current
+      const current = activeSession()
       if (!current) {
         showBanner('warn', 'Open a connection before opening a structure.')
         return
       }
-      if (!activeDatabase) {
+      if (!current.activeDatabase) {
         showBanner('warn', 'Select a database before opening a structure.')
         return
       }
 
-      const tabId = openDesignTab(`Design ${table.name}`, {
+      const tabId = openDesignTab(current.connectionId, `Design ${table.name}`, {
         mode: 'edit',
         schema: table.schema,
         table: table.name,
@@ -479,27 +624,27 @@ export default function App() {
       try {
         await reloadDesign(tabId, table.schema, table.name)
       } catch (error) {
-        updateTab(tabId, { loading: false, error: error.message })
+        updateTab(current.connectionId, tabId, { loading: false, error: error.message })
       }
     },
-    [activeDatabase, openDesignTab, reloadDesign, showBanner, updateTab],
+    [activeSession, openDesignTab, reloadDesign, showBanner, updateTab],
   )
 
   const handleNewTable = useCallback(
     (table) => {
-      const current = sessionRef.current
+      const current = activeSession()
       if (!current) {
         showBanner('warn', 'Open a connection before creating a table.')
         return
       }
 
-      const tabId = openDesignTab('New table', {
+      const tabId = openDesignTab(current.connectionId, 'New table', {
         mode: 'new',
         schema: table?.schema || 'dbo',
         table: '',
       })
 
-      updateTab(tabId, {
+      updateTab(current.connectionId, tabId, {
         loading: false,
         design: {
           schema: table?.schema || 'dbo',
@@ -532,7 +677,7 @@ export default function App() {
         },
       })
     },
-    [openDesignTab, showBanner, updateTab],
+    [activeSession, openDesignTab, showBanner, updateTab],
   )
 
   const handleRenameTable = useCallback((table) => {
@@ -546,12 +691,12 @@ export default function App() {
 
   const handleCloneTable = useCallback(
     async (table) => {
-      const current = sessionRef.current
+      const current = activeSession()
       if (!current) {
         showBanner('warn', 'Open a connection before cloning a table.')
         return
       }
-      if (!activeDatabase) {
+      if (!current.activeDatabase) {
         showBanner('warn', 'Select a database before cloning a table.')
         return
       }
@@ -559,20 +704,20 @@ export default function App() {
       try {
         const structure = await api.tableStructure(
           current.connectionId,
-          activeDatabase,
+          current.activeDatabase,
           table.schema,
           table.name,
         )
         const copyName = `${table.name}_copy`
         const sql = generateCreateTable(cloneDesign(structure, copyName))
-        const tabId = openTab(copyName, sql)
-        setSelectedTable(`${structure.schema}.${copyName}`)
+        const tabId = openTab(current.connectionId, copyName, sql)
+        patchSession(current.connectionId, { selectedTable: `${structure.schema}.${copyName}` })
         execute(sql, tabId)
       } catch (error) {
         showBanner('error', error.message)
       }
     },
-    [activeDatabase, execute, openTab, showBanner],
+    [activeSession, execute, openTab, patchSession, showBanner],
   )
 
   const handleTruncateTable = useCallback((table) => {
@@ -585,9 +730,9 @@ export default function App() {
 
   const handleTablePromptConfirm = useCallback(
     async (value) => {
-      const current = sessionRef.current
+      const current = activeSession()
       const prompt = tablePrompt
-      if (!current || !prompt || !activeDatabase) return
+      if (!current || !prompt || !current.activeDatabase) return
 
       const table = prompt.table
       if (prompt.kind === 'truncate' && value !== table.name) {
@@ -602,10 +747,14 @@ export default function App() {
 
       setTableBusy(true)
       try {
-        await api.runQuery({ connectionId: current.connectionId, database: activeDatabase, sql: statement })
+        await api.runQuery({
+          connectionId: current.connectionId,
+          database: current.activeDatabase,
+          sql: statement,
+        })
         const nextName = prompt.kind === 'rename' ? value : table.name
         showBanner('success', prompt.kind === 'rename' ? `Renamed to ${value}.` : `Truncated ${table.name}.`)
-        setSelectedTable(`${table.schema}.${nextName}`)
+        patchSession(current.connectionId, { selectedTable: `${table.schema}.${nextName}` })
         if (prompt.kind === 'rename') {
           const previousKey = `${table.schema}.${table.name}`
           setPinnedTables((prev) =>
@@ -613,96 +762,102 @@ export default function App() {
           )
         }
         setTablePrompt(null)
-        await loadTables(current.connectionId, activeDatabase)
+        await loadTables(current.connectionId, current.activeDatabase)
       } catch (error) {
         showBanner('error', error.message)
       } finally {
         setTableBusy(false)
       }
     },
-    [activeDatabase, loadTables, showBanner, tablePrompt],
+    [activeSession, loadTables, patchSession, showBanner, tablePrompt],
   )
 
   const handleDropConfirm = useCallback(async () => {
-    const current = sessionRef.current
-    if (!current || !dropTarget || !activeDatabase) return
+    const current = activeSession()
+    if (!current || !dropTarget || !current.activeDatabase) return
 
     setTableBusy(true)
     try {
       await api.runQuery({
         connectionId: current.connectionId,
-        database: activeDatabase,
+        database: current.activeDatabase,
         sql: `DROP TABLE ${qualifiedName(dropTarget)};`,
       })
       showBanner('success', `Dropped ${dropTarget.schema}.${dropTarget.name}.`)
-      setSelectedTable(null)
+      patchSession(current.connectionId, { selectedTable: null })
       setPinnedTables((prev) => prev.filter((item) => item !== `${dropTarget.schema}.${dropTarget.name}`))
       setDropTarget(null)
-      await loadTables(current.connectionId, activeDatabase)
+      await loadTables(current.connectionId, current.activeDatabase)
     } catch (error) {
       showBanner('error', error.message)
     } finally {
       setTableBusy(false)
     }
-  }, [activeDatabase, dropTarget, loadTables, showBanner])
+  }, [activeSession, dropTarget, loadTables, patchSession, showBanner])
 
   const handleDesignGenerate = useCallback(
     (sql) => {
-      openTab('Generated SQL', sql)
+      const current = activeSession()
+      if (!current) return
+      openTab(current.connectionId, 'Generated SQL', sql)
     },
-    [openTab],
+    [activeSession, openTab],
   )
 
   const handleDesignApply = useCallback(
     async (tabId, sql, draft) => {
-      const current = sessionRef.current
+      const current = activeSession()
       if (!current) {
         showBanner('warn', 'Open a connection before applying changes.')
         return
       }
-      if (!activeDatabase) {
+      if (!current.activeDatabase) {
         showBanner('warn', 'Select a database before applying changes.')
         return
       }
 
-      updateTab(tabId, { busy: true })
+      updateTab(current.connectionId, tabId, { busy: true })
       try {
-        await api.runQuery({ connectionId: current.connectionId, database: activeDatabase, sql })
+        await api.runQuery({
+          connectionId: current.connectionId,
+          database: current.activeDatabase,
+          sql,
+        })
         showBanner('success', 'Structure applied.')
-        await loadTables(current.connectionId, activeDatabase)
+        await loadTables(current.connectionId, current.activeDatabase)
         await reloadDesign(tabId, draft.schema, draft.table)
       } catch (error) {
         showBanner('error', error.message)
       } finally {
-        updateTab(tabId, { busy: false })
+        updateTab(current.connectionId, tabId, { busy: false })
       }
     },
-    [activeDatabase, loadTables, reloadDesign, showBanner, updateTab],
+    [activeSession, loadTables, reloadDesign, showBanner, updateTab],
   )
 
   const handleDesignRename = useCallback(
     async (tabId, draft, nextName) => {
-      const current = sessionRef.current
-      if (!current || !activeDatabase) return
+      const current = activeSession()
+      if (!current || !current.activeDatabase) return
       if (!nextName || nextName === draft.table) return
 
-      updateTab(tabId, { busy: true })
+      updateTab(current.connectionId, tabId, { busy: true })
       try {
         await api.runQuery({
           connectionId: current.connectionId,
-          database: activeDatabase,
+          database: current.activeDatabase,
           sql: `EXEC sp_rename N'${quoteIdentifier(draft.schema)}.${quoteIdentifier(draft.table)}', N'${nextName.replace(/'/g, "''")}';`,
         })
         showBanner('success', `Renamed table to ${nextName}.`)
-        await loadTables(current.connectionId, activeDatabase)
+        await loadTables(current.connectionId, current.activeDatabase)
         await reloadDesign(tabId, draft.schema, nextName)
       } catch (error) {
         showBanner('error', error.message)
       } finally {
-        updateTab(tabId, { busy: false })
+        updateTab(current.connectionId, tabId, { busy: false })
       }
     },
-    [activeDatabase, loadTables, reloadDesign, showBanner, updateTab],
+    [activeSession, loadTables, reloadDesign, showBanner, updateTab],
   )
 
   const handleSqlChange = useCallback((value) => {
@@ -711,53 +866,61 @@ export default function App() {
 
   const handleSelectTab = useCallback(
     (tabId) => {
-      if (tabId === activeTabId) return
-      const next = tabs.find((tab) => tab.id === tabId)
+      const current = activeSession()
+      if (!current || tabId === current.activeTabId) return
+      const next = current.tabs.find((tab) => tab.id === tabId)
       if (!next) return
-      const liveSql = sqlRef.current
-      setTabs((prev) => prev.map((tab) => (tab.id === activeTabId ? { ...tab, sql: liveSql } : tab)))
-      setActiveTabId(tabId)
+      syncLiveSql(current.connectionId, current.activeTabId)
+      patchSession(current.connectionId, { activeTabId: tabId })
       seedEditor(next.sql)
     },
-    [activeTabId, seedEditor, tabs],
+    [activeSession, patchSession, seedEditor, syncLiveSql],
   )
 
   const handleCloseTab = useCallback(
     (tabId) => {
-      const index = tabs.findIndex((tab) => tab.id === tabId)
+      const current = activeSession()
+      if (!current) return
+      const index = current.tabs.findIndex((tab) => tab.id === tabId)
       if (index === -1) return
 
-      const remaining = tabs.filter((tab) => tab.id !== tabId)
+      const remaining = current.tabs.filter((tab) => tab.id !== tabId)
 
       if (remaining.length === 0) {
         queryIdRef.current += 1
         tabIdRef.current += 1
         const tab = createTab(`tab-${tabIdRef.current}`, queryTitle(queryIdRef.current), '')
-        setTabs([tab])
-        setActiveTabId(tab.id)
+        patchSession(current.connectionId, { tabs: [tab], activeTabId: tab.id })
         seedEditor(tab.sql)
         return
       }
 
-      setTabs(remaining)
-
-      if (tabId === activeTabId) {
-        const neighbour = remaining[Math.min(index, remaining.length - 1)]
-        setActiveTabId(neighbour.id)
-        seedEditor(neighbour.sql)
+      if (tabId !== current.activeTabId) {
+        patchSession(current.connectionId, { tabs: remaining })
+        return
       }
+
+      const neighbour = remaining[Math.min(index, remaining.length - 1)]
+      patchSession(current.connectionId, { tabs: remaining, activeTabId: neighbour.id })
+      seedEditor(neighbour.sql)
     },
-    [activeTabId, seedEditor, tabs],
+    [activeSession, patchSession, seedEditor],
   )
 
   const handleNewTab = useCallback(() => {
+    const current = activeSession()
+    if (!current) return
     queryIdRef.current += 1
-    openTab(queryTitle(queryIdRef.current), '')
-  }, [openTab])
+    openTab(current.connectionId, queryTitle(queryIdRef.current), '')
+  }, [activeSession, openTab])
 
   const handleSelectSet = useCallback(
-    (index) => updateTab(activeTabId, { activeSet: index }),
-    [activeTabId, updateTab],
+    (index) => {
+      const current = activeSession()
+      if (!current) return
+      updateTab(current.connectionId, current.activeTabId, { activeSet: index })
+    },
+    [activeSession, updateTab],
   )
 
   const handleSaveConnection = useCallback(
@@ -766,8 +929,8 @@ export default function App() {
       setConnections(await api.listConnections())
       setDialog(null)
 
-      const current = sessionRef.current
-      if (!current || current.connectionId !== saved.id) return
+      const current = sessionsRef.current[saved.id]
+      if (!current) return
 
       const reconnectKeys = ['host', 'port', 'username', 'database', 'encrypt', 'trustServerCertificate', 'hasPassword']
       const needsReconnect = reconnectKeys.some(
@@ -775,17 +938,13 @@ export default function App() {
       )
 
       if (needsReconnect) {
-        await closeSession()
+        await closeSession(saved.id)
         showBanner('info', 'Connection settings changed — reconnect to apply them.')
       } else {
-        setSession((prev) =>
-          prev && prev.connectionId === saved.id
-            ? { ...prev, name: saved.name, connection: saved }
-            : prev,
-        )
+        patchSession(saved.id, { name: saved.name, connection: saved })
       }
     },
-    [closeSession, showBanner],
+    [closeSession, patchSession, showBanner],
   )
 
   const handleDeleteConfirm = useCallback(async () => {
@@ -794,7 +953,7 @@ export default function App() {
     try {
       await api.deleteConnection(deleteTarget.id)
       setConnections(await api.listConnections())
-      if (sessionRef.current?.connectionId === deleteTarget.id) await closeSession()
+      if (sessionsRef.current[deleteTarget.id]) await closeSession(deleteTarget.id)
       setDeleteTarget(null)
     } catch (error) {
       showBanner('error', error.message)
@@ -880,8 +1039,11 @@ export default function App() {
     window.addEventListener('pointerup', stop)
   }, [])
 
-  const activeTab = tabs.find((tab) => tab.id === activeTabId)
-  const running = activeTab.state.status === 'running'
+  const session = activeConnectionId ? sessions[activeConnectionId] || null : null
+  const activeTab = session
+    ? session.tabs.find((tab) => tab.id === session.activeTabId) || null
+    : null
+  const running = activeTab?.state.status === 'running'
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -892,11 +1054,15 @@ export default function App() {
       {session && screen === 'workspace' ? (
         <div className="flex min-h-0 flex-1">
           <Sidebar
+            sessions={Object.values(sessions)}
+            activeConnectionId={activeConnectionId}
             session={session}
-            activeDatabase={activeDatabase}
-            tablesState={tablesState}
+            activeDatabase={session.activeDatabase}
+            tablesState={session.tables}
             appVersion={appVersion}
             pinnedTables={pinnedTables}
+            onActivateSession={activateSession}
+            onCloseSession={closeSession}
             onSelectDatabase={handleSelectDatabase}
             onBrowseTable={handleBrowseTable}
             onCopyObjectName={handleCopyObjectName}
@@ -909,8 +1075,8 @@ export default function App() {
             onDropTable={handleDropTable}
             onTogglePin={handleTogglePin}
             onOpenConnections={openConnectionScreen}
-            selectedTable={selectedTable}
-            onSelectTable={setSelectedTable}
+            selectedTable={session.selectedTable}
+            onSelectTable={handleSelectTable}
             onEditConnection={(connection) => setDialog({ mode: 'edit', connection })}
             onDeleteConnection={(connection) => setDeleteTarget(connection)}
             onRefreshDatabases={handleRefreshDatabases}
@@ -919,16 +1085,16 @@ export default function App() {
           <main className="flex min-w-0 flex-1 flex-col bg-base">
             <WorkspaceHeader
               session={session}
-              activeDatabase={activeDatabase}
+              activeDatabase={session.activeDatabase}
               running={running}
               onSelectDatabase={handleSelectDatabase}
               onRun={handleRun}
-              onDisconnect={closeSession}
+              onDisconnect={() => closeSession(session.connectionId)}
             />
 
             <TabBar
-              tabs={tabs}
-              activeTabId={activeTabId}
+              tabs={session.tabs}
+              activeTabId={session.activeTabId}
               onSelect={handleSelectTab}
               onClose={handleCloseTab}
               onNewTab={handleNewTab}
@@ -965,11 +1131,11 @@ export default function App() {
                 </div>
 
                 <ResultsPanel
-                  key={activeTab.id}
-                  state={activeTab.state}
-                  activeSet={activeTab.activeSet}
+                  key={`${session.connectionId}:${activeTab?.id ?? 'empty'}`}
+                  state={activeTab?.state || IDLE_QUERY}
+                  activeSet={activeTab?.activeSet ?? 0}
                   onSelectSet={handleSelectSet}
-                  relations={activeTab.relations}
+                  relations={activeTab?.relations || []}
                   onRelationClick={handleOpenRelation}
                 />
               </div>
@@ -977,8 +1143,8 @@ export default function App() {
 
             <StatusBar
               session={session}
-              activeDatabase={activeDatabase}
-              queryStatus={activeTab.state.status}
+              activeDatabase={session.activeDatabase}
+              queryStatus={activeTab?.state.status || 'idle'}
             />
           </main>
         </div>
@@ -986,6 +1152,7 @@ export default function App() {
         <ConnectionsScreen
           connections={connections}
           folders={folders}
+          openIds={Object.keys(sessions)}
           connectingId={connectingId}
           appVersion={appVersion}
           onOpen={handleConnect}

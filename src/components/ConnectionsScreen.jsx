@@ -20,6 +20,7 @@ function folderTree(folders, parentId = null, depth = 0, result = []) {
 export default function ConnectionsScreen({
   connections,
   folders,
+  openIds,
   connectingId,
   appVersion,
   onOpen,
@@ -87,6 +88,7 @@ export default function ConnectionsScreen({
 
   const renderConnection = (connection, depth) => {
     const isConnecting = connectingId === connection.id
+    const isOpen = openIds.includes(connection.id)
 
     return (
       <div
@@ -99,15 +101,26 @@ export default function ConnectionsScreen({
           disabled={isConnecting}
           onClick={() => onOpen(connection)}
           className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:opacity-70"
-          title={`Connect to ${connection.name} (${connection.host}:${connection.port})`}
+          title={isOpen ? `Switch to ${connection.name}` : `Connect to ${connection.name} (${connection.host}:${connection.port})`}
         >
           {isConnecting ? (
             <Spinner size={12} className="shrink-0 text-accent" />
           ) : (
-            <span className="h-[7px] w-[7px] shrink-0 rounded-full bg-slate-700" />
+            <span
+              className={`h-[7px] w-[7px] shrink-0 rounded-full ${
+                isOpen ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]' : 'bg-slate-700'
+              }`}
+            />
           )}
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[12.5px] text-slate-200">{connection.name}</span>
+            <span className="flex items-center gap-1.5">
+              <span className="truncate text-[12.5px] text-slate-200">{connection.name}</span>
+              {isOpen ? (
+                <span className="shrink-0 rounded border border-emerald-500/30 bg-emerald-500/10 px-1 text-[9px] font-semibold uppercase tracking-wide text-emerald-400">
+                  open
+                </span>
+              ) : null}
+            </span>
             <span className="block truncate text-[10.5px] leading-4 text-slate-600">
               {connection.host}:{connection.port}
               {connection.database ? ` · ${connection.database}` : ''}
