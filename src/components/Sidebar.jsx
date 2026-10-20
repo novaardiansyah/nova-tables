@@ -2,14 +2,6 @@ import { useEffect, useState } from 'react'
 import ContextMenu from './ContextMenu.jsx'
 import Icon, { BrandMark, Spinner } from './Icon.jsx'
 
-const TABLE_MENU_ITEMS = [
-  'Rename',
-  'Pin to top',
-  'Clone',
-  'Truncate',
-  'Delete',
-]
-
 export default function Sidebar({
   connections,
   session,
@@ -17,6 +9,7 @@ export default function Sidebar({
   activeDatabase,
   tablesState,
   appVersion,
+  pinnedTables,
   onConnect,
   onSelectDatabase,
   onBrowseTable,
@@ -29,6 +22,11 @@ export default function Sidebar({
   onRefreshDatabases,
   onOpenStructure,
   onNewTable,
+  onRenameTable,
+  onCloneTable,
+  onTruncateTable,
+  onDropTable,
+  onTogglePin,
   selectedTable,
   onSelectTable,
 }) {
@@ -64,6 +62,16 @@ export default function Sidebar({
     onSelectTable(`${table.schema}.${table.name}`)
     setMenu({ x: event.clientX, y: event.clientY, table })
   }
+
+  const pinned = new Set(pinnedTables)
+  const orderedTables = tablesState.tables
+    .map((table, index) => ({ table, index }))
+    .sort((left, right) => {
+      const leftRank = pinned.has(`${left.table.schema}.${left.table.name}`) ? 0 : 1
+      const rightRank = pinned.has(`${right.table.schema}.${right.table.name}`) ? 0 : 1
+      return leftRank - rightRank || left.index - right.index
+    })
+    .map((entry) => entry.table)
 
   return (
     <aside className="flex w-[272px] shrink-0 flex-col border-r border-line bg-panel">
@@ -225,7 +233,7 @@ export default function Sidebar({
                                 ) : null}
 
                                 {tablesState.status === 'ready'
-                                  ? tablesState.tables.map((table) => {
+                                  ? orderedTables.map((table) => {
                                       const key = `${table.schema}.${table.name}`
                                       return (
                                         <div
@@ -248,6 +256,9 @@ export default function Sidebar({
                                             ) : null}
                                             <span className="truncate">{table.name}</span>
                                           </button>
+                                          {pinned.has(key) ? (
+                                            <Icon name="pin" size={10} className="shrink-0 text-accent" />
+                                          ) : null}
                                           <button
                                             type="button"
                                             className="icon-btn h-5 w-5 opacity-0 group-hover/table:opacity-100"
@@ -309,7 +320,33 @@ export default function Sidebar({
               label: 'New table',
               onSelect: () => onNewTable(menu.table),
             },
-            ...TABLE_MENU_ITEMS.map((label) => ({ id: label, label })),
+            {
+              id: 'rename',
+              label: 'Rename',
+              onSelect: () => onRenameTable(menu.table),
+            },
+            {
+              id: 'clone',
+              label: 'Clone',
+              onSelect: () => onCloneTable(menu.table),
+            },
+            {
+              id: 'pin-to-top',
+              label: pinnedTables.includes(`${menu.table.schema}.${menu.table.name}`)
+                ? 'Unpin from top'
+                : 'Pin to top',
+              onSelect: () => onTogglePin(menu.table),
+            },
+            {
+              id: 'truncate',
+              label: 'Truncate',
+              onSelect: () => onTruncateTable(menu.table),
+            },
+            {
+              id: 'drop-table',
+              label: 'Drop Table',
+              onSelect: () => onDropTable(menu.table),
+            },
           ]}
           onClose={() => setMenu(null)}
         />

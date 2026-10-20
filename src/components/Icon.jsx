@@ -114,6 +114,12 @@ const ICONS = {
       <path d="M16 8l2.5 2.5" />
     </>
   ),
+  pin: (
+    <>
+      <path d="M12 17v5" />
+      <path d="M9 3h6l-1 6 3.5 3.5V15h-11v-2.5L10 9z" />
+    </>
+  ),
 }
 
 export default function Icon({ name, size = 15, className = '', strokeWidth = 1.7 }) {

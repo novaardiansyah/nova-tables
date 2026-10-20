@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from './api.js'
+import { generateCreateTable } from './designSql.js'
 import Banner from './components/Banner.jsx'
 import ConfirmDialog from './components/ConfirmDialog.jsx'
 import ConnectionDialog from './components/ConnectionDialog.jsx'
+import PromptDialog from './components/PromptDialog.jsx'
 import QueryEditor from './components/QueryEditor.jsx'
 import ResultsPanel from './components/ResultsPanel.jsx'
 import Sidebar from './components/Sidebar.jsx'
@@ -83,6 +85,31 @@ function queryTitle(index) {
   return `Query ${index}`
 }
 
+function constraintName(prefix, table, columns) {
+  return `${prefix}_${table}_${columns.join('_')}`.slice(0, 128)
+}
+
+function cloneDesign(structure, name) {
+  return {
+    schema: structure.schema,
+    table: name,
+    columns: structure.columns.map((column) => ({ ...column, defaultName: null, originalName: null })),
+    primaryKey: structure.primaryKey[0]?.columns ?? [],
+    uniqueKeys: structure.uniqueKeys.map((key) => ({
+      ...key,
+      name: constraintName('UQ', name, key.columns),
+    })),
+    foreignKeys: structure.foreignKeys.map((key) => ({
+      ...key,
+      name: constraintName('FK', name, key.columns.map((item) => item.column)),
+    })),
+    indexes: structure.indexes.map((index) => ({
+      ...index,
+      name: constraintName('IX', name, index.columns),
+    })),
+  }
+}
+
 const FIRST_TAB = createTab('tab-1', queryTitle(1), STARTER_SQL)
 
 export default function App() {
@@ -101,6 +128,10 @@ export default function App() {
   const [editorHeight, setEditorHeight] = useState(EDITOR_DEFAULT_HEIGHT)
   const [appVersion, setAppVersion] = useState('')
   const [selectedTable, setSelectedTable] = useState(null)
+  const [tablePrompt, setTablePrompt] = useState(null)
+  const [dropTarget, setDropTarget] = useState(null)
+  const [tableBusy, setTableBusy] = useState(false)
+  const [pinnedTables, setPinnedTables] = useState([])
 
   const sqlRef = useRef(STARTER_SQL)
   const sessionRef = useRef(null)
@@ -494,6 +525,117 @@ export default function App() {
     [openDesignTab, showBanner, updateTab],
   )
 
+  const handleRenameTable = useCallback((table) => {
+    setTablePrompt({ kind: 'rename', table })
+  }, [])
+
+  const handleTogglePin = useCallback((table) => {
+    const key = `${table.schema}.${table.name}`
+    setPinnedTables((prev) => (prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]))
+  }, [])
+
+  const handleCloneTable = useCallback(
+    async (table) => {
+      const current = sessionRef.current
+      if (!current) {
+        showBanner('warn', 'Open a connection before cloning a table.')
+        return
+      }
+      if (!activeDatabase) {
+        showBanner('warn', 'Select a database before cloning a table.')
+        return
+      }
+
+      try {
+        const structure = await api.tableStructure(
+          current.connectionId,
+          activeDatabase,
+          table.schema,
+          table.name,
+        )
+        const copyName = `${table.name}_copy`
+        const sql = generateCreateTable(cloneDesign(structure, copyName))
+        const tabId = openTab(copyName, sql)
+        setSelectedTable(`${structure.schema}.${copyName}`)
+        execute(sql, tabId)
+      } catch (error) {
+        showBanner('error', error.message)
+      }
+    },
+    [activeDatabase, execute, openTab, showBanner],
+  )
+
+  const handleTruncateTable = useCallback((table) => {
+    setTablePrompt({ kind: 'truncate', table })
+  }, [])
+
+  const handleDropTable = useCallback((table) => {
+    setDropTarget(table)
+  }, [])
+
+  const handleTablePromptConfirm = useCallback(
+    async (value) => {
+      const current = sessionRef.current
+      const prompt = tablePrompt
+      if (!current || !prompt || !activeDatabase) return
+
+      const table = prompt.table
+      if (prompt.kind === 'truncate' && value !== table.name) {
+        showBanner('warn', `Type “${table.name}” to confirm the truncate.`)
+        return
+      }
+
+      const statement =
+        prompt.kind === 'rename'
+          ? `EXEC sp_rename N'${qualifiedName(table)}', N'${value.replace(/'/g, "''")}';`
+          : `TRUNCATE TABLE ${qualifiedName(table)};`
+
+      setTableBusy(true)
+      try {
+        await api.runQuery({ connectionId: current.connectionId, database: activeDatabase, sql: statement })
+        const nextName = prompt.kind === 'rename' ? value : table.name
+        showBanner('success', prompt.kind === 'rename' ? `Renamed to ${value}.` : `Truncated ${table.name}.`)
+        setSelectedTable(`${table.schema}.${nextName}`)
+        if (prompt.kind === 'rename') {
+          const previousKey = `${table.schema}.${table.name}`
+          setPinnedTables((prev) =>
+            prev.map((item) => (item === previousKey ? `${table.schema}.${value}` : item)),
+          )
+        }
+        setTablePrompt(null)
+        await loadTables(current.connectionId, activeDatabase)
+      } catch (error) {
+        showBanner('error', error.message)
+      } finally {
+        setTableBusy(false)
+      }
+    },
+    [activeDatabase, loadTables, showBanner, tablePrompt],
+  )
+
+  const handleDropConfirm = useCallback(async () => {
+    const current = sessionRef.current
+    if (!current || !dropTarget || !activeDatabase) return
+
+    setTableBusy(true)
+    try {
+      await api.runQuery({
+        connectionId: current.connectionId,
+        database: activeDatabase,
+        sql: `DROP TABLE ${qualifiedName(dropTarget)};`,
+      })
+      showBanner('success', `Dropped ${dropTarget.schema}.${dropTarget.name}.`)
+      setSelectedTable(null)
+      setPinnedTables((prev) => prev.filter((item) => item !== `${dropTarget.schema}.${dropTarget.name}`))
+      setDropTarget(null)
+      await loadTables(current.connectionId, activeDatabase)
+    } catch (error) {
+      showBanner('error', error.message)
+    } finally {
+      setTableBusy(false)
+    }
+  }, [activeDatabase, dropTarget, loadTables, showBanner])
+
   const handleDesignGenerate = useCallback(
     (sql) => {
       openTab('Generated SQL', sql)
@@ -692,6 +834,7 @@ export default function App() {
           activeDatabase={activeDatabase}
           tablesState={tablesState}
           appVersion={appVersion}
+          pinnedTables={pinnedTables}
           onConnect={handleConnect}
           onSelectDatabase={handleSelectDatabase}
           onBrowseTable={handleBrowseTable}
@@ -700,6 +843,11 @@ export default function App() {
           onCopyStructure={handleCopyStructure}
           onOpenStructure={handleOpenStructure}
           onNewTable={handleNewTable}
+          onRenameTable={handleRenameTable}
+          onCloneTable={handleCloneTable}
+          onTruncateTable={handleTruncateTable}
+          onDropTable={handleDropTable}
+          onTogglePin={handleTogglePin}
           selectedTable={selectedTable}
           onSelectTable={setSelectedTable}
           onNewConnection={() => setDialog({ mode: 'create' })}
@@ -779,6 +927,43 @@ export default function App() {
           onTest={api.testConnection}
         />
       ) : null}
+
+      <PromptDialog
+        open={Boolean(tablePrompt)}
+        title={tablePrompt?.kind === 'rename' ? 'Rename table' : 'Truncate table'}
+        description={
+          tablePrompt?.kind === 'rename'
+            ? `Rename ${tablePrompt.table.schema}.${tablePrompt.table.name}.`
+            : `All rows in ${tablePrompt?.table.schema}.${tablePrompt?.table.name} will be removed. This cannot be undone.`
+        }
+        label={tablePrompt?.kind === 'rename' ? 'New name' : 'Table name'}
+        hint={
+          tablePrompt?.kind === 'rename'
+            ? null
+            : `Type "${tablePrompt?.table.name}" to confirm this action.`
+        }
+        confirmLabel={tableBusy ? 'Working…' : tablePrompt?.kind === 'rename' ? 'Rename' : 'Truncate'}
+        initialValue={tablePrompt?.kind === 'rename' ? tablePrompt.table.name : ''}
+        placeholder={tablePrompt?.kind === 'rename' ? tablePrompt.table.name : ''}
+        busy={tableBusy}
+        onCancel={() => setTablePrompt(null)}
+        onConfirm={handleTablePromptConfirm}
+      />
+
+      <ConfirmDialog
+        open={Boolean(dropTarget)}
+        title="Drop table"
+        message={
+          dropTarget
+            ? `“${dropTarget.schema}.${dropTarget.name}” will be permanently dropped. This cannot be undone.`
+            : ''
+        }
+        confirmLabel={tableBusy ? 'Dropping…' : 'Drop Table'}
+        danger
+        busy={tableBusy}
+        onCancel={() => setDropTarget(null)}
+        onConfirm={handleDropConfirm}
+      />
 
       <ConfirmDialog
         open={Boolean(deleteTarget)}
