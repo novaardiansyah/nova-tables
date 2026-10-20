@@ -2,7 +2,7 @@ import Icon, { Spinner } from './Icon.jsx'
 
 export default function StatusBar({ session, activeDatabase, queryStatus }) {
   return (
-    <footer className="flex h-7 shrink-0 items-center justify-between gap-4 border-t border-line bg-panel px-3 text-[10.5px] text-slate-500">
+    <footer className="flex h-7 shrink-0 items-center justify-between gap-4 border-t border-line bg-panel px-3 text-[length:calc(10.5px*var(--app-font-scale))] text-slate-500">
       <div className="flex min-w-0 items-center gap-3">
         {session ? (
           <>

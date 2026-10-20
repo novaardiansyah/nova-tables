@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import Editor from '@monaco-editor/react'
-import { NOVA_THEME } from '../monaco.js'
+import { editorThemeName } from '../monaco.js'
 import { Spinner } from './Icon.jsx'
 
 const EDITOR_OPTIONS = {
@@ -31,7 +31,7 @@ const EDITOR_OPTIONS = {
   fixedOverflowWidgets: true,
 }
 
-export default function QueryEditor({ seed, onChange, onRun }) {
+export default function QueryEditor({ seed, theme, onChange, onRun }) {
   const editorRef = useRef(null)
   const handlersRef = useRef({ onChange, onRun })
   const lastSeedRef = useRef(null)
@@ -72,7 +72,7 @@ export default function QueryEditor({ seed, onChange, onRun }) {
     <div className="h-full w-full">
       <Editor
         language="sql"
-        theme={NOVA_THEME}
+        theme={editorThemeName(theme)}
         defaultValue={seed.value}
         onMount={handleMount}
         onChange={(value) => {
@@ -81,7 +81,7 @@ export default function QueryEditor({ seed, onChange, onRun }) {
         }}
         options={EDITOR_OPTIONS}
         loading={
-          <div className="flex items-center gap-2 p-4 text-[12px] text-slate-500">
+          <div className="flex items-center gap-2 p-4 text-[length:calc(12px*var(--app-font-scale))] text-slate-500">
             <Spinner size={13} />
             Loading editor…
           </div>

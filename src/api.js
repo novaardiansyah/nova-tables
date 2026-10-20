@@ -69,9 +69,16 @@ export const api = {
 
   copyText: async (text) => call(() => bridge().clipboard.writeText(text)),
 
+  loadSettings: async () => (await call(() => bridge().settings.get())).settings,
+
+  saveSettings: async (settings) =>
+    (await call(() => bridge().settings.save(settings))).settings,
+
   onOpenConnection: (handler) => bridge().events.onOpenConnection(handler),
 
   onNewConnection: (handler) => bridge().events.onNewConnection(handler),
+
+  onPreferences: (handler) => bridge().events.onPreferences(handler),
 
   appInfo: async () => call(() => bridge().app.info()),
 }

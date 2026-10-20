@@ -80,21 +80,21 @@ export default function ResultsPanel({ state, activeSet, onSelectSet, relations,
 
       <div className="flex h-9 shrink-0 items-center gap-1 overflow-x-auto border-b border-line bg-panel px-2">
         {status === 'error' ? (
-          <span className="flex items-center gap-1.5 px-2 text-[11.5px] font-medium text-rose-400">
+          <span className="flex items-center gap-1.5 px-2 text-[length:calc(11.5px*var(--app-font-scale))] font-medium text-rose-400">
             <Icon name="alert-triangle" size={12} />
             Error
           </span>
         ) : null}
 
         {status === 'running' ? (
-          <span className="flex items-center gap-1.5 px-2 text-[11.5px] text-slate-400">
+          <span className="flex items-center gap-1.5 px-2 text-[length:calc(11.5px*var(--app-font-scale))] text-slate-400">
             <Spinner size={12} />
             Running query…
           </span>
         ) : null}
 
         {status !== 'error' && status !== 'running' && resultSets.length === 0 ? (
-          <span className="px-2 text-[11.5px] font-medium text-slate-400">Results</span>
+          <span className="px-2 text-[length:calc(11.5px*var(--app-font-scale))] font-medium text-slate-400">Results</span>
         ) : null}
 
         {status !== 'error' && resultSets.length > 0
@@ -106,21 +106,21 @@ export default function ResultsPanel({ state, activeSet, onSelectSet, relations,
                   onSelectSet(index)
                   setSelectedRow(null)
                 }}
-                className={`flex h-6 shrink-0 items-center gap-1.5 rounded px-2 text-[11.5px] transition-colors ${
+                className={`flex h-6 shrink-0 items-center gap-1.5 rounded px-2 text-[length:calc(11.5px*var(--app-font-scale))] transition-colors ${
                   index === activeIndex
                     ? 'bg-white/[0.06] text-slate-100'
                     : 'text-slate-500 hover:bg-white/[0.03] hover:text-slate-300'
                 }`}
               >
                 Result {index + 1}
-                <span className="rounded bg-black/25 px-1 text-[10px] tabular-nums text-slate-500">
+                <span className="rounded bg-black/25 px-1 text-[length:calc(10px*var(--app-font-scale))] tabular-nums text-slate-500">
                   {formatNumber(set.rowCount)}
                 </span>
               </button>
             ))
           : null}
 
-        <div className="ml-auto flex shrink-0 items-center gap-3 pl-3 text-[11px] text-slate-500">
+        <div className="ml-auto flex shrink-0 items-center gap-3 pl-3 text-[length:calc(11px*var(--app-font-scale))] text-slate-500">
           {status === 'success' && result ? (
             <>
               <span className="tabular-nums">{formatNumber(result.rowCount)} rows</span>
@@ -135,7 +135,7 @@ export default function ResultsPanel({ state, activeSet, onSelectSet, relations,
             </>
           ) : null}
           {status === 'error' && error?.code ? (
-            <span className="font-mono text-[10.5px] text-slate-600">{error.code}</span>
+            <span className="font-mono text-[length:calc(10.5px*var(--app-font-scale))] text-slate-600">{error.code}</span>
           ) : null}
         </div>
       </div>
@@ -144,7 +144,7 @@ export default function ResultsPanel({ state, activeSet, onSelectSet, relations,
         {status === 'idle' ? <IdleState /> : null}
         {status === 'running' ? (
           <div className="flex h-full items-center justify-center">
-            <div className="flex items-center gap-2 text-[12.5px] text-slate-500">
+            <div className="flex items-center gap-2 text-[length:calc(12.5px*var(--app-font-scale))] text-slate-500">
               <Spinner size={14} />
               Executing against SQL Server…
             </div>
@@ -157,7 +157,7 @@ export default function ResultsPanel({ state, activeSet, onSelectSet, relations,
           ) : (
             <div className="flex h-full flex-col">
               {result.truncated ? (
-                <p className="border-b border-line bg-amber-500/[0.06] px-3 py-1.5 text-[11px] text-amber-300/90">
+                <p className="border-b border-line bg-amber-500/[0.06] px-3 py-1.5 text-[length:calc(11px*var(--app-font-scale))] text-amber-300/90">
                   Result set was larger than the transfer limit. Only the first{' '}
                   {formatNumber(result.maxRows)} rows of each set were loaded.
                 </p>
@@ -191,7 +191,7 @@ export default function ResultsPanel({ state, activeSet, onSelectSet, relations,
                     >
                       <div className="flex h-8 shrink-0 items-center gap-2 border-b border-line px-3">
                         <Icon name="grid" size={12} className="shrink-0 text-slate-500" />
-                        <span className="text-[11px] font-medium text-slate-400">
+                        <span className="text-[length:calc(11px*var(--app-font-scale))] font-medium text-slate-400">
                           Row {selectedRow + 1}
                         </span>
                         <button
@@ -223,8 +223,8 @@ function IdleState() {
         <Icon name="grid" size={19} />
       </span>
       <div>
-        <p className="text-[13px] text-slate-400">No query results yet</p>
-        <p className="mt-1 text-[11.5px] text-slate-600">
+        <p className="text-[length:calc(13px*var(--app-font-scale))] text-slate-400">No query results yet</p>
+        <p className="mt-1 text-[length:calc(11.5px*var(--app-font-scale))] text-slate-600">
           Run a query with <span className="kbd">Ctrl</span> + <span className="kbd">↵</span> to see the
           output here.
         </p>
@@ -249,14 +249,14 @@ function ErrorState({ error }) {
             <Icon name="alert-triangle" size={13} />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-[10.5px] font-semibold uppercase tracking-wider text-rose-400/80">
+            <p className="text-[length:calc(10.5px*var(--app-font-scale))] font-semibold uppercase tracking-wider text-rose-400/80">
               Query failed
             </p>
-            <p className="mt-1 whitespace-pre-wrap break-words font-mono text-[12px] leading-5 text-rose-100">
+            <p className="mt-1 whitespace-pre-wrap break-words font-mono text-[length:calc(12px*var(--app-font-scale))] leading-5 text-rose-100">
               {error?.message || 'Unknown error'}
             </p>
             {details.length > 0 ? (
-              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-rose-300/60">
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:calc(10.5px*var(--app-font-scale))] text-rose-300/60">
                 {details.map((detail) => (
                   <span key={detail}>{detail}</span>
                 ))}
@@ -275,8 +275,8 @@ function CompletedState({ rowsAffected, elapsedMs }) {
       <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400">
         <Icon name="check-circle" size={18} />
       </span>
-      <p className="text-[13px] text-slate-300">Query completed successfully</p>
-      <p className="text-[11.5px] text-slate-500">
+      <p className="text-[length:calc(13px*var(--app-font-scale))] text-slate-300">Query completed successfully</p>
+      <p className="text-[length:calc(11.5px*var(--app-font-scale))] text-slate-500">
         {rowsAffected > 0 ? `${formatNumber(rowsAffected)} rows affected` : 'No rows returned'} ·{' '}
         {formatDuration(elapsedMs)}
       </p>

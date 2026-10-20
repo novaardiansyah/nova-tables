@@ -34,8 +34,8 @@ export default function ConfirmDialog({
             <Icon name={danger ? 'alert-triangle' : 'info'} size={15} />
           </span>
           <div className="min-w-0">
-            <h2 className="text-[14px] font-semibold text-slate-100">{title}</h2>
-            {message ? <p className="mt-1 text-[12.5px] leading-5 text-slate-400">{message}</p> : null}
+            <h2 className="text-[length:calc(14px*var(--app-font-scale))] font-semibold text-slate-100">{title}</h2>
+            {message ? <p className="mt-1 text-[length:calc(12.5px*var(--app-font-scale))] leading-5 text-slate-400">{message}</p> : null}
           </div>
         </div>
 

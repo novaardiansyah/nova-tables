@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from './api.js'
+import { DEFAULT_SETTINGS, applySettings } from './settings.js'
 import { generateCreateTable } from './designSql.js'
 import Banner from './components/Banner.jsx'
 import ConfirmDialog from './components/ConfirmDialog.jsx'
@@ -10,6 +11,7 @@ import QueryEditor from './components/QueryEditor.jsx'
 import ResultsPanel from './components/ResultsPanel.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import ShortcutPanel from './components/ShortcutPanel.jsx'
+import SettingsDialog from './components/SettingsDialog.jsx'
 import StatusBar from './components/StatusBar.jsx'
 import TabBar from './components/TabBar.jsx'
 import TableDesigner from './components/TableDesigner.jsx'
@@ -151,6 +153,8 @@ export default function App() {
   const [tableBusy, setTableBusy] = useState(false)
   const [pinnedTables, setPinnedTables] = useState([])
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS)
 
   const sqlRef = useRef(STARTER_SQL)
   const sessionsRef = useRef({})
@@ -235,6 +239,13 @@ export default function App() {
       .appInfo()
       .then((info) => {
         if (!cancelled) setAppVersion(info.version)
+      })
+      .catch(() => {})
+
+    api
+      .loadSettings()
+      .then((stored) => {
+        if (!cancelled) setSettings(applySettings(stored))
       })
       .catch(() => {})
 
@@ -358,13 +369,26 @@ export default function App() {
     setBanner(null)
   }, [])
 
+  const saveSettings = useCallback(async (next) => {
+    try {
+      const saved = await api.saveSettings(next)
+      setSettings(applySettings(saved))
+      setSettingsOpen(false)
+    } catch (error) {
+      showBanner('error', error.message)
+      throw error
+    }
+  }, [showBanner])
+
   useEffect(() => {
     try {
       const offOpen = api.onOpenConnection(openConnectionScreen)
       const offNew = api.onNewConnection(() => setDialog({ mode: 'create' }))
+      const offPreferences = api.onPreferences(() => setSettingsOpen(true))
       return () => {
         offOpen()
         offNew()
+        offPreferences()
       }
     } catch {
       return undefined
@@ -1108,7 +1132,8 @@ export default function App() {
         Boolean(tablePrompt) ||
         Boolean(dropTarget) ||
         Boolean(deleteTarget) ||
-        shortcutsOpen
+        shortcutsOpen ||
+        settingsOpen
 
       if (!event.ctrlKey && !event.metaKey) {
         if (event.key === 'F5' && !hasDialog && !isFormField) {
@@ -1138,6 +1163,12 @@ export default function App() {
       if (event.key.toLowerCase() === 'o' && !event.shiftKey) {
         event.preventDefault()
         openConnectionScreen()
+        return
+      }
+
+      if (event.key === ',') {
+        event.preventDefault()
+        setSettingsOpen(true)
         return
       }
 
@@ -1182,6 +1213,7 @@ export default function App() {
     handleSelectTabIndex,
     openConnectionScreen,
     screen,
+    settingsOpen,
     shortcutsOpen,
     tablePrompt,
   ])
@@ -1263,7 +1295,7 @@ export default function App() {
             ) : (
               <div ref={splitRef} className="flex min-h-0 flex-1 flex-col">
                 <div style={{ height: editorHeight }} className="min-h-[140px] shrink-0 overflow-hidden">
-                  <QueryEditor seed={query} onChange={handleSqlChange} onRun={handleRun} />
+                  <QueryEditor seed={query} theme={settings.theme} onChange={handleSqlChange} onRun={handleRun} />
                 </div>
 
                 <div
@@ -1312,6 +1344,13 @@ export default function App() {
       )}
 
       <ShortcutPanel open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+
+      <SettingsDialog
+        open={settingsOpen}
+        settings={settings}
+        onClose={() => setSettingsOpen(false)}
+        onSave={saveSettings}
+      />
 
       {dialog ? (
         <ConnectionDialog

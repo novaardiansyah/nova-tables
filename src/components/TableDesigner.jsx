@@ -84,10 +84,10 @@ function Section({ title, count, onAdd, addLabel, children }) {
   return (
     <section className="rounded-lg border border-line bg-panel">
       <div className="flex items-center gap-2 border-b border-line px-3 py-2">
-        <span className="text-[11.5px] font-semibold uppercase tracking-wider text-slate-500">{title}</span>
-        {count !== undefined ? <span className="text-[11px] text-slate-600">{count}</span> : null}
+        <span className="text-[length:calc(11.5px*var(--app-font-scale))] font-semibold uppercase tracking-wider text-slate-500">{title}</span>
+        {count !== undefined ? <span className="text-[length:calc(11px*var(--app-font-scale))] text-slate-600">{count}</span> : null}
         {onAdd ? (
-          <button type="button" className="btn-ghost ml-auto h-6 px-2 text-[11.5px]" onClick={onAdd}>
+          <button type="button" className="btn-ghost ml-auto h-6 px-2 text-[length:calc(11.5px*var(--app-font-scale))]" onClick={onAdd}>
             <Icon name="plus" size={12} />
             {addLabel}
           </button>
@@ -125,7 +125,7 @@ export default function TableDesigner({
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center gap-2 text-[12.5px] text-slate-500">
+      <div className="flex h-full items-center justify-center gap-2 text-[length:calc(12.5px*var(--app-font-scale))] text-slate-500">
         <Spinner size={14} />
         Reading table definition…
       </div>
@@ -134,7 +134,7 @@ export default function TableDesigner({
 
   if (error) {
     return (
-      <div className="flex h-full items-center justify-center px-8 text-center text-[12.5px] leading-5 text-rose-400">
+      <div className="flex h-full items-center justify-center px-8 text-center text-[length:calc(12.5px*var(--app-font-scale))] leading-5 text-rose-400">
         {error}
       </div>
     )
@@ -327,32 +327,32 @@ export default function TableDesigner({
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-9 shrink-0 items-center gap-2 border-b border-line bg-panel px-3">
         <Icon name="table" size={13} className="shrink-0 text-slate-500" />
-        <span className="text-[11.5px] text-slate-500">{draft.schema}</span>
+        <span className="text-[length:calc(11.5px*var(--app-font-scale))] text-slate-500">{draft.schema}</span>
         <button
           type="button"
           onClick={() => {}}
           title={mode === 'new' ? 'New table' : 'Click to load the name into the picker below'}
-          className="text-[12px] text-slate-200"
+          className="text-[length:calc(12px*var(--app-font-scale))] text-slate-200"
         >
           {draft.table || '(untitled)'}
         </button>
-        <span className="rounded border border-line-strong bg-white/[0.03] px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-slate-500">
+        <span className="rounded border border-line-strong bg-white/[0.03] px-1.5 py-0.5 text-[length:calc(9.5px*var(--app-font-scale))] font-semibold uppercase tracking-wider text-slate-500">
           {mode === 'new' ? 'new' : 'design'}
         </span>
 
         <div className="ml-auto flex items-center gap-2">
           {mode === 'edit' ? (
-            <button type="button" className="btn-ghost h-6 px-2 text-[11.5px]" onClick={handleRename} disabled={!draft.table.trim() || draft.table === design?.table}>
+            <button type="button" className="btn-ghost h-6 px-2 text-[length:calc(11.5px*var(--app-font-scale))]" onClick={handleRename} disabled={!draft.table.trim() || draft.table === design?.table}>
               Rename
             </button>
           ) : null}
-          <button type="button" className="btn-ghost h-6 px-2 text-[11.5px]" onClick={discard} disabled={busy}>
+          <button type="button" className="btn-ghost h-6 px-2 text-[length:calc(11.5px*var(--app-font-scale))]" onClick={discard} disabled={busy}>
             Discard
           </button>
-          <button type="button" className="btn-soft h-6 px-2 text-[11.5px]" onClick={handleGenerate} disabled={busy}>
+          <button type="button" className="btn-soft h-6 px-2 text-[length:calc(11.5px*var(--app-font-scale))]" onClick={handleGenerate} disabled={busy}>
             Generate SQL
           </button>
-          <button type="button" className="btn-primary h-6 px-2.5 text-[11.5px]" onClick={handleApply} disabled={busy || (mode === 'new' && !draft.table.trim())}>
+          <button type="button" className="btn-primary h-6 px-2.5 text-[length:calc(11.5px*var(--app-font-scale))]" onClick={handleApply} disabled={busy || (mode === 'new' && !draft.table.trim())}>
             {busy ? <Spinner size={11} /> : <Icon name="check-circle" size={12} />}
             Apply
           </button>
@@ -360,7 +360,7 @@ export default function TableDesigner({
       </div>
 
       {notice ? (
-        <div className="flex items-start gap-2 border-b border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11.5px] leading-5 text-amber-200">
+        <div className="flex items-start gap-2 border-b border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[length:calc(11.5px*var(--app-font-scale))] leading-5 text-amber-200">
           <Icon name="alert-triangle" size={12} className="mt-0.5 shrink-0 text-amber-400" />
           <span>{notice}</span>
         </div>
@@ -374,18 +374,18 @@ export default function TableDesigner({
 
         <section className="rounded-lg border border-line bg-panel">
           <div className="flex items-center gap-2 border-b border-line px-3 py-2">
-            <span className="text-[11.5px] font-semibold uppercase tracking-wider text-slate-500">Columns</span>
-            <span className="text-[11px] text-slate-600">{draft.columns.length}</span>
-            <button type="button" className="btn-ghost ml-auto h-6 px-2 text-[11.5px]" onClick={addColumn}>
+            <span className="text-[length:calc(11.5px*var(--app-font-scale))] font-semibold uppercase tracking-wider text-slate-500">Columns</span>
+            <span className="text-[length:calc(11px*var(--app-font-scale))] text-slate-600">{draft.columns.length}</span>
+            <button type="button" className="btn-ghost ml-auto h-6 px-2 text-[length:calc(11.5px*var(--app-font-scale))]" onClick={addColumn}>
               <Icon name="plus" size={12} />
               Add column
             </button>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] border-collapse text-[12px]">
+            <table className="w-full min-w-[900px] border-collapse text-[length:calc(12px*var(--app-font-scale))]">
               <thead>
-                <tr className="text-left text-[10.5px] uppercase tracking-wider text-slate-600">
+                <tr className="text-left text-[length:calc(10.5px*var(--app-font-scale))] uppercase tracking-wider text-slate-600">
                   <th className="px-3 py-2 font-medium">Name</th>
                   <th className="px-2 py-2 font-medium">Type</th>
                   <th className="px-2 py-2 font-medium">Length</th>
@@ -508,7 +508,7 @@ export default function TableDesigner({
 
         <Section title="Unique keys" count={draft.uniqueKeys.length} onAdd={addUnique} addLabel="Add unique key">
           {draft.uniqueKeys.length === 0 ? (
-            <p className="text-[11.5px] text-slate-600">No unique keys.</p>
+            <p className="text-[length:calc(11.5px*var(--app-font-scale))] text-slate-600">No unique keys.</p>
           ) : (
             <div className="space-y-2">
               {draft.uniqueKeys.map((key, index) => (
@@ -518,10 +518,10 @@ export default function TableDesigner({
                     <span className="field-label">Columns</span>
                     <div className="flex flex-wrap gap-1.5">
                       {columnOptions.length === 0 ? (
-                        <span className="text-[11.5px] text-slate-600">No columns.</span>
+                        <span className="text-[length:calc(11.5px*var(--app-font-scale))] text-slate-600">No columns.</span>
                       ) : (
                         columnOptions.map((option) => (
-                          <label key={option.value} className="flex items-center gap-1 rounded border border-line-strong px-2 py-1 text-[11.5px] text-slate-300">
+                          <label key={option.value} className="flex items-center gap-1 rounded border border-line-strong px-2 py-1 text-[length:calc(11.5px*var(--app-font-scale))] text-slate-300">
                             <input
                               type="checkbox"
                               className="h-3 w-3 accent-accent"
@@ -551,7 +551,7 @@ export default function TableDesigner({
 
         <Section title="Foreign keys" count={draft.foreignKeys.length} onAdd={addForeign} addLabel="Add foreign key">
           {draft.foreignKeys.length === 0 ? (
-            <p className="text-[11.5px] text-slate-600">No foreign keys.</p>
+            <p className="text-[length:calc(11.5px*var(--app-font-scale))] text-slate-600">No foreign keys.</p>
           ) : (
             <div className="space-y-3">
               {draft.foreignKeys.map((key, index) => (
@@ -591,7 +591,7 @@ export default function TableDesigner({
                         </button>
                       </div>
                     ))}
-                    <button type="button" className="btn-ghost h-6 px-2 text-[11.5px]" onClick={() => addForeignColumn(index)}>
+                    <button type="button" className="btn-ghost h-6 px-2 text-[length:calc(11.5px*var(--app-font-scale))]" onClick={() => addForeignColumn(index)}>
                       <Icon name="plus" size={11} />
                       Add column pair
                     </button>
@@ -604,7 +604,7 @@ export default function TableDesigner({
 
         <Section title="Indexes" count={draft.indexes.length} onAdd={addIndex} addLabel="Add index">
           {draft.indexes.length === 0 ? (
-            <p className="text-[11.5px] text-slate-600">No indexes.</p>
+            <p className="text-[length:calc(11.5px*var(--app-font-scale))] text-slate-600">No indexes.</p>
           ) : (
             <div className="space-y-2">
               {draft.indexes.map((index, position) => (
@@ -614,10 +614,10 @@ export default function TableDesigner({
                     <span className="field-label">Columns</span>
                     <div className="flex flex-wrap gap-1.5">
                       {columnOptions.length === 0 ? (
-                        <span className="text-[11.5px] text-slate-600">No columns.</span>
+                        <span className="text-[length:calc(11.5px*var(--app-font-scale))] text-slate-600">No columns.</span>
                       ) : (
                         columnOptions.map((option) => (
-                          <label key={option.value} className="flex items-center gap-1 rounded border border-line-strong px-2 py-1 text-[11.5px] text-slate-300">
+                          <label key={option.value} className="flex items-center gap-1 rounded border border-line-strong px-2 py-1 text-[length:calc(11.5px*var(--app-font-scale))] text-slate-300">
                             <input
                               type="checkbox"
                               className="h-3 w-3 accent-accent"
@@ -630,7 +630,7 @@ export default function TableDesigner({
                       )}
                     </div>
                   </div>
-                  <label className="flex items-center gap-1.5 text-[11.5px] text-slate-400">
+                  <label className="flex items-center gap-1.5 text-[length:calc(11.5px*var(--app-font-scale))] text-slate-400">
                     <input type="checkbox" className="h-3.5 w-3.5 accent-accent" checked={index.unique} onChange={(event) => updateIndex(position, { unique: event.target.checked })} />
                     Unique
                   </label>

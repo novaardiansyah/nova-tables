@@ -5,20 +5,21 @@ export default {
   theme: {
     extend: {
       colors: {
-        base: '#0b0e13',
-        panel: '#0f1218',
-        surface: '#12161d',
-        elevated: '#161b23',
-        line: '#1c212a',
-        'line-strong': '#262d38',
+        base: 'rgb(var(--color-base) / <alpha-value>)',
+        panel: 'rgb(var(--color-panel) / <alpha-value>)',
+        surface: 'rgb(var(--color-surface) / <alpha-value>)',
+        elevated: 'rgb(var(--color-elevated) / <alpha-value>)',
+        line: 'rgb(var(--color-line) / <alpha-value>)',
+        'line-strong': 'rgb(var(--color-line-strong) / <alpha-value>)',
+        'row-hover': 'rgb(var(--color-row-hover) / <alpha-value>)',
         accent: {
-          DEFAULT: '#4f8cff',
-          hover: '#6b9dff',
-          soft: 'rgba(79, 140, 255, 0.14)',
+          DEFAULT: 'rgb(var(--color-accent) / <alpha-value>)',
+          hover: 'rgb(var(--color-accent-hover) / <alpha-value>)',
+          soft: 'rgb(var(--color-accent) / 0.14)',
         },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'Segoe UI', 'Helvetica', 'Arial', 'sans-serif'],
+        sans: ['var(--app-font-family)'],
         mono: ['JetBrains Mono', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
       keyframes: {

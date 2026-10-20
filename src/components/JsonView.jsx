@@ -44,7 +44,10 @@ function tokenize(text) {
 
 export default function JsonView({ text }) {
   return (
-    <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words px-3 py-2 font-mono text-[12.5px] leading-5 text-[#f8f8f2]">
+    <pre
+      className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words px-3 py-2 leading-5 text-[#f8f8f2]"
+      style={{ fontFamily: 'var(--json-font-family)', fontSize: 'var(--json-font-size)' }}
+    >
       {tokenize(text)}
     </pre>
   )

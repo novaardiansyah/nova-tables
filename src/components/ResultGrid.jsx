@@ -96,16 +96,19 @@ export default function ResultGrid({
 
   return (
     <div className="h-full overflow-auto">
-      <table className="min-w-full border-separate border-spacing-0 text-[12.5px]">
+      <table
+        className="min-w-full border-separate border-spacing-0"
+        style={{ fontFamily: 'var(--grid-font-family)', fontSize: 'var(--grid-font-size)' }}
+      >
         <thead>
           <tr>
-            <th className="sticky left-0 top-0 z-30 w-12 border-b border-r border-line bg-elevated px-2 py-1.5 text-right text-[10.5px] font-medium text-slate-600">
+            <th className="sticky left-0 top-0 z-30 w-12 border-b border-r border-line bg-elevated px-2 py-1.5 text-right text-[0.84em] font-medium text-slate-600">
               #
             </th>
             {columns.map((column, index) => (
               <th
                 key={`${column.name}-${index}`}
-                className={`sticky top-0 z-20 whitespace-nowrap border-b border-line bg-elevated text-[11px] font-semibold tracking-wide text-slate-400 ${
+                className={`sticky top-0 z-20 whitespace-nowrap border-b border-line bg-elevated text-[0.88em] font-semibold tracking-wide text-slate-400 ${
                   numericColumns[index] ? 'text-right' : 'text-left'
                 }`}
               >
@@ -146,7 +149,7 @@ export default function ResultGrid({
               className={`group cursor-pointer ${selectedIndex === index ? 'bg-white/[0.04]' : ''}`}
             >
               <td
-                className={`sticky left-0 z-10 border-b border-r border-line px-2 py-[5px] text-right font-mono text-[10.5px] text-slate-600 group-hover:bg-[#161c26] ${
+                className={`sticky left-0 z-10 border-b border-r border-line px-2 py-[5px] text-right font-mono text-[0.84em] text-slate-600 group-hover:bg-row-hover ${
                   selectedIndex === index ? 'bg-white/[0.04]' : 'bg-surface'
                 }`}
               >
@@ -155,7 +158,7 @@ export default function ResultGrid({
               {columns.map((_, index) => (
                 <td
                   key={index}
-                  className={`whitespace-nowrap border-b border-line/70 px-3 py-[5px] group-hover:bg-[#161c26] ${
+                  className={`whitespace-nowrap border-b border-line/70 px-3 py-[5px] group-hover:bg-row-hover ${
                     numericColumns[index] ? 'text-right tabular-nums' : ''
                   }`}
                 >
@@ -191,7 +194,7 @@ export default function ResultGrid({
 
 function Cell({ value }) {
   if (value === null || value === undefined) {
-    return <span className="font-mono text-[11.5px] italic text-slate-600">NULL</span>
+    return <span className="font-mono text-[0.92em] italic text-slate-600">NULL</span>
   }
 
   if (typeof value === 'number') {

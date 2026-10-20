@@ -20,7 +20,7 @@ export default function WorkspaceHeader({
       {session ? (
         <>
           <span className="h-[7px] w-[7px] shrink-0 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
-          <span className="max-w-[220px] truncate text-[13px] font-medium text-slate-100" title={session.name}>
+          <span className="max-w-[220px] truncate text-[length:calc(13px*var(--app-font-scale))] font-medium text-slate-100" title={session.name}>
             {session.name}
           </span>
           <span className="text-slate-700">/</span>
@@ -30,15 +30,15 @@ export default function WorkspaceHeader({
             onChange={onSelectDatabase}
             disabled={options.length === 0}
           />
-          <span className="hidden truncate text-[11px] text-slate-600 lg:block">
+          <span className="hidden truncate text-[length:calc(11px*var(--app-font-scale))] text-slate-600 lg:block">
             {session.host}:{session.port}
           </span>
         </>
       ) : (
         <>
           <span className="h-[7px] w-[7px] shrink-0 rounded-full bg-slate-700" />
-          <span className="text-[13px] text-slate-400">No connection open</span>
-          <span className="hidden text-[11.5px] text-slate-600 lg:block">
+          <span className="text-[length:calc(13px*var(--app-font-scale))] text-slate-400">No connection open</span>
+          <span className="hidden text-[length:calc(11.5px*var(--app-font-scale))] text-slate-600 lg:block">
             Pick a saved connection in the sidebar to start browsing.
           </span>
         </>

@@ -5,8 +5,10 @@ import {
   listConnections,
   listFolders,
   moveConnection,
+  readSettings,
   saveConnection,
   saveFolder,
+  writeSettings,
 } from './connectionStore.js'
 import {
   connect,
@@ -71,6 +73,10 @@ export function registerIpcHandlers() {
     version: app.getVersion(),
     platform: process.platform,
   }))
+
+  handle('settings:get', () => ({ settings: readSettings() }))
+
+  handle('settings:save', (settings) => ({ settings: writeSettings(settings) }))
 
   handle('clipboard:write-text', (text) => {
     clipboard.writeText(String(text ?? ''))

@@ -35,11 +35,16 @@ contextBridge.exposeInMainWorld('nova', {
   app: {
     info: () => ipcRenderer.invoke('app:info'),
   },
+  settings: {
+    get: () => ipcRenderer.invoke('settings:get'),
+    save: (settings) => ipcRenderer.invoke('settings:save', settings),
+  },
   clipboard: {
     writeText: (text) => ipcRenderer.invoke('clipboard:write-text', text),
   },
   events: {
     onOpenConnection: (handler) => subscribe('menu:open-connection', handler),
     onNewConnection: (handler) => subscribe('menu:new-connection', handler),
+    onPreferences: (handler) => subscribe('menu:preferences', handler),
   },
 })

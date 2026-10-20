@@ -53,6 +53,12 @@ function createApplicationMenu() {
         { role: 'copy' },
         { role: 'paste' },
         { role: 'selectAll' },
+        { type: 'separator' },
+        {
+          label: 'Preferences',
+          accelerator: 'CmdOrCtrl+,',
+          click: () => win?.webContents.send('menu:preferences'),
+        },
       ],
     },
     {

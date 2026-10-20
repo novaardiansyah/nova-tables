@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import Icon from './Icon.jsx'
 
-export default function Select({ value, options, onChange, disabled = false, className = '' }) {
+export default function Select({
+  value,
+  options,
+  onChange,
+  disabled = false,
+  className = '',
+  icon = 'database',
+  placeholder = 'Select database',
+  emptyLabel = 'No databases',
+}) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef(null)
 
@@ -31,10 +40,10 @@ export default function Select({ value, options, onChange, disabled = false, cla
         type="button"
         disabled={disabled}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex h-8 max-w-[240px] items-center gap-2 rounded-md border border-line-strong bg-elevated px-2.5 text-[12.5px] text-slate-200 transition-colors hover:border-accent/50 disabled:pointer-events-none disabled:opacity-50"
+        className="flex h-8 max-w-[240px] items-center gap-2 rounded-md border border-line-strong bg-elevated px-2.5 text-[length:calc(12.5px*var(--app-font-scale))] text-slate-200 transition-colors hover:border-accent/50 disabled:pointer-events-none disabled:opacity-50"
       >
-        <Icon name="database" size={13} className="shrink-0 text-slate-500" />
-        <span className="truncate">{current?.label ?? value ?? 'Select database'}</span>
+        <Icon name={icon} size={13} className="shrink-0 text-slate-500" />
+        <span className="truncate">{current?.label ?? value ?? placeholder}</span>
         <Icon
           name="chevron-down"
           size={13}
@@ -45,7 +54,7 @@ export default function Select({ value, options, onChange, disabled = false, cla
       {open ? (
         <div className="absolute left-0 top-[calc(100%+6px)] z-40 max-h-80 w-64 origin-top-left animate-fade-in overflow-auto rounded-lg border border-line-strong bg-elevated p-1 shadow-2xl shadow-black/60">
           {options.length === 0 ? (
-            <p className="px-2 py-3 text-center text-[12px] text-slate-500">No databases</p>
+            <p className="px-2 py-3 text-center text-[length:calc(12px*var(--app-font-scale))] text-slate-500">{emptyLabel}</p>
           ) : (
             options.map((option) => (
               <button
@@ -55,7 +64,7 @@ export default function Select({ value, options, onChange, disabled = false, cla
                   onChange(option.value)
                   setOpen(false)
                 }}
-                className={`flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-[12.5px] transition-colors hover:bg-white/5 ${
+                className={`flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-[length:calc(12.5px*var(--app-font-scale))] transition-colors hover:bg-white/5 ${
                   option.value === value ? 'text-accent' : 'text-slate-300'
                 }`}
               >

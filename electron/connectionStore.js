@@ -455,6 +455,21 @@ export function closeStore() {
   db = null
 }
 
+export function readSettings() {
+  const raw = readMeta(getDb(), 'settings')
+  if (!raw) return null
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+export function writeSettings(settings) {
+  writeMeta(getDb(), 'settings', JSON.stringify(settings ?? {}))
+  return readSettings()
+}
+
 export function isSystemDatabase(name) {
   return SYSTEM_DATABASES.includes(String(name || '').toLowerCase())
 }
