@@ -4,6 +4,7 @@ import { generateCreateTable } from './designSql.js'
 import Banner from './components/Banner.jsx'
 import ConfirmDialog from './components/ConfirmDialog.jsx'
 import ConnectionDialog from './components/ConnectionDialog.jsx'
+import ConnectionsScreen from './components/ConnectionsScreen.jsx'
 import PromptDialog from './components/PromptDialog.jsx'
 import QueryEditor from './components/QueryEditor.jsx'
 import ResultsPanel from './components/ResultsPanel.jsx'
@@ -114,7 +115,9 @@ const FIRST_TAB = createTab('tab-1', queryTitle(1), STARTER_SQL)
 
 export default function App() {
   const [connections, setConnections] = useState([])
+  const [folders, setFolders] = useState([])
   const [session, setSession] = useState(null)
+  const [screen, setScreen] = useState('connections')
   const [activeDatabase, setActiveDatabase] = useState(null)
   const [tablesState, setTablesState] = useState(EMPTY_TABLES)
   const [tabs, setTabs] = useState([FIRST_TAB])
@@ -160,6 +163,13 @@ export default function App() {
       .catch((error) => showBanner('error', error.message))
 
     api
+      .listFolders()
+      .then((list) => {
+        if (!cancelled) setFolders(list)
+      })
+      .catch((error) => showBanner('error', error.message))
+
+    api
       .appInfo()
       .then((info) => {
         if (!cancelled) setAppVersion(info.version)
@@ -197,12 +207,22 @@ export default function App() {
     setTablesState(EMPTY_TABLES)
   }, [])
 
+  const openConnectionScreen = useCallback(() => {
+    setScreen('connections')
+    setBanner(null)
+  }, [])
+
   const handleConnect = useCallback(
     async (connection) => {
       setConnectingId(connection.id)
       setBanner(null)
       try {
-        if (sessionRef.current && sessionRef.current.connectionId !== connection.id) {
+        if (sessionRef.current?.connectionId === connection.id) {
+          setScreen('workspace')
+          return
+        }
+
+        if (sessionRef.current) {
           await closeSession()
         }
 
@@ -210,6 +230,7 @@ export default function App() {
         setSession({ ...result, connection })
         const database = pickDatabase(result.databases, result.database)
         setActiveDatabase(database)
+        setScreen('workspace')
         await loadTables(connection.id, database)
       } catch (error) {
         if (error.code === 'PASSWORD_MISSING') {
@@ -782,6 +803,59 @@ export default function App() {
     }
   }, [closeSession, deleteTarget, showBanner])
 
+  const handleCreateFolder = useCallback(
+    async (name, parentId) => {
+      try {
+        await api.saveFolder({ name, parentId })
+        setFolders(await api.listFolders())
+      } catch (error) {
+        showBanner('error', error.message)
+      }
+    },
+    [showBanner],
+  )
+
+  const handleRenameFolder = useCallback(
+    async (folder, name) => {
+      try {
+        await api.saveFolder({ id: folder.id, name })
+        setFolders(await api.listFolders())
+      } catch (error) {
+        showBanner('error', error.message)
+      }
+    },
+    [showBanner],
+  )
+
+  const handleDeleteFolder = useCallback(
+    async (folder) => {
+      try {
+        await api.deleteFolder(folder.id)
+        const [nextFolders, nextConnections] = await Promise.all([
+          api.listFolders(),
+          api.listConnections(),
+        ])
+        setFolders(nextFolders)
+        setConnections(nextConnections)
+      } catch (error) {
+        showBanner('error', error.message)
+      }
+    },
+    [showBanner],
+  )
+
+  const handleMoveConnection = useCallback(
+    async (connection, folderId) => {
+      try {
+        await api.moveConnection(connection.id, folderId)
+        setConnections(await api.listConnections())
+      } catch (error) {
+        showBanner('error', error.message)
+      }
+    },
+    [showBanner],
+  )
+
   const handleSplitPointerDown = useCallback((event) => {
     if (event.button !== 0) return
     const container = splitRef.current
@@ -815,95 +889,115 @@ export default function App() {
         <Banner type={banner.type} message={banner.message} onDismiss={() => setBanner(null)} />
       ) : null}
 
-      <div className="flex min-h-0 flex-1">
-        <Sidebar
+      {session && screen === 'workspace' ? (
+        <div className="flex min-h-0 flex-1">
+          <Sidebar
+            session={session}
+            activeDatabase={activeDatabase}
+            tablesState={tablesState}
+            appVersion={appVersion}
+            pinnedTables={pinnedTables}
+            onSelectDatabase={handleSelectDatabase}
+            onBrowseTable={handleBrowseTable}
+            onCopyObjectName={handleCopyObjectName}
+            onCopyStructure={handleCopyStructure}
+            onOpenStructure={handleOpenStructure}
+            onNewTable={handleNewTable}
+            onRenameTable={handleRenameTable}
+            onCloneTable={handleCloneTable}
+            onTruncateTable={handleTruncateTable}
+            onDropTable={handleDropTable}
+            onTogglePin={handleTogglePin}
+            onOpenConnections={openConnectionScreen}
+            selectedTable={selectedTable}
+            onSelectTable={setSelectedTable}
+            onEditConnection={(connection) => setDialog({ mode: 'edit', connection })}
+            onDeleteConnection={(connection) => setDeleteTarget(connection)}
+            onRefreshDatabases={handleRefreshDatabases}
+          />
+
+          <main className="flex min-w-0 flex-1 flex-col bg-base">
+            <WorkspaceHeader
+              session={session}
+              activeDatabase={activeDatabase}
+              running={running}
+              onSelectDatabase={handleSelectDatabase}
+              onRun={handleRun}
+              onDisconnect={closeSession}
+            />
+
+            <TabBar
+              tabs={tabs}
+              activeTabId={activeTabId}
+              onSelect={handleSelectTab}
+              onClose={handleCloseTab}
+              onNewTab={handleNewTab}
+            />
+
+            {activeTab?.kind === 'design' ? (
+              <div className="flex min-h-0 flex-1 flex-col">
+                <TableDesigner
+                  design={activeTab.design}
+                  mode={activeTab.target?.mode}
+                  loading={activeTab.loading}
+                  error={activeTab.error}
+                  busy={activeTab.busy}
+                  onGenerate={handleDesignGenerate}
+                  onApply={(sql, draft) => handleDesignApply(activeTab.id, sql, draft)}
+                  onRenameTable={(nextName) =>
+                    handleDesignRename(activeTab.id, activeTab.design, nextName)
+                  }
+                />
+              </div>
+            ) : (
+              <div ref={splitRef} className="flex min-h-0 flex-1 flex-col">
+                <div style={{ height: editorHeight }} className="min-h-[140px] shrink-0 overflow-hidden">
+                  <QueryEditor seed={query} onChange={handleSqlChange} onRun={handleRun} />
+                </div>
+
+                <div
+                  onPointerDown={handleSplitPointerDown}
+                  onDoubleClick={() => setEditorHeight(EDITOR_DEFAULT_HEIGHT)}
+                  className="group flex h-1.5 shrink-0 cursor-row-resize items-center justify-center bg-base"
+                  title="Drag to resize"
+                >
+                  <span className="h-px w-full bg-line transition-colors group-hover:bg-accent/60" />
+                </div>
+
+                <ResultsPanel
+                  key={activeTab.id}
+                  state={activeTab.state}
+                  activeSet={activeTab.activeSet}
+                  onSelectSet={handleSelectSet}
+                  relations={activeTab.relations}
+                  onRelationClick={handleOpenRelation}
+                />
+              </div>
+            )}
+
+            <StatusBar
+              session={session}
+              activeDatabase={activeDatabase}
+              queryStatus={activeTab.state.status}
+            />
+          </main>
+        </div>
+      ) : (
+        <ConnectionsScreen
           connections={connections}
-          session={session}
+          folders={folders}
           connectingId={connectingId}
-          activeDatabase={activeDatabase}
-          tablesState={tablesState}
           appVersion={appVersion}
-          pinnedTables={pinnedTables}
-          onConnect={handleConnect}
-          onSelectDatabase={handleSelectDatabase}
-          onBrowseTable={handleBrowseTable}
-          onCopyObjectName={handleCopyObjectName}
-          onCopyStructure={handleCopyStructure}
-          onOpenStructure={handleOpenStructure}
-          onNewTable={handleNewTable}
-          onRenameTable={handleRenameTable}
-          onCloneTable={handleCloneTable}
-          onTruncateTable={handleTruncateTable}
-          onDropTable={handleDropTable}
-          onTogglePin={handleTogglePin}
-          selectedTable={selectedTable}
-          onSelectTable={setSelectedTable}
+          onOpen={handleConnect}
           onNewConnection={() => setDialog({ mode: 'create' })}
           onEditConnection={(connection) => setDialog({ mode: 'edit', connection })}
           onDeleteConnection={(connection) => setDeleteTarget(connection)}
-          onRefreshDatabases={handleRefreshDatabases}
+          onCreateFolder={handleCreateFolder}
+          onRenameFolder={handleRenameFolder}
+          onDeleteFolder={handleDeleteFolder}
+          onMoveConnection={handleMoveConnection}
         />
-
-        <main className="flex min-w-0 flex-1 flex-col bg-base">
-          <WorkspaceHeader
-            session={session}
-            activeDatabase={activeDatabase}
-            running={running}
-            onSelectDatabase={handleSelectDatabase}
-            onRun={handleRun}
-            onDisconnect={closeSession}
-          />
-
-          <TabBar
-            tabs={tabs}
-            activeTabId={activeTabId}
-            onSelect={handleSelectTab}
-            onClose={handleCloseTab}
-            onNewTab={handleNewTab}
-          />
-
-          {activeTab?.kind === 'design' ? (
-            <div className="flex min-h-0 flex-1 flex-col">
-              <TableDesigner
-                design={activeTab.design}
-                mode={activeTab.target?.mode}
-                loading={activeTab.loading}
-                error={activeTab.error}
-                busy={activeTab.busy}
-                onGenerate={handleDesignGenerate}
-                onApply={(sql, draft) => handleDesignApply(activeTab.id, sql, draft)}
-                onRenameTable={(nextName) => handleDesignRename(activeTab.id, activeTab.design, nextName)}
-              />
-            </div>
-          ) : (
-            <div ref={splitRef} className="flex min-h-0 flex-1 flex-col">
-              <div style={{ height: editorHeight }} className="min-h-[140px] shrink-0 overflow-hidden">
-                <QueryEditor seed={query} onChange={handleSqlChange} onRun={handleRun} />
-              </div>
-
-              <div
-                onPointerDown={handleSplitPointerDown}
-                onDoubleClick={() => setEditorHeight(EDITOR_DEFAULT_HEIGHT)}
-                className="group flex h-1.5 shrink-0 cursor-row-resize items-center justify-center bg-base"
-                title="Drag to resize"
-              >
-                <span className="h-px w-full bg-line transition-colors group-hover:bg-accent/60" />
-              </div>
-
-              <ResultsPanel
-                key={activeTab.id}
-                state={activeTab.state}
-                activeSet={activeTab.activeSet}
-                onSelectSet={handleSelectSet}
-                relations={activeTab.relations}
-                onRelationClick={handleOpenRelation}
-              />
-            </div>
-          )}
-
-          <StatusBar session={session} activeDatabase={activeDatabase} queryStatus={activeTab.state.status} />
-        </main>
-      </div>
+      )}
 
       {dialog ? (
         <ConnectionDialog

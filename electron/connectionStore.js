@@ -23,9 +23,10 @@ function readStore() {
     cache = {
       version: STORE_VERSION,
       connections: Array.isArray(parsed?.connections) ? parsed.connections : [],
+      folders: Array.isArray(parsed?.folders) ? parsed.folders : [],
     }
   } catch {
-    cache = { version: STORE_VERSION, connections: [] }
+    cache = { version: STORE_VERSION, connections: [], folders: [] }
   }
   return cache
 }
@@ -65,6 +66,7 @@ function toPublic(connection) {
     port: connection.port,
     username: connection.username,
     database: connection.database || '',
+    folderId: connection.folderId ?? null,
     encrypt: connection.encrypt !== false,
     trustServerCertificate: connection.trustServerCertificate !== false,
     hasPassword: Boolean(connection.passwordCipher) || sessionPasswords.has(connection.id),
@@ -164,6 +166,7 @@ export function saveConnection(input = {}) {
   const connection = {
     id: crypto.randomUUID(),
     ...fields,
+    folderId: input.folderId ?? null,
     passwordCipher: null,
     createdAt: now,
     updatedAt: now,
@@ -180,6 +183,108 @@ export function deleteConnection(id) {
   if (index === -1) return false
   store.connections.splice(index, 1)
   sessionPasswords.delete(id)
+  writeStore()
+  return true
+}
+
+function folderDepth(folders, id) {
+  let depth = 0
+  let current = folders.find((folder) => folder.id === id)
+  while (current?.parentId && depth < folders.length) {
+    current = folders.find((folder) => folder.id === current.parentId)
+    depth += 1
+  }
+  return depth
+}
+
+function missingFolderError() {
+  const error = new Error('Folder not found')
+  error.code = 'FOLDER_MISSING'
+  return error
+}
+
+function invalidFolderNameError() {
+  const error = new Error('Folder name is required')
+  error.code = 'INVALID_FOLDER'
+  error.fields = { name: 'Folder name is required' }
+  return error
+}
+
+export function listFolders() {
+  return readStore()
+    .folders.slice()
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+    .map((folder) => ({
+      id: folder.id,
+      name: folder.name,
+      parentId: folder.parentId ?? null,
+      createdAt: folder.createdAt,
+    }))
+}
+
+export function saveFolder(input = {}) {
+  const store = readStore()
+  const name = cleanText(input.name)
+  if (!name) throw invalidFolderNameError()
+
+  const parentId = input.parentId ? String(input.parentId) : null
+  if (parentId && !store.folders.some((folder) => folder.id === parentId)) throw missingFolderError()
+
+  if (input.id) {
+    const existing = store.folders.find((folder) => folder.id === input.id)
+    if (!existing) throw missingFolderError()
+    existing.name = name
+    writeStore()
+    return { id: existing.id, name: existing.name, parentId: existing.parentId ?? null }
+  }
+
+  if (parentId && folderDepth(store.folders, parentId) >= 8) {
+    const error = new Error('Folders can be nested up to 9 levels')
+    error.code = 'INVALID_FOLDER'
+    throw error
+  }
+
+  const folder = {
+    id: crypto.randomUUID(),
+    name,
+    parentId,
+    createdAt: new Date().toISOString(),
+  }
+  store.folders.push(folder)
+  writeStore()
+  return { id: folder.id, name: folder.name, parentId: folder.parentId }
+}
+
+export function deleteFolder(id) {
+  const store = readStore()
+  const folder = store.folders.find((item) => item.id === id)
+  if (!folder) return false
+
+  const parentId = folder.parentId ?? null
+  for (const child of store.folders) {
+    if (child.parentId === folder.id) child.parentId = parentId
+  }
+  for (const connection of store.connections) {
+    if (connection.folderId === folder.id) connection.folderId = parentId
+  }
+
+  store.folders = store.folders.filter((item) => item.id !== folder.id)
+  writeStore()
+  return true
+}
+
+export function moveConnection(id, folderId) {
+  const store = readStore()
+  const connection = store.connections.find((item) => item.id === id)
+  if (!connection) return false
+
+  const nextFolderId = folderId ? String(folderId) : null
+  if (nextFolderId && !store.folders.some((folder) => folder.id === nextFolderId)) {
+    throw missingFolderError()
+  }
+
+  connection.folderId = nextFolderId
+  connection.updatedAt = new Date().toISOString()
   writeStore()
   return true
 }

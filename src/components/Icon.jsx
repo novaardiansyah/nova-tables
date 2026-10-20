@@ -114,6 +114,12 @@ const ICONS = {
       <path d="M16 8l2.5 2.5" />
     </>
   ),
+  folder: (
+    <>
+      <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+      <path d="M3 13h18" />
+    </>
+  ),
   pin: (
     <>
       <path d="M12 17v5" />

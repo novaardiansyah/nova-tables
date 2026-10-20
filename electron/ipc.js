@@ -1,8 +1,12 @@
 import { app, clipboard, ipcMain } from 'electron'
 import {
   deleteConnection,
+  deleteFolder,
   listConnections,
+  listFolders,
+  moveConnection,
   saveConnection,
+  saveFolder,
 } from './connectionStore.js'
 import {
   connect,
@@ -35,6 +39,17 @@ export function registerIpcHandlers() {
   handle('connections:save', (input) => ({ connection: saveConnection(input) }))
 
   handle('connections:delete', (id) => ({ deleted: deleteConnection(id), connectionId: id }))
+
+  handle('connections:move', (input) => ({
+    moved: moveConnection(input.id, input.folderId),
+    connectionId: input.id,
+  }))
+
+  handle('folders:list', () => ({ folders: listFolders() }))
+
+  handle('folders:save', (input) => ({ folder: saveFolder(input) }))
+
+  handle('folders:delete', (id) => ({ deleted: deleteFolder(id), folderId: id }))
 
   handle('connections:test', (input) => testConnection(input))
 

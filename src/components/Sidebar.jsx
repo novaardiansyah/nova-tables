@@ -3,19 +3,15 @@ import ContextMenu from './ContextMenu.jsx'
 import Icon, { BrandMark, Spinner } from './Icon.jsx'
 
 export default function Sidebar({
-  connections,
   session,
-  connectingId,
   activeDatabase,
   tablesState,
   appVersion,
   pinnedTables,
-  onConnect,
   onSelectDatabase,
   onBrowseTable,
   onCopyObjectName,
   onCopyStructure,
-  onNewConnection,
   onEditConnection,
   onDeleteConnection,
   onRefreshDatabases,
@@ -26,29 +22,16 @@ export default function Sidebar({
   onTruncateTable,
   onDropTable,
   onTogglePin,
+  onOpenConnections,
   selectedTable,
   onSelectTable,
 }) {
-  const [expandedId, setExpandedId] = useState(null)
   const [expandedDatabase, setExpandedDatabase] = useState(null)
   const [menu, setMenu] = useState(null)
 
   useEffect(() => {
-    if (session?.connectionId) setExpandedId(session.connectionId)
-  }, [session?.connectionId])
-
-  useEffect(() => {
     if (activeDatabase) setExpandedDatabase(activeDatabase)
   }, [activeDatabase])
-
-  const handleConnectionClick = (connection) => {
-    const isConnected = session?.connectionId === connection.id
-    if (isConnected) {
-      setExpandedId((prev) => (prev === connection.id ? null : connection.id))
-    } else {
-      onConnect(connection)
-    }
-  }
 
   const handleDatabaseClick = (name) => {
     const isOpen = expandedDatabase === name
@@ -82,206 +65,170 @@ export default function Sidebar({
         </span>
       </div>
 
-      <div className="p-3">
-        <button type="button" className="btn-soft w-full" onClick={onNewConnection}>
-          <Icon name="plus" size={14} />
-          New connection
+      <div className="space-y-1.5 p-3">
+        <button type="button" className="btn-soft w-full" onClick={onOpenConnections}>
+          <Icon name="server" size={14} />
+          New Connections
         </button>
       </div>
 
       <div className="flex items-center justify-between px-4 pb-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Connections</span>
-        <span className="text-[10px] text-slate-600">{connections.length}</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+          Active connection
+        </span>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pb-3">
-        {connections.length === 0 ? (
-          <div className="mx-1 mt-2 rounded-lg border border-dashed border-line-strong px-3 py-6 text-center">
-            <Icon name="server" size={18} className="mx-auto mb-2 text-slate-600" />
-            <p className="text-[12px] text-slate-500">No saved connections</p>
-            <p className="mt-1 text-[11px] text-slate-600">Create one to browse your databases.</p>
-          </div>
-        ) : (
-          connections.map((connection) => {
-            const isConnected = session?.connectionId === connection.id
-            const isExpanded = expandedId === connection.id
-            const isConnecting = connectingId === connection.id
+        {session?.connection ? (
+          <div className="mb-0.5">
+            <div className="group relative flex items-center gap-1.5 rounded-md bg-accent-soft pr-1">
+              <div className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pl-1.5 text-left">
+                <span className="h-[7px] w-[7px] shrink-0 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[12.5px] font-medium text-slate-100">
+                    {session.connection.name}
+                  </span>
+                  <span className="block truncate text-[10.5px] leading-4 text-slate-500">
+                    {session.connection.host}:{session.connection.port}
+                    {session.connection.database ? ` · ${session.connection.database}` : ''}
+                  </span>
+                </span>
+              </div>
 
-            return (
-              <div key={connection.id} className="mb-0.5">
-                <div
-                  className={`group relative flex items-center gap-1.5 rounded-md pr-1 transition-colors ${
-                    isConnected ? 'bg-accent-soft' : 'hover:bg-white/[0.03]'
-                  }`}
+              <div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100">
+                <button
+                  type="button"
+                  className="icon-btn h-6 w-6"
+                  title="Refresh databases"
+                  onClick={() => onRefreshDatabases(session.connection)}
                 >
-                  <button
-                    type="button"
-                    onClick={() => handleConnectionClick(connection)}
-                    className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pl-1.5 text-left"
-                    title={
-                      isConnected
-                        ? `${connection.name} — click to expand`
-                        : `Connect to ${connection.name} (${connection.host}:${connection.port})`
-                    }
-                  >
-                    {isConnecting ? (
-                      <Spinner size={12} className="shrink-0 text-accent" />
-                    ) : (
-                      <span
-                        className={`h-[7px] w-[7px] shrink-0 rounded-full ${
-                          isConnected ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]' : 'bg-slate-700'
-                        }`}
-                      />
-                    )}
-                    <span className="min-w-0 flex-1">
-                      <span
-                        className={`block truncate text-[12.5px] ${
-                          isConnected ? 'font-medium text-slate-100' : 'text-slate-300'
-                        }`}
-                      >
-                        {connection.name}
-                      </span>
-                      <span className="block truncate text-[10.5px] leading-4 text-slate-600">
-                        {connection.host}:{connection.port}
-                        {connection.database ? ` · ${connection.database}` : ''}
-                      </span>
-                    </span>
-                  </button>
+                  <Icon name="refresh" size={13} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn h-6 w-6"
+                  title="Edit connection"
+                  onClick={() => onEditConnection(session.connection)}
+                >
+                  <Icon name="pencil" size={13} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn h-6 w-6 hover:text-rose-400"
+                  title="Delete connection"
+                  onClick={() => onDeleteConnection(session.connection)}
+                >
+                  <Icon name="trash" size={13} />
+                </button>
+              </div>
+            </div>
 
-                  <div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100">
-                    {isConnected ? (
+            <div className="mt-0.5 space-y-px pl-3">
+              {session.databases.length === 0 ? (
+                <p className="px-2 py-1 text-[11px] text-slate-600">No databases visible</p>
+              ) : (
+                session.databases.map((database) => {
+                  const isOpen = expandedDatabase === database.name
+                  const isActive = activeDatabase === database.name
+                  const showTables = isOpen && tablesState.database === database.name
+
+                  return (
+                    <div key={database.name}>
                       <button
                         type="button"
-                        className="icon-btn h-6 w-6"
-                        title="Refresh databases"
-                        onClick={() => onRefreshDatabases(connection)}
+                        onClick={() => handleDatabaseClick(database.name)}
+                        className={`tree-row ${isActive ? 'tree-row-active' : ''}`}
+                        title={database.isOnline ? database.name : `${database.name} (offline)`}
                       >
-                        <Icon name="refresh" size={13} />
+                        <Icon
+                          name="chevron-right"
+                          size={11}
+                          className={`shrink-0 text-slate-600 transition-transform ${
+                            isOpen ? 'rotate-90' : ''
+                          }`}
+                        />
+                        <Icon name="database" size={12} className="shrink-0 text-slate-500" />
+                        <span className="truncate">{database.name}</span>
+                        {!database.isOnline ? (
+                          <span className="ml-auto rounded bg-amber-500/15 px-1 text-[9.5px] font-medium uppercase text-amber-400">
+                            offline
+                          </span>
+                        ) : null}
                       </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="icon-btn h-6 w-6"
-                      title="Edit connection"
-                      onClick={() => onEditConnection(connection)}
-                    >
-                      <Icon name="pencil" size={13} />
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-btn h-6 w-6 hover:text-rose-400"
-                      title="Delete connection"
-                      onClick={() => onDeleteConnection(connection)}
-                    >
-                      <Icon name="trash" size={13} />
-                    </button>
-                  </div>
-                </div>
 
-                {isExpanded && isConnected ? (
-                  <div className="mt-0.5 space-y-px pl-3">
-                    {session.databases.length === 0 ? (
-                      <p className="px-2 py-1 text-[11px] text-slate-600">No databases visible</p>
-                    ) : (
-                      session.databases.map((database) => {
-                        const isOpen = expandedDatabase === database.name
-                        const isActive = activeDatabase === database.name
-                        const showTables = isOpen && tablesState.database === database.name
+                      {showTables ? (
+                        <div className="ml-3 space-y-px border-l border-line pl-1.5">
+                          {tablesState.status === 'loading' ? (
+                            <div className="flex items-center gap-2 px-2 py-1 text-[11.5px] text-slate-500">
+                              <Spinner size={11} />
+                              Loading tables…
+                            </div>
+                          ) : null}
 
-                        return (
-                          <div key={database.name}>
-                            <button
-                              type="button"
-                              onClick={() => handleDatabaseClick(database.name)}
-                              className={`tree-row ${isActive ? 'tree-row-active' : ''}`}
-                              title={database.isOnline ? database.name : `${database.name} (offline)`}
-                            >
-                              <Icon
-                                name="chevron-right"
-                                size={11}
-                                className={`shrink-0 text-slate-600 transition-transform ${
-                                  isOpen ? 'rotate-90' : ''
-                                }`}
-                              />
-                              <Icon name="database" size={12} className="shrink-0 text-slate-500" />
-                              <span className="truncate">{database.name}</span>
-                              {!database.isOnline ? (
-                                <span className="ml-auto rounded bg-amber-500/15 px-1 text-[9.5px] font-medium uppercase text-amber-400">
-                                  offline
-                                </span>
-                              ) : null}
-                            </button>
+                          {tablesState.status === 'error' ? (
+                            <div className="px-2 py-1 text-[11.5px] leading-4 text-rose-400">
+                              {tablesState.error}
+                            </div>
+                          ) : null}
 
-                            {showTables ? (
-                              <div className="ml-3 space-y-px border-l border-line pl-1.5">
-                                {tablesState.status === 'loading' ? (
-                                  <div className="flex items-center gap-2 px-2 py-1 text-[11.5px] text-slate-500">
-                                    <Spinner size={11} />
-                                    Loading tables…
+                          {tablesState.status === 'ready' && tablesState.tables.length === 0 ? (
+                            <p className="px-2 py-1 text-[11.5px] text-slate-600">No tables</p>
+                          ) : null}
+
+                          {tablesState.status === 'ready'
+                            ? orderedTables.map((table) => {
+                                const key = `${table.schema}.${table.name}`
+                                return (
+                                  <div
+                                    key={key}
+                                    onDoubleClick={() => onBrowseTable(table)}
+                                    onContextMenu={(event) => handleTableContextMenu(event, table)}
+                                    className="group/table flex items-center gap-1.5 rounded px-2 py-[3px] text-[12px] text-slate-400 hover:bg-white/[0.04]"
+                                  >
+                                    <Icon name="table" size={11} className="shrink-0 text-slate-600" />
+                                    <button
+                                      type="button"
+                                      onClick={() => onSelectTable(key)}
+                                      className={`flex min-w-0 flex-1 items-center truncate text-left ${
+                                        selectedTable === key ? 'text-accent' : ''
+                                      }`}
+                                      title={`${table.schema}.${table.name}`}
+                                    >
+                                      {table.schema !== 'dbo' ? (
+                                        <span className="text-slate-600">{table.schema}.</span>
+                                      ) : null}
+                                      <span className="truncate">{table.name}</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={`icon-btn h-5 w-5 shrink-0 ${
+                                        pinned.has(key)
+                                          ? 'text-accent'
+                                          : 'opacity-0 group-hover/table:opacity-100'
+                                      }`}
+                                      title={pinned.has(key) ? 'Unpin from top' : 'Pin to top'}
+                                      onClick={() => onTogglePin(table)}
+                                    >
+                                      <Icon name="pin" size={10} />
+                                    </button>
                                   </div>
-                                ) : null}
-
-                                {tablesState.status === 'error' ? (
-                                  <div className="px-2 py-1 text-[11.5px] leading-4 text-rose-400">
-                                    {tablesState.error}
-                                  </div>
-                                ) : null}
-
-                                {tablesState.status === 'ready' && tablesState.tables.length === 0 ? (
-                                  <p className="px-2 py-1 text-[11.5px] text-slate-600">No tables</p>
-                                ) : null}
-
-                                {tablesState.status === 'ready'
-                                  ? orderedTables.map((table) => {
-                                      const key = `${table.schema}.${table.name}`
-                                      return (
-                                        <div
-                                          key={key}
-                                          onDoubleClick={() => onBrowseTable(table)}
-                                          onContextMenu={(event) => handleTableContextMenu(event, table)}
-                                          className="group/table flex items-center gap-1.5 rounded px-2 py-[3px] text-[12px] text-slate-400 hover:bg-white/[0.04]"
-                                        >
-                                          <Icon name="table" size={11} className="shrink-0 text-slate-600" />
-                                          <button
-                                            type="button"
-                                            onClick={() => onSelectTable(key)}
-                                            className={`flex min-w-0 flex-1 items-center truncate text-left ${
-                                              selectedTable === key ? 'text-accent' : ''
-                                            }`}
-                                            title={`${table.schema}.${table.name}`}
-                                          >
-                                            {table.schema !== 'dbo' ? (
-                                              <span className="text-slate-600">{table.schema}.</span>
-                                            ) : null}
-                                            <span className="truncate">{table.name}</span>
-                                          </button>
-                                          <button
-                                            type="button"
-                                            className={`icon-btn h-5 w-5 shrink-0 ${
-                                              pinned.has(key)
-                                                ? 'text-accent'
-                                                : 'opacity-0 group-hover/table:opacity-100'
-                                            }`}
-                                            title={pinned.has(key) ? 'Unpin from top' : 'Pin to top'}
-                                            onClick={() => onTogglePin(table)}
-                                          >
-                                            <Icon name="pin" size={10} />
-                                          </button>
-                                        </div>
-                                      )
-                                    })
-                                  : null}
-                              </div>
-                            ) : null}
-                          </div>
-                        )
-                      })
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            )
-          })
+                                )
+                              })
+                            : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="mx-1 mt-2 rounded-lg border border-dashed border-line-strong px-3 py-6 text-center">
+            <Icon name="server" size={18} className="mx-auto mb-2 text-slate-600" />
+            <p className="text-[12px] text-slate-500">No connection open</p>
+            <p className="mt-1 text-[11px] text-slate-600">Pick one to browse its databases.</p>
+          </div>
         )}
       </div>
 

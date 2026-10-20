@@ -37,6 +37,15 @@ export const api = {
   deleteConnection: async (id) =>
     call(() => bridge().connections.remove(id)),
 
+  moveConnection: async (id, folderId) =>
+    call(() => bridge().connections.move({ id, folderId })),
+
+  listFolders: async () => (await call(() => bridge().folders.list())).folders,
+
+  saveFolder: async (input) => (await call(() => bridge().folders.save(input))).folder,
+
+  deleteFolder: async (id) => call(() => bridge().folders.remove(id)),
+
   testConnection: async (input) => call(() => bridge().connections.test(input)),
 
   connect: async (input) => call(() => bridge().connections.connect(input)),
