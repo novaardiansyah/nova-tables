@@ -369,16 +369,20 @@ export default function App() {
     setBanner(null)
   }, [])
 
-  const saveSettings = useCallback(async (next) => {
-    try {
-      const saved = await api.saveSettings(next)
-      setSettings(applySettings(saved))
-      setSettingsOpen(false)
-    } catch (error) {
-      showBanner('error', error.message)
-      throw error
-    }
-  }, [showBanner])
+  const saveSettings = useCallback(
+    async (next) => {
+      try {
+        const saved = await api.saveSettings(next)
+        setSettings(applySettings(saved))
+        setSettingsOpen(false)
+      } catch (error) {
+        applySettings(settings)
+        showBanner('error', error.message)
+        throw error
+      }
+    },
+    [settings, showBanner],
+  )
 
   useEffect(() => {
     try {
@@ -1295,7 +1299,13 @@ export default function App() {
             ) : (
               <div ref={splitRef} className="flex min-h-0 flex-1 flex-col">
                 <div style={{ height: editorHeight }} className="min-h-[140px] shrink-0 overflow-hidden">
-                  <QueryEditor seed={query} theme={settings.theme} onChange={handleSqlChange} onRun={handleRun} />
+                  <QueryEditor
+                    seed={query}
+                    theme={settings.theme}
+                    settings={settings}
+                    onChange={handleSqlChange}
+                    onRun={handleRun}
+                  />
                 </div>
 
                 <div

@@ -5,6 +5,7 @@ import {
   DEFAULT_SETTINGS,
   FONT_FAMILIES,
   FONT_SIZES,
+  QUERY_SIZES,
   THEMES,
   applySettings,
   normalizeSettings,
@@ -15,6 +16,8 @@ const THEME_OPTIONS = THEMES.map((theme) => ({ value: theme.id, label: theme.lab
 const FONT_OPTIONS = FONT_FAMILIES.map((family) => ({ value: family.id, label: family.label }))
 
 const SIZE_OPTIONS = FONT_SIZES.map((size) => ({ value: String(size), label: `${size} px` }))
+
+const QUERY_SIZE_OPTIONS = QUERY_SIZES.map((size) => ({ value: String(size), label: `${size} px` }))
 
 function Row({ label, hint, children }) {
   return (
@@ -33,7 +36,9 @@ export default function SettingsDialog({ open, settings, onClose, onSave }) {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (open) setDraft(settings)
+    if (!open) return
+    setDraft(settings)
+    setSaving(false)
   }, [open, settings])
 
   useEffect(() => {
@@ -68,7 +73,9 @@ export default function SettingsDialog({ open, settings, onClose, onSave }) {
       await onSave(normalizeSettings(draft))
     } catch {
       setSaving(false)
+      return
     }
+    setSaving(false)
   }
 
   return (
@@ -179,6 +186,32 @@ export default function SettingsDialog({ open, settings, onClose, onSave }) {
                 options={SIZE_OPTIONS}
                 onChange={(value) => update('jsonFontSize')(Number(value))}
                 icon="folder"
+                placeholder="Select size"
+                emptyLabel="No sizes"
+                className="w-56"
+              />
+            </Row>
+          </section>
+
+          <section className="border-t border-line pt-4">
+            <p className="field-label">Query editor</p>
+            <Row label="Font family" hint="SQL editor and its line numbers">
+              <Select
+                value={draft.queryFontFamily}
+                options={FONT_OPTIONS}
+                onChange={update('queryFontFamily')}
+                icon="code"
+                placeholder="Select font"
+                emptyLabel="No fonts"
+                className="w-56"
+              />
+            </Row>
+            <Row label="Font size">
+              <Select
+                value={String(draft.queryFontSize)}
+                options={QUERY_SIZE_OPTIONS}
+                onChange={(value) => update('queryFontSize')(Number(value))}
+                icon="code"
                 placeholder="Select size"
                 emptyLabel="No sizes"
                 className="w-56"

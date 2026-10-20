@@ -1,13 +1,10 @@
 import { useEffect, useRef } from 'react'
 import Editor from '@monaco-editor/react'
 import { editorThemeName } from '../monaco.js'
+import { queryFontOptions, subscribeSettings } from '../settings.js'
 import { Spinner } from './Icon.jsx'
 
 const EDITOR_OPTIONS = {
-  fontFamily:
-    "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', 'Noto Sans Mono', monospace",
-  fontSize: 13,
-  lineHeight: 21,
   minimap: { enabled: false },
   scrollBeyondLastLine: false,
   smoothScrolling: true,
@@ -32,15 +29,29 @@ const EDITOR_OPTIONS = {
   fixedOverflowWidgets: true,
 }
 
-export default function QueryEditor({ seed, theme, onChange, onRun }) {
+export default function QueryEditor({ seed, theme, settings, onChange, onRun }) {
   const editorRef = useRef(null)
   const handlersRef = useRef({ onChange, onRun })
   const lastSeedRef = useRef(null)
   const seedingRef = useRef(false)
+  const { fontFamily, fontSize, lineHeight } = queryFontOptions(settings)
 
   useEffect(() => {
     handlersRef.current = { onChange, onRun }
   }, [onChange, onRun])
+
+  useEffect(() => {
+    editorRef.current?.updateOptions({ fontFamily, fontSize, lineHeight })
+  }, [fontFamily, fontSize, lineHeight])
+
+  useEffect(
+    () =>
+      subscribeSettings((next) => {
+        const options = queryFontOptions(next)
+        editorRef.current?.updateOptions(options)
+      }),
+    [],
+  )
 
   useEffect(() => {
     if (lastSeedRef.current === null || lastSeedRef.current === seed.id) {
@@ -80,7 +91,7 @@ export default function QueryEditor({ seed, theme, onChange, onRun }) {
           if (seedingRef.current) return
           handlersRef.current.onChange?.(value ?? '')
         }}
-        options={EDITOR_OPTIONS}
+        options={{ ...EDITOR_OPTIONS, fontFamily, fontSize, lineHeight }}
         loading={
           <div className="flex items-center gap-2 p-4 text-[length:var(--app-text-12)] text-slate-500">
             <Spinner size={13} />

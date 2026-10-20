@@ -28,6 +28,8 @@
     --grid-font-family: ui-sans-serif, -apple-system, system-ui, 'Segoe UI', 'Helvetica Neue', Arial, 'Liberation Sans', 'DejaVu Sans', 'Noto Sans', 'Noto Sans CJK JP', sans-serif;
     --json-font-size: 12px;
     --json-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', 'Noto Sans Mono', monospace;
+    --query-font-size: 13px;
+    --query-font-family: 'Hack', ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', 'Noto Sans Mono', monospace;
   }
 
   :root[data-theme='midnight'] {
