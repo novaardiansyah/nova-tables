@@ -613,7 +613,13 @@ function serializeResultSets(recordsets) {
 
     return {
       columns: names.map((name) => ({ name })),
-      rows: limited.map((row) => names.map((name) => toPlainValue(row[name]))),
+      rows: limited.map((row) =>
+        names.map((name) => {
+          const value = toPlainValue(row[name])
+          if (typeof value === 'boolean') return value ? 1 : 0
+          return value
+        }),
+      ),
       rowCount: rows.length,
     }
   })

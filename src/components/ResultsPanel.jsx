@@ -1,5 +1,9 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Icon, { Spinner } from './Icon.jsx'
+import JsonView from './JsonView.jsx'
 import ResultGrid from './ResultGrid.jsx'
+
+const ROW_PANEL_DEFAULT_WIDTH = 360
 
 function formatNumber(value) {
   return Number(value || 0).toLocaleString()
@@ -11,12 +15,64 @@ function formatDuration(ms) {
   return `${(ms / 1000).toFixed(2)} s`
 }
 
+function rowJson(columns, row) {
+  if (!row) return ''
+  const record = {}
+  columns.forEach((column, index) => {
+    record[column.name] = row[index] ?? null
+  })
+  return JSON.stringify(record, null, 2)
+}
+
 export default function ResultsPanel({ state, activeSet, onSelectSet, relations, onRelationClick }) {
   const { status, result, error } = state
   const resultSets = result?.resultSets ?? []
   const activeIndex = Math.min(activeSet ?? 0, Math.max(resultSets.length - 1, 0))
   const activeResultSet = resultSets[activeIndex]
   const rowsAffected = (result?.rowsAffected ?? []).reduce((total, count) => total + count, 0)
+  const [selectedRow, setSelectedRow] = useState(null)
+  const [panelWidth, setPanelWidth] = useState(ROW_PANEL_DEFAULT_WIDTH)
+  const splitRef = useRef(null)
+
+  const handleSelectRow = useCallback((index) => {
+    setSelectedRow((prev) => (prev === index ? null : index))
+  }, [])
+
+  useEffect(() => {
+    setSelectedRow(null)
+  }, [result])
+
+  const handlePanelPointerDown = useCallback(
+    (event) => {
+      if (event.button !== 0) return
+      const container = splitRef.current
+      if (!container) return
+      event.preventDefault()
+
+      const bounds = container.getBoundingClientRect()
+      const startX = event.clientX
+      const startWidth = panelWidth
+      const move = (moveEvent) => {
+        const next = Math.min(Math.max(startWidth + (startX - moveEvent.clientX), 240), bounds.width - 240)
+        setPanelWidth(next)
+      }
+      const stop = () => {
+        window.removeEventListener('pointermove', move)
+        window.removeEventListener('pointerup', stop)
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+      window.addEventListener('pointermove', move)
+      window.addEventListener('pointerup', stop)
+    },
+    [panelWidth],
+  )
+
+  const selectedValues =
+    selectedRow === null || !activeResultSet ? null : activeResultSet.rows[selectedRow] ?? null
 
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-surface">
@@ -46,7 +102,10 @@ export default function ResultsPanel({ state, activeSet, onSelectSet, relations,
               <button
                 key={index}
                 type="button"
-                onClick={() => onSelectSet(index)}
+                onClick={() => {
+                  onSelectSet(index)
+                  setSelectedRow(null)
+                }}
                 className={`flex h-6 shrink-0 items-center gap-1.5 rounded px-2 text-[11.5px] transition-colors ${
                   index === activeIndex
                     ? 'bg-white/[0.06] text-slate-100'
@@ -103,14 +162,51 @@ export default function ResultsPanel({ state, activeSet, onSelectSet, relations,
                   {formatNumber(result.maxRows)} rows of each set were loaded.
                 </p>
               ) : null}
-              <div className="min-h-0 flex-1">
-                <ResultGrid
-                  key={activeIndex}
-                  columns={activeResultSet.columns}
-                  rows={activeResultSet.rows}
-                  relations={relations}
-                  onRelationClick={onRelationClick}
-                />
+              <div ref={splitRef} className="flex min-h-0 flex-1">
+                <div className="min-h-0 min-w-0 flex-1">
+                  <ResultGrid
+                    key={activeIndex}
+                    columns={activeResultSet.columns}
+                    rows={activeResultSet.rows}
+                    relations={relations}
+                    onRelationClick={onRelationClick}
+                    onRowClick={handleSelectRow}
+                    selectedIndex={selectedRow}
+                  />
+                </div>
+
+                {selectedRow !== null && selectedValues ? (
+                  <>
+                    <div
+                      onPointerDown={handlePanelPointerDown}
+                      className="group flex w-1.5 shrink-0 cursor-col-resize items-center justify-center bg-base"
+                      title="Drag to resize"
+                    >
+                      <span className="h-full w-px bg-line transition-colors group-hover:bg-accent/60" />
+                    </div>
+
+                    <div
+                      style={{ width: panelWidth }}
+                      className="flex min-h-0 shrink-0 flex-col border-l border-line bg-panel"
+                    >
+                      <div className="flex h-8 shrink-0 items-center gap-2 border-b border-line px-3">
+                        <Icon name="grid" size={12} className="shrink-0 text-slate-500" />
+                        <span className="text-[11px] font-medium text-slate-400">
+                          Row {selectedRow + 1}
+                        </span>
+                        <button
+                          type="button"
+                          className="icon-btn ml-auto h-5 w-5"
+                          title="Close"
+                          onClick={() => setSelectedRow(null)}
+                        >
+                          <Icon name="x" size={12} />
+                        </button>
+                      </div>
+                      <JsonView text={rowJson(activeResultSet.columns, selectedValues)} />
+                    </div>
+                  </>
+                ) : null}
               </div>
             </div>
           )

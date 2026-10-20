@@ -3,7 +3,14 @@ import { useMemo } from 'react'
 const RENDER_LIMIT = 2000
 const DATE_RE = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/
 
-export default function ResultGrid({ columns, rows, relations, onRelationClick }) {
+export default function ResultGrid({
+  columns,
+  rows,
+  relations,
+  onRelationClick,
+  onRowClick,
+  selectedIndex,
+}) {
   const visibleRows = useMemo(
     () => (rows.length > RENDER_LIMIT ? rows.slice(0, RENDER_LIMIT) : rows),
     [rows],
@@ -70,8 +77,16 @@ export default function ResultGrid({ columns, rows, relations, onRelationClick }
         </thead>
         <tbody>
           {visibleRows.map((row, rowIndex) => (
-            <tr key={rowIndex} className="group">
-              <td className="sticky left-0 z-10 border-b border-r border-line bg-surface px-2 py-[5px] text-right font-mono text-[10.5px] text-slate-600 group-hover:bg-[#161c26]">
+            <tr
+              key={rowIndex}
+              onClick={() => onRowClick(rowIndex)}
+              className={`group cursor-pointer ${selectedIndex === rowIndex ? 'bg-white/[0.04]' : ''}`}
+            >
+              <td
+                className={`sticky left-0 z-10 border-b border-r border-line px-2 py-[5px] text-right font-mono text-[10.5px] text-slate-600 group-hover:bg-[#161c26] ${
+                  selectedIndex === rowIndex ? 'bg-white/[0.04]' : 'bg-surface'
+                }`}
+              >
                 {rowIndex + 1}
               </td>
               {columns.map((_, index) => (
@@ -84,7 +99,10 @@ export default function ResultGrid({ columns, rows, relations, onRelationClick }
                   {columnRelations[index] && row[index] !== null && row[index] !== undefined ? (
                     <button
                       type="button"
-                      onClick={() => onRelationClick(columnRelations[index], row[index])}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onRelationClick(columnRelations[index], row[index])
+                      }}
                       className="cursor-pointer border-b border-dashed border-slate-500/50 hover:border-slate-300"
                     >
                       {String(row[index])}
@@ -115,10 +133,6 @@ function Cell({ value }) {
 
   if (typeof value === 'number') {
     return <span className="text-slate-200">{String(value)}</span>
-  }
-
-  if (typeof value === 'boolean') {
-    return <span className={value ? 'text-emerald-400' : 'text-rose-400'}>{String(value)}</span>
   }
 
   const text = String(value)
