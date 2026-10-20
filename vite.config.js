@@ -15,7 +15,7 @@ export default defineConfig({
         vite: {
           build: {
             rollupOptions: {
-              external: ['mssql'],
+              external: ['mssql', 'node-sqlite3-wasm'],
             },
           },
         },

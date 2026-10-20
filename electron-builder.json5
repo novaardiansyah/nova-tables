@@ -10,6 +10,9 @@
     "dist",
     "dist-electron"
   ],
+  "asarUnpack": [
+    "node_modules/node-sqlite3-wasm/dist/*.wasm"
+  ],
   "mac": {
     "icon": "public/nova.png",
     "target": [
