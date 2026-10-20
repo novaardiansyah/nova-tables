@@ -168,14 +168,6 @@ export default function App() {
     activeIdRef.current = activeConnectionId
   }, [activeConnectionId])
 
-  useEffect(() => {
-    try {
-      return api.onAddConnection(() => setDialog((current) => current ?? { mode: 'create' }))
-    } catch {
-      return undefined
-    }
-  }, [])
-
   const showBanner = useCallback((type, message) => {
     setBanner({ type, message })
   }, [])
@@ -365,6 +357,19 @@ export default function App() {
     setScreen('connections')
     setBanner(null)
   }, [])
+
+  useEffect(() => {
+    try {
+      const offOpen = api.onOpenConnection(openConnectionScreen)
+      const offNew = api.onNewConnection(() => setDialog({ mode: 'create' }))
+      return () => {
+        offOpen()
+        offNew()
+      }
+    } catch {
+      return undefined
+    }
+  }, [openConnectionScreen])
 
   const handleSelectDatabase = useCallback(
     async (database) => {
@@ -1130,6 +1135,12 @@ export default function App() {
         return
       }
 
+      if (event.key.toLowerCase() === 'o' && !event.shiftKey) {
+        event.preventDefault()
+        openConnectionScreen()
+        return
+      }
+
       if (screen !== 'workspace') return
 
       const key = event.key.toLowerCase()
@@ -1169,6 +1180,7 @@ export default function App() {
     handleNewTab,
     handleRun,
     handleSelectTabIndex,
+    openConnectionScreen,
     screen,
     shortcutsOpen,
     tablePrompt,

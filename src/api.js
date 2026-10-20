@@ -69,7 +69,9 @@ export const api = {
 
   copyText: async (text) => call(() => bridge().clipboard.writeText(text)),
 
-  onAddConnection: (handler) => bridge().events.onAddConnection(handler),
+  onOpenConnection: (handler) => bridge().events.onOpenConnection(handler),
+
+  onNewConnection: (handler) => bridge().events.onNewConnection(handler),
 
   appInfo: async () => call(() => bridge().app.info()),
 }

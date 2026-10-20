@@ -30,9 +30,14 @@ function createApplicationMenu() {
       label: 'File',
       submenu: [
         {
-          label: 'Add Connection',
+          label: 'Open Connection',
+          accelerator: 'CmdOrCtrl+O',
+          click: () => win?.webContents.send('menu:open-connection'),
+        },
+        {
+          label: 'New Connection',
           accelerator: 'CmdOrCtrl+N',
-          click: () => win?.webContents.send('menu:add-connection'),
+          click: () => win?.webContents.send('menu:new-connection'),
         },
         { type: 'separator' },
         { role: 'quit' },

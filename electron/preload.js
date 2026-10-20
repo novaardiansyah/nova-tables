@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+function subscribe(channel, handler) {
+  const listener = () => handler()
+  ipcRenderer.on(channel, listener)
+  return () => ipcRenderer.removeListener(channel, listener)
+}
+
 contextBridge.exposeInMainWorld('nova', {
   connections: {
     list: () => ipcRenderer.invoke('connections:list'),
@@ -33,10 +39,7 @@ contextBridge.exposeInMainWorld('nova', {
     writeText: (text) => ipcRenderer.invoke('clipboard:write-text', text),
   },
   events: {
-    onAddConnection: (handler) => {
-      const listener = () => handler()
-      ipcRenderer.on('menu:add-connection', listener)
-      return () => ipcRenderer.removeListener('menu:add-connection', listener)
-    },
+    onOpenConnection: (handler) => subscribe('menu:open-connection', handler),
+    onNewConnection: (handler) => subscribe('menu:new-connection', handler),
   },
 })

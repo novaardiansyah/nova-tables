@@ -21,7 +21,10 @@ const GROUPS = [
   },
   {
     title: 'Connections',
-    items: [{ keys: ['Ctrl', 'N'], label: 'Open the new connection dialog' }],
+    items: [
+      { keys: ['Ctrl', 'O'], label: 'Open the connections list' },
+      { keys: ['Ctrl', 'N'], label: 'Open the new connection dialog' },
+    ],
   },
   {
     title: 'Help',
