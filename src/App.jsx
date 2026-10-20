@@ -271,6 +271,44 @@ export default function App() {
     [activeTabId, seedEditor, updateTab],
   )
 
+  const handleCopyObjectName = useCallback(
+    async (table) => {
+      try {
+        await api.copyText(table.name)
+      } catch (error) {
+        showBanner('error', error.message)
+      }
+    },
+    [showBanner],
+  )
+
+  const handleCopyStructure = useCallback(
+    async (table) => {
+      const current = sessionRef.current
+      if (!current) {
+        showBanner('warn', 'Open a connection before copying a structure.')
+        return
+      }
+      if (!activeDatabase) {
+        showBanner('warn', 'Select a database before copying a structure.')
+        return
+      }
+      try {
+        const structure = await api.tableStructure(
+          current.connectionId,
+          activeDatabase,
+          table.schema,
+          table.name,
+        )
+        await api.copyText(structure.statement)
+        showBanner('success', `Copied structure of ${table.schema}.${table.name}.`)
+      } catch (error) {
+        showBanner('error', error.message)
+      }
+    },
+    [activeDatabase, showBanner],
+  )
+
   const handleSqlChange = useCallback((value) => {
     sqlRef.current = value
   }, [])
@@ -414,6 +452,8 @@ export default function App() {
           onSelectDatabase={handleSelectDatabase}
           onBrowseTable={handleBrowseTable}
           onQueryTable={handleQueryTable}
+          onCopyObjectName={handleCopyObjectName}
+          onCopyStructure={handleCopyStructure}
           onNewConnection={() => setDialog({ mode: 'create' })}
           onEditConnection={(connection) => setDialog({ mode: 'edit', connection })}
           onDeleteConnection={(connection) => setDeleteTarget(connection)}

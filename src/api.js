@@ -50,7 +50,12 @@ export const api = {
   listTables: async (connectionId, database) =>
     (await call(() => bridge().tables.list({ connectionId, database }))).tables,
 
+  tableStructure: async (connectionId, database, schema, table) =>
+    call(() => bridge().tables.structure({ connectionId, database, schema, table })),
+
   runQuery: async (input) => call(() => bridge().query.run(input)),
+
+  copyText: async (text) => call(() => bridge().clipboard.writeText(text)),
 
   appInfo: async () => call(() => bridge().app.info()),
 }

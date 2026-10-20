@@ -14,11 +14,15 @@ contextBridge.exposeInMainWorld('nova', {
   },
   tables: {
     list: (input) => ipcRenderer.invoke('db:tables', input),
+    structure: (input) => ipcRenderer.invoke('db:table-structure', input),
   },
   query: {
     run: (input) => ipcRenderer.invoke('query:run', input),
   },
   app: {
     info: () => ipcRenderer.invoke('app:info'),
+  },
+  clipboard: {
+    writeText: (text) => ipcRenderer.invoke('clipboard:write-text', text),
   },
 })

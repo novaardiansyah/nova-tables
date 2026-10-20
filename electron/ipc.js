@@ -1,4 +1,4 @@
-import { app, ipcMain } from 'electron'
+import { app, clipboard, ipcMain } from 'electron'
 import {
   deleteConnection,
   listConnections,
@@ -10,6 +10,7 @@ import {
   listDatabases,
   listTables,
   runQuery,
+  tableStructure,
   testConnection,
 } from './sqlServer.js'
 import { toErrorPayload } from './serialize.js'
@@ -44,10 +45,17 @@ export function registerIpcHandlers() {
 
   handle('db:tables', (input) => listTables(input))
 
+  handle('db:table-structure', async (input) => tableStructure(input))
+
   handle('query:run', (input) => runQuery(input))
 
   handle('app:info', () => ({
     version: app.getVersion(),
     platform: process.platform,
   }))
+
+  handle('clipboard:write-text', (text) => {
+    clipboard.writeText(String(text ?? ''))
+    return { written: true }
+  })
 }
