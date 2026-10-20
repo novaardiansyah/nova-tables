@@ -32,4 +32,11 @@ contextBridge.exposeInMainWorld('nova', {
   clipboard: {
     writeText: (text) => ipcRenderer.invoke('clipboard:write-text', text),
   },
+  events: {
+    onAddConnection: (handler) => {
+      const listener = () => handler()
+      ipcRenderer.on('menu:add-connection', listener)
+      return () => ipcRenderer.removeListener('menu:add-connection', listener)
+    },
+  },
 })

@@ -28,7 +28,15 @@ function createApplicationMenu() {
   const template = [
     {
       label: 'File',
-      submenu: [{ role: 'quit' }],
+      submenu: [
+        {
+          label: 'Add Connection',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => win?.webContents.send('menu:add-connection'),
+        },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
     },
     {
       label: 'Edit',

@@ -168,6 +168,14 @@ export default function App() {
     activeIdRef.current = activeConnectionId
   }, [activeConnectionId])
 
+  useEffect(() => {
+    try {
+      return api.onAddConnection(() => setDialog((current) => current ?? { mode: 'create' }))
+    } catch {
+      return undefined
+    }
+  }, [])
+
   const showBanner = useCallback((type, message) => {
     setBanner({ type, message })
   }, [])
@@ -1204,8 +1212,6 @@ export default function App() {
             onOpenConnections={openConnectionScreen}
             selectedTable={session.selectedTable}
             onSelectTable={handleSelectTable}
-            onEditConnection={(connection) => setDialog({ mode: 'edit', connection })}
-            onDeleteConnection={(connection) => setDeleteTarget(connection)}
             onRefreshDatabases={handleRefreshDatabases}
           />
 

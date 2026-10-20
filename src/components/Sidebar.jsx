@@ -16,8 +16,6 @@ export default function Sidebar({
   onBrowseTable,
   onCopyObjectName,
   onCopyStructure,
-  onEditConnection,
-  onDeleteConnection,
   onRefreshDatabases,
   onOpenStructure,
   onNewTable,
@@ -194,22 +192,6 @@ export default function Sidebar({
             <button
               type="button"
               className="icon-btn h-6 w-6"
-              title="Edit connection"
-              onClick={() => onEditConnection(item.connection)}
-            >
-              <Icon name="pencil" size={13} />
-            </button>
-            <button
-              type="button"
-              className="icon-btn h-6 w-6 hover:text-rose-400"
-              title="Delete connection"
-              onClick={() => onDeleteConnection(item.connection)}
-            >
-              <Icon name="trash" size={13} />
-            </button>
-            <button
-              type="button"
-              className="icon-btn h-6 w-6"
               title="Close connection"
               onClick={() => onCloseSession(item.connectionId)}
             >
@@ -250,7 +232,7 @@ export default function Sidebar({
       <div className="space-y-1.5 p-3">
         <button type="button" className="btn-soft w-full" onClick={onOpenConnections}>
           <Icon name="server" size={14} />
-          New Connections
+          Add Connection
         </button>
       </div>
 
