@@ -121,7 +121,7 @@ export default function ConnectionsScreen({
                 </span>
               ) : null}
             </span>
-            <span className="block truncate text-[length:var(--app-text-10)] leading-4 text-slate-600">
+            <span className="block truncate text-[length:var(--app-text-10)] leading-[calc(var(--app-text-12)+4px)] text-slate-600">
               {connection.host}:{connection.port}
               {connection.database ? ` · ${connection.database}` : ''}
             </span>

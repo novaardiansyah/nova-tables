@@ -23,11 +23,11 @@
     --app-text-13: 13px;
     --app-text-14: 14px;
     --app-text-15: 15px;
-    --app-font-family: 'Inter', system-ui, 'Segoe UI', Helvetica, Arial, sans-serif;
-    --grid-font-size: 12.5px;
-    --grid-font-family: 'Inter', system-ui, 'Segoe UI', Helvetica, Arial, sans-serif;
-    --json-font-size: 12.5px;
-    --json-font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+    --app-font-family: ui-sans-serif, -apple-system, system-ui, 'Segoe UI', 'Helvetica Neue', Arial, 'Liberation Sans', 'DejaVu Sans', 'Noto Sans', 'Noto Sans CJK JP', sans-serif;
+    --grid-font-size: 12px;
+    --grid-font-family: ui-sans-serif, -apple-system, system-ui, 'Segoe UI', 'Helvetica Neue', Arial, 'Liberation Sans', 'DejaVu Sans', 'Noto Sans', 'Noto Sans CJK JP', sans-serif;
+    --json-font-size: 12px;
+    --json-font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', 'Noto Sans Mono', monospace;
   }
 
   :root[data-theme='midnight'] {
@@ -94,6 +94,7 @@
 
   body {
     @apply bg-base font-sans text-[length:var(--app-text-13)] text-slate-200 antialiased;
+    line-height: calc(var(--app-text-13) + 7px);
     overflow: hidden;
     margin: 0;
   }

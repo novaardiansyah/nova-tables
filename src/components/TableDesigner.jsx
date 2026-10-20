@@ -134,7 +134,7 @@ export default function TableDesigner({
 
   if (error) {
     return (
-      <div className="flex h-full items-center justify-center px-8 text-center text-[length:var(--app-text-12)] leading-5 text-rose-400">
+      <div className="flex h-full items-center justify-center px-8 text-center text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] text-rose-400">
         {error}
       </div>
     )
@@ -360,7 +360,7 @@ export default function TableDesigner({
       </div>
 
       {notice ? (
-        <div className="flex items-start gap-2 border-b border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[length:var(--app-text-11)] leading-5 text-amber-200">
+        <div className="flex items-start gap-2 border-b border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[length:var(--app-text-11)] leading-[calc(var(--app-text-12)+8px)] text-amber-200">
           <Icon name="alert-triangle" size={12} className="mt-0.5 shrink-0 text-amber-400" />
           <span>{notice}</span>
         </div>

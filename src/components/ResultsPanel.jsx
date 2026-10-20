@@ -252,7 +252,7 @@ function ErrorState({ error }) {
             <p className="text-[length:var(--app-text-10)] font-semibold uppercase tracking-wider text-rose-400/80">
               Query failed
             </p>
-            <p className="mt-1 whitespace-pre-wrap break-words font-mono text-[length:var(--app-text-12)] leading-5 text-rose-100">
+            <p className="mt-1 whitespace-pre-wrap break-words font-mono text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] text-rose-100">
               {error?.message || 'Unknown error'}
             </p>
             {details.length > 0 ? (

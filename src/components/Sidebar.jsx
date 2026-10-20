@@ -129,7 +129,7 @@ export default function Sidebar({
             ) : null}
 
             {tablesState.status === 'error' ? (
-              <div className="px-2 py-1 text-[length:var(--app-text-11)] leading-4 text-rose-400">{tablesState.error}</div>
+              <div className="px-2 py-1 text-[length:var(--app-text-11)] leading-[calc(var(--app-text-12)+4px)] text-rose-400">{tablesState.error}</div>
             ) : null}
 
             {tablesState.status === 'ready' && tablesState.tables.length === 0 ? (
@@ -174,7 +174,7 @@ export default function Sidebar({
               >
                 {item.connection.name}
               </span>
-              <span className="block truncate text-[length:var(--app-text-10)] leading-4 text-slate-500">
+              <span className="block truncate text-[length:var(--app-text-10)] leading-[calc(var(--app-text-12)+4px)] text-slate-500">
                 {item.connection.host}:{item.connection.port}
                 {item.connection.database ? ` · ${item.connection.database}` : ''}
               </span>

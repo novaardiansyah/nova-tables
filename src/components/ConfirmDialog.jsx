@@ -35,7 +35,7 @@ export default function ConfirmDialog({
           </span>
           <div className="min-w-0">
             <h2 className="text-[length:var(--app-text-14)] font-semibold text-slate-100">{title}</h2>
-            {message ? <p className="mt-1 text-[length:var(--app-text-12)] leading-5 text-slate-400">{message}</p> : null}
+            {message ? <p className="mt-1 text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] text-slate-400">{message}</p> : null}
           </div>
         </div>
 

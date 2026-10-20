@@ -33,7 +33,7 @@ export default function Banner({ type = 'info', message, onDismiss }) {
       role="status"
     >
       <Icon name={style.icon} size={14} className={`mt-0.5 shrink-0 ${style.iconClass}`} />
-      <p className="flex-1 leading-5">{message}</p>
+      <p className="flex-1 leading-[calc(var(--app-text-12)+8px)]">{message}</p>
       {onDismiss ? (
         <button type="button" onClick={onDismiss} className="icon-btn h-5 w-5" title="Dismiss">
           <Icon name="x" size={13} />

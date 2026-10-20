@@ -54,7 +54,7 @@ export default function PromptDialog({
           <div className="min-w-0 flex-1">
             <h2 className="text-[length:var(--app-text-14)] font-semibold text-slate-100">{title}</h2>
             {description ? (
-              <p className="mt-1 text-[length:var(--app-text-12)] leading-5 text-slate-400">{description}</p>
+              <p className="mt-1 text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] text-slate-400">{description}</p>
             ) : null}
           </div>
           <button type="button" className="icon-btn h-6 w-6" onClick={onCancel} disabled={busy}>
@@ -74,7 +74,7 @@ export default function PromptDialog({
             placeholder={placeholder}
             onChange={(event) => setValue(event.target.value)}
           />
-          {hint ? <p className="mt-2 text-[length:var(--app-text-11)] leading-4 text-slate-500">{hint}</p> : null}
+          {hint ? <p className="mt-2 text-[length:var(--app-text-11)] leading-[calc(var(--app-text-12)+4px)] text-slate-500">{hint}</p> : null}
         </div>
 
         <div className="flex justify-end gap-2 border-t border-line px-5 py-3.5">

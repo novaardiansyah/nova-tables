@@ -154,7 +154,7 @@ export default function ConnectionDialog({
 
         <form ref={formRef} onSubmit={handleSubmit} className="space-y-4 px-5 py-4">
           {notice ? (
-            <div className="flex items-start gap-2 rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[length:var(--app-text-12)] leading-5 text-amber-200">
+            <div className="flex items-start gap-2 rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] text-amber-200">
               <Icon name="info" size={13} className="mt-0.5 shrink-0 text-amber-400" />
               <span>{notice}</span>
             </div>
@@ -289,13 +289,13 @@ export default function ConnectionDialog({
             </label>
           </div>
 
-          <p className="text-[length:var(--app-text-11)] leading-4 text-slate-600">
+          <p className="text-[length:var(--app-text-11)] leading-[calc(var(--app-text-12)+4px)] text-slate-600">
             Passwords are protected with Electron safeStorage and are never exposed to the interface.
           </p>
 
           {testResult ? (
             <div
-              className={`flex items-start gap-2 rounded-md border px-3 py-2 text-[length:var(--app-text-12)] leading-5 ${
+              className={`flex items-start gap-2 rounded-md border px-3 py-2 text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] ${
                 testResult.ok
                   ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
                   : 'border-rose-500/25 bg-rose-500/10 text-rose-200'
@@ -311,7 +311,7 @@ export default function ConnectionDialog({
           ) : null}
 
           {error ? (
-            <div className="flex items-start gap-2 rounded-md border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-[length:var(--app-text-12)] leading-5 text-rose-200">
+            <div className="flex items-start gap-2 rounded-md border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] text-rose-200">
               <Icon name="alert-triangle" size={13} className="mt-0.5 shrink-0 text-rose-400" />
               <span className="break-words">{error}</span>
             </div>

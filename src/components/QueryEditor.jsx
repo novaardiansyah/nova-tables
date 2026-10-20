@@ -4,7 +4,8 @@ import { editorThemeName } from '../monaco.js'
 import { Spinner } from './Icon.jsx'
 
 const EDITOR_OPTIONS = {
-  fontFamily: "'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace",
+  fontFamily:
+    "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', 'Noto Sans Mono', monospace",
   fontSize: 13,
   lineHeight: 21,
   minimap: { enabled: false },

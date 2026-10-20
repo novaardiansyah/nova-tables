@@ -20,7 +20,16 @@ export default {
       },
       fontFamily: {
         sans: ['var(--app-font-family)'],
-        mono: ['JetBrains Mono', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
+        mono: [
+          'JetBrains Mono',
+          'ui-monospace',
+          'SFMono-Regular',
+          'Menlo',
+          'Consolas',
+          'DejaVu Sans Mono',
+          'Noto Sans Mono',
+          'monospace',
+        ],
       },
       keyframes: {
         fadeIn: {

@@ -86,7 +86,7 @@ export default function ResultGrid({
   if (rows.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
-        <p className="text-[12.5px] text-slate-500">
+        <p className="text-[var(--grid-font-size)] text-slate-500">
           Query returned no rows
           {columns.length > 0 ? ` (${columns.length} columns)` : ''}
         </p>
@@ -102,13 +102,13 @@ export default function ResultGrid({
       >
         <thead>
           <tr>
-            <th className="sticky left-0 top-0 z-30 w-12 border-b border-r border-line bg-elevated px-2 py-1.5 text-right text-[0.84em] font-medium text-slate-600">
+            <th className="sticky left-0 top-0 z-30 w-12 border-b border-r border-line bg-elevated px-2 py-1.5 text-right text-[length:calc(var(--grid-font-size)-2px)] font-medium text-slate-600">
               #
             </th>
             {columns.map((column, index) => (
               <th
                 key={`${column.name}-${index}`}
-                className={`sticky top-0 z-20 whitespace-nowrap border-b border-line bg-elevated text-[0.88em] font-semibold tracking-wide text-slate-400 ${
+                className={`sticky top-0 z-20 whitespace-nowrap border-b border-line bg-elevated text-[length:calc(var(--grid-font-size)-1px)] font-semibold tracking-wide text-slate-400 ${
                   numericColumns[index] ? 'text-right' : 'text-left'
                 }`}
               >
@@ -149,7 +149,7 @@ export default function ResultGrid({
               className={`group cursor-pointer ${selectedIndex === index ? 'bg-white/[0.04]' : ''}`}
             >
               <td
-                className={`sticky left-0 z-10 border-b border-r border-line px-2 py-[5px] text-right font-mono text-[0.84em] text-slate-600 group-hover:bg-row-hover ${
+                className={`sticky left-0 z-10 border-b border-r border-line px-2 py-[5px] text-right font-mono text-[length:calc(var(--grid-font-size)-2px)] text-slate-600 group-hover:bg-row-hover ${
                   selectedIndex === index ? 'bg-white/[0.04]' : 'bg-surface'
                 }`}
               >
@@ -184,7 +184,7 @@ export default function ResultGrid({
       </table>
 
       {orderedRows.length > RENDER_LIMIT ? (
-        <p className="px-3 py-2 text-[11px] text-slate-500">
+        <p className="px-3 py-2 text-[length:calc(var(--grid-font-size)-1px)] text-slate-500">
           Showing the first {RENDER_LIMIT.toLocaleString()} of {orderedRows.length.toLocaleString()} rows.
         </p>
       ) : null}
@@ -194,7 +194,7 @@ export default function ResultGrid({
 
 function Cell({ value }) {
   if (value === null || value === undefined) {
-    return <span className="font-mono text-[0.92em] italic text-slate-600">NULL</span>
+    return <span className="font-mono text-[length:calc(var(--grid-font-size)-1px)] italic text-slate-600">NULL</span>
   }
 
   if (typeof value === 'number') {
