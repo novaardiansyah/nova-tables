@@ -4,7 +4,6 @@ import Icon, { BrandMark, Spinner } from './Icon.jsx'
 
 const TABLE_MENU_ITEMS = [
   'Rename',
-  'New table',
   'Pin to top',
   'Clone',
   'Truncate',
@@ -303,6 +302,11 @@ export default function Sidebar({
               id: 'open-structure',
               label: 'Open structure',
               onSelect: () => onOpenStructure(menu.table),
+            },
+            {
+              id: 'new-table',
+              label: 'New table',
+              onSelect: () => onNewTable(menu.table),
             },
             ...TABLE_MENU_ITEMS.map((label) => ({ id: label, label })),
           ]}

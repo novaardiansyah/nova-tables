@@ -106,7 +106,6 @@ export default function TableDesigner({
   busy,
   onRenameTable,
   onGenerate,
-  onDiscard,
   onApply,
 }) {
   const [draft, setDraft] = useState(design ?? NEW_TABLE_TEMPLATE)
@@ -118,6 +117,11 @@ export default function TableDesigner({
     setDraft(design ?? NEW_TABLE_TEMPLATE)
     setNotice(null)
   }, [design])
+
+  const discard = () => {
+    setDraft(originalRef.current ?? NEW_TABLE_TEMPLATE)
+    setNotice(null)
+  }
 
   if (loading) {
     return (
@@ -169,12 +173,6 @@ export default function TableDesigner({
           .map((index) => ({ ...index, columns: index.columns.filter((column) => column !== removed.name) }))
           .filter((index) => index.columns.length > 0),
       }
-    })
-
-  const togglePrimary = (name) =>
-    setDraft((prev) => {
-      if (prev.primaryKey.length > 0 && prev.primaryKey[0]?.name) return prev
-      return prev
     })
 
   const columnOptions = draft.columns
@@ -316,7 +314,7 @@ export default function TableDesigner({
   const handleApply = () => {
     const text = preview()
     if (!text) return
-    onApply(text)
+    onApply(text, draft)
   }
 
   const handleRename = () => {
@@ -348,7 +346,7 @@ export default function TableDesigner({
               Rename
             </button>
           ) : null}
-          <button type="button" className="btn-ghost h-6 px-2 text-[11.5px]" onClick={onDiscard} disabled={busy}>
+          <button type="button" className="btn-ghost h-6 px-2 text-[11.5px]" onClick={discard} disabled={busy}>
             Discard
           </button>
           <button type="button" className="btn-soft h-6 px-2 text-[11.5px]" onClick={handleGenerate} disabled={busy}>
@@ -370,8 +368,8 @@ export default function TableDesigner({
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
         <div className="grid grid-cols-2 gap-3">
-          <Editor label="Schema" value={draft.schema} onChange={(value) => update({ schema: value })} disabled={mode === 'edit'} placeholder="dbo" />
           <Editor label="Table name" value={draft.table} onChange={(value) => update({ table: value })} placeholder="my_table" />
+          <Editor label="Schema" value={draft.schema} onChange={(value) => update({ schema: value })} disabled={mode === 'edit'} placeholder="dbo" />
         </div>
 
         <section className="rounded-lg border border-line bg-panel">

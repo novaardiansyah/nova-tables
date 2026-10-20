@@ -500,7 +500,6 @@ export async function tableStructure({ connectionId, database, schema, table }) 
   const body = lines.map((line) => `  ${line}`).join(', \n')
   const statement = `CREATE TABLE ${quoteName(schema)}.${quoteName(table)} (\n${body}\n);`
 
-  const strip = (name) => String(name).replace(/ DESC$/, '').replace(/^\[/, '').replace(/\]$/, '')
   const toDesignKey = (key) => ({
     name: key.name,
     columns: key.columnNames,
