@@ -1,7 +1,13 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import Icon from './Icon.jsx'
 
 const RENDER_LIMIT = 2000
 const DATE_RE = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/
+
+function compareValues(left, right) {
+  if (typeof left === 'number' && typeof right === 'number') return left - right
+  return String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: 'base' })
+}
 
 export default function ResultGrid({
   columns,
@@ -11,10 +17,43 @@ export default function ResultGrid({
   onRowClick,
   selectedIndex,
 }) {
+  const [sort, setSort] = useState(null)
+
+  useEffect(() => {
+    setSort(null)
+  }, [rows])
+
+  const orderedRows = useMemo(() => {
+    const entries = rows.map((row, index) => ({ row, index }))
+    if (!sort || sort.index >= columns.length) return entries
+
+    const factor = sort.direction === 'asc' ? 1 : -1
+    const columnIndex = sort.index
+
+    return entries.sort((left, right) => {
+      const leftValue = left.row[columnIndex]
+      const rightValue = right.row[columnIndex]
+      const leftEmpty = leftValue === null || leftValue === undefined
+      const rightEmpty = rightValue === null || rightValue === undefined
+      if (leftEmpty || rightEmpty) {
+        if (leftEmpty && rightEmpty) return 0
+        return leftEmpty ? 1 : -1
+      }
+      return factor * compareValues(leftValue, rightValue)
+    })
+  }, [columns.length, rows, sort])
+
   const visibleRows = useMemo(
-    () => (rows.length > RENDER_LIMIT ? rows.slice(0, RENDER_LIMIT) : rows),
-    [rows],
+    () => (orderedRows.length > RENDER_LIMIT ? orderedRows.slice(0, RENDER_LIMIT) : orderedRows),
+    [orderedRows],
   )
+
+  const handleSort = (index) => {
+    setSort((prev) => {
+      if (!prev || prev.index !== index) return { index, direction: 'asc' }
+      return { index, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+    })
+  }
 
   const relationMap = useMemo(() => {
     const map = new Map()
@@ -33,8 +72,8 @@ export default function ResultGrid({
     () =>
       columns.map((_, index) => {
         let hasNumber = false
-        for (const row of visibleRows) {
-          const value = row[index]
+        for (const entry of visibleRows) {
+          const value = entry.row[index]
           if (value === null || value === undefined) continue
           if (typeof value !== 'number') return false
           hasNumber = true
@@ -66,25 +105,49 @@ export default function ResultGrid({
             {columns.map((column, index) => (
               <th
                 key={`${column.name}-${index}`}
-                className={`sticky top-0 z-20 whitespace-nowrap border-b border-line bg-elevated px-3 py-1.5 text-[11px] font-semibold tracking-wide text-slate-400 ${
+                className={`sticky top-0 z-20 whitespace-nowrap border-b border-line bg-elevated text-[11px] font-semibold tracking-wide text-slate-400 ${
                   numericColumns[index] ? 'text-right' : 'text-left'
                 }`}
               >
-                {column.name}
+                <button
+                  type="button"
+                  onClick={() => handleSort(index)}
+                  title={`Sort by ${column.name}`}
+                  className={`group/sort flex w-full items-center gap-1.5 px-3 py-1.5 hover:text-slate-200 ${
+                    numericColumns[index] ? 'justify-end' : ''
+                  }`}
+                >
+                  <span>{column.name}</span>
+                  <Icon
+                    name={
+                      sort?.index === index
+                        ? sort.direction === 'asc'
+                          ? 'sort-asc'
+                          : 'sort-desc'
+                        : 'sort-idle'
+                    }
+                    size={11}
+                    className={`shrink-0 ${
+                      sort?.index === index
+                        ? 'text-accent'
+                        : 'text-slate-600 opacity-0 group-hover/sort:opacity-100'
+                    }`}
+                  />
+                </button>
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {visibleRows.map((row, rowIndex) => (
+          {visibleRows.map(({ row, index }, rowIndex) => (
             <tr
-              key={rowIndex}
-              onClick={() => onRowClick(rowIndex)}
-              className={`group cursor-pointer ${selectedIndex === rowIndex ? 'bg-white/[0.04]' : ''}`}
+              key={index}
+              onClick={() => onRowClick(index)}
+              className={`group cursor-pointer ${selectedIndex === index ? 'bg-white/[0.04]' : ''}`}
             >
               <td
                 className={`sticky left-0 z-10 border-b border-r border-line px-2 py-[5px] text-right font-mono text-[10.5px] text-slate-600 group-hover:bg-[#161c26] ${
-                  selectedIndex === rowIndex ? 'bg-white/[0.04]' : 'bg-surface'
+                  selectedIndex === index ? 'bg-white/[0.04]' : 'bg-surface'
                 }`}
               >
                 {rowIndex + 1}
@@ -117,9 +180,9 @@ export default function ResultGrid({
         </tbody>
       </table>
 
-      {rows.length > RENDER_LIMIT ? (
+      {orderedRows.length > RENDER_LIMIT ? (
         <p className="px-3 py-2 text-[11px] text-slate-500">
-          Showing the first {RENDER_LIMIT.toLocaleString()} of {rows.length.toLocaleString()} rows.
+          Showing the first {RENDER_LIMIT.toLocaleString()} of {orderedRows.length.toLocaleString()} rows.
         </p>
       ) : null}
     </div>

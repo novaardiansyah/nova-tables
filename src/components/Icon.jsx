@@ -120,6 +120,26 @@ const ICONS = {
       <path d="M9 3h6l-1 6 3.5 3.5V15h-11v-2.5L10 9z" />
     </>
   ),
+  'sort-asc': (
+    <>
+      <path d="M12 5v11" />
+      <path d="M7 13l5 5 5-5" />
+      <path d="M5 21h14" />
+    </>
+  ),
+  'sort-desc': (
+    <>
+      <path d="M12 19V8" />
+      <path d="M7 11l5-5 5 5" />
+      <path d="M5 3h14" />
+    </>
+  ),
+  'sort-idle': (
+    <>
+      <path d="M8 10l4-4 4 4" />
+      <path d="M8 14l4 4 4-4" />
+    </>
+  ),
 }
 
 export default function Icon({ name, size = 15, className = '', strokeWidth = 1.7 }) {
