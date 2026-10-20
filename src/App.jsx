@@ -1203,7 +1203,6 @@ export default function App() {
           <Sidebar
             sessions={Object.values(sessions)}
             activeConnectionId={activeConnectionId}
-            session={session}
             activeDatabase={session.activeDatabase}
             tablesState={session.tables}
             appVersion={appVersion}

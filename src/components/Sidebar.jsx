@@ -5,7 +5,6 @@ import Icon, { BrandMark, Spinner } from './Icon.jsx'
 export default function Sidebar({
   sessions,
   activeConnectionId,
-  session,
   activeDatabase,
   tablesState,
   appVersion,
@@ -39,7 +38,7 @@ export default function Sidebar({
   const handleDatabaseClick = (name) => {
     const isOpen = expandedDatabase === name
     setExpandedDatabase(isOpen ? null : name)
-    onSelectDatabase(name)
+    if (name !== activeDatabase) onSelectDatabase(name)
   }
 
   const handleTableContextMenu = (event, table) => {
@@ -146,6 +145,8 @@ export default function Sidebar({
 
   const renderSession = (item) => {
     const isActive = item.connectionId === activeConnectionId
+    const activeDatabaseInfo =
+      item.databases.find((database) => database.name === activeDatabase) || null
 
     return (
       <div key={item.connectionId} className="mb-1">
@@ -203,11 +204,11 @@ export default function Sidebar({
         {isActive ? (
           expanded ? (
             <div className="mt-0.5 space-y-px pl-3">
-              {session.databases.length === 0 ? (
+              {item.databases.length === 0 ? (
                 <p className="px-2 py-1 text-[11px] text-slate-600">No databases visible</p>
-              ) : (
-                session.databases.map(renderDatabase)
-              )}
+              ) : activeDatabaseInfo ? (
+                renderDatabase(activeDatabaseInfo)
+              ) : null}
             </div>
           ) : null
         ) : (
