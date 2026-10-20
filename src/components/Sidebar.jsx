@@ -13,7 +13,6 @@ export default function Sidebar({
   onConnect,
   onSelectDatabase,
   onBrowseTable,
-  onQueryTable,
   onCopyObjectName,
   onCopyStructure,
   onNewConnection,
@@ -256,16 +255,17 @@ export default function Sidebar({
                                             ) : null}
                                             <span className="truncate">{table.name}</span>
                                           </button>
-                                          {pinned.has(key) ? (
-                                            <Icon name="pin" size={10} className="shrink-0 text-accent" />
-                                          ) : null}
                                           <button
                                             type="button"
-                                            className="icon-btn h-5 w-5 opacity-0 group-hover/table:opacity-100"
-                                            title="Load into editor"
-                                            onClick={() => onQueryTable(table)}
+                                            className={`icon-btn h-5 w-5 shrink-0 ${
+                                              pinned.has(key)
+                                                ? 'text-accent'
+                                                : 'opacity-0 group-hover/table:opacity-100'
+                                            }`}
+                                            title={pinned.has(key) ? 'Unpin from top' : 'Pin to top'}
+                                            onClick={() => onTogglePin(table)}
                                           >
-                                            <Icon name="play" size={10} />
+                                            <Icon name="pin" size={10} />
                                           </button>
                                         </div>
                                       )

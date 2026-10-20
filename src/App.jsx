@@ -359,17 +359,6 @@ export default function App() {
     [execute, loadRelations, openTab],
   )
 
-  const handleQueryTable = useCallback(
-    (table) => {
-      const sql = `SELECT TOP (1000) *\nFROM ${qualifiedName(table)};`
-      updateTab(activeTabId, { sql, relations: [] })
-      setSelectedTable(`${table.schema}.${table.name}`)
-      seedEditor(sql)
-      loadRelations(activeTabId, table)
-    },
-    [activeTabId, loadRelations, seedEditor, updateTab],
-  )
-
   const handleCopyObjectName = useCallback(
     async (table) => {
       try {
@@ -838,7 +827,6 @@ export default function App() {
           onConnect={handleConnect}
           onSelectDatabase={handleSelectDatabase}
           onBrowseTable={handleBrowseTable}
-          onQueryTable={handleQueryTable}
           onCopyObjectName={handleCopyObjectName}
           onCopyStructure={handleCopyStructure}
           onOpenStructure={handleOpenStructure}
