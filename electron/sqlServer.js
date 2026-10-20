@@ -363,7 +363,7 @@ export async function tableStructure({ connectionId, database, schema, table }) 
     .input('schema', sql.NVarChar(128), schema)
     .input('table', sql.NVarChar(128), table)
     .query(
-      `SELECT c.name AS columnName, d.definition AS definition
+      `SELECT c.name AS columnName, d.name AS constraintName, d.definition AS definition
          FROM sys.default_constraints d
          JOIN sys.columns c ON c.object_id = d.parent_object_id AND c.column_id = d.parent_column_id
          JOIN sys.tables t ON t.object_id = d.parent_object_id
@@ -372,7 +372,10 @@ export async function tableStructure({ connectionId, database, schema, table }) 
     )
 
   const defaults = new Map(
-    (defaultsResult.recordset || []).map((row) => [String(row.columnName), String(row.definition)]),
+    (defaultsResult.recordset || []).map((row) => [
+      String(row.columnName),
+      { name: String(row.constraintName), definition: String(row.definition) },
+    ]),
   )
 
   const keysResult = await pool
@@ -382,6 +385,7 @@ export async function tableStructure({ connectionId, database, schema, table }) 
     .query(
       `SELECT i.is_primary_key AS isPrimaryKey,
               i.is_unique AS isUnique,
+              i.is_unique_constraint AS isUniqueConstraint,
               i.type_desc AS typeDesc,
               i.name AS indexName,
               col.name AS columnName,
@@ -392,28 +396,36 @@ export async function tableStructure({ connectionId, database, schema, table }) 
          JOIN sys.tables t ON t.object_id = i.object_id
          JOIN sys.schemas s ON s.schema_id = t.schema_id
         WHERE s.name = @schema AND t.name = @table AND ic.is_included_column = 0
-          AND (i.is_primary_key = 1 OR i.is_unique_constraint = 1)
+          AND i.is_hypothetical = 0 AND i.type IN (1, 2)
         ORDER BY i.is_primary_key DESC, i.name, ic.key_ordinal`,
     )
 
   const keys = []
+  const indexes = []
   const keyColumns = new Map()
   for (const row of keysResult.recordset || []) {
-    const key = `${row.isPrimaryKey ? 'pk' : 'uq'}::${row.indexName}`
+    const key = `${row.isUniqueConstraint ? 'uq' : row.isPrimaryKey ? 'pk' : 'ix'}::${row.indexName}`
     let entry = keyColumns.get(key)
     if (!entry) {
       entry = {
         name: String(row.indexName),
         primary: Boolean(row.isPrimaryKey),
+        unique: Boolean(row.isUnique),
+        uniqueConstraint: Boolean(row.isUniqueConstraint),
         clustered: String(row.typeDesc).startsWith('CLUSTERED'),
         columns: [],
+        columnNames: [],
+        descending: [],
       }
       keyColumns.set(key, entry)
-      keys.push(entry)
+      if (entry.primary || entry.uniqueConstraint) keys.push(entry)
+      else indexes.push(entry)
     }
     entry.columns.push(
       row.isDescending ? `${quoteName(row.columnName)} DESC` : quoteName(row.columnName),
     )
+    entry.columnNames.push(String(row.columnName))
+    entry.descending.push(Boolean(row.isDescending))
   }
 
   const foreignResult = await pool
@@ -460,10 +472,10 @@ export async function tableStructure({ connectionId, database, schema, table }) 
   }
 
   const lines = columns.map((column) => {
-    const defaultDefinition = defaults.get(column.name)
+    const entry = defaults.get(column.name)
     const definition = buildColumnDefinition(column)
-    if (!defaultDefinition || column.isComputed) return definition
-    return `${definition} DEFAULT ${defaultDefinition}`
+    if (!entry || column.isComputed) return definition
+    return `${definition} DEFAULT ${entry.definition}`
   })
 
   for (const foreign of foreignKeys) {
@@ -488,12 +500,61 @@ export async function tableStructure({ connectionId, database, schema, table }) 
   const body = lines.map((line) => `  ${line}`).join(', \n')
   const statement = `CREATE TABLE ${quoteName(schema)}.${quoteName(table)} (\n${body}\n);`
 
+  const strip = (name) => String(name).replace(/ DESC$/, '').replace(/^\[/, '').replace(/\]$/, '')
+  const toDesignKey = (key) => ({
+    name: key.name,
+    columns: key.columnNames,
+    descending: key.descending,
+    clustered: key.clustered,
+  })
+  const primaryColumns = keys.filter((key) => key.primary).map(toDesignKey)
+  const uniqueColumns = keys.filter((key) => !key.primary).map(toDesignKey)
+  const indexList = indexes.map((index) => ({
+    name: index.name,
+    columns: index.columnNames,
+    descending: index.descending,
+    unique: index.unique,
+    clustered: index.clustered,
+  }))
+
   return {
     database: database || null,
     schema,
     table,
     objectName: `${quoteName(schema)}.${quoteName(table)}`,
     statement,
+    columns: columns.map((column) => {
+      const entry = defaults.get(column.name)
+      return {
+        name: column.name,
+        typeName: column.typeName,
+        maxLength: column.maxLength,
+        precision: column.precision,
+        scale: column.scale,
+        isNullable: column.isNullable,
+        isIdentity: column.isIdentity,
+        isComputed: column.isComputed,
+        computedDefinition: column.computedDefinition,
+        seedValue: column.seedValue,
+        incrementValue: column.incrementValue,
+        collation: column.collation,
+        databaseCollation: column.databaseCollation,
+        defaultName: entry ? entry.name : null,
+        defaultDefinition: entry ? entry.definition : null,
+      }
+    }),
+    foreignKeys: foreignKeys.map((foreign) => ({
+      name: foreign.name,
+      referencedSchema: foreign.referencedSchema,
+      referencedTable: foreign.referencedTable,
+      columns: foreign.columns.map((item) => ({
+        column: item.column,
+        referencedColumn: item.referencedColumn,
+      })),
+    })),
+    primaryKey: primaryColumns,
+    uniqueKeys: uniqueColumns,
+    indexes: indexList,
   }
 }
 

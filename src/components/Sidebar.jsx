@@ -3,7 +3,6 @@ import ContextMenu from './ContextMenu.jsx'
 import Icon, { BrandMark, Spinner } from './Icon.jsx'
 
 const TABLE_MENU_ITEMS = [
-  'Open structure',
   'Rename',
   'New table',
   'Pin to top',
@@ -29,6 +28,8 @@ export default function Sidebar({
   onEditConnection,
   onDeleteConnection,
   onRefreshDatabases,
+  onOpenStructure,
+  onNewTable,
 }) {
   const [expandedId, setExpandedId] = useState(null)
   const [expandedDatabase, setExpandedDatabase] = useState(null)
@@ -297,6 +298,11 @@ export default function Sidebar({
               id: 'copy-structure',
               label: 'Copy structure',
               onSelect: () => onCopyStructure(menu.table),
+            },
+            {
+              id: 'open-structure',
+              label: 'Open structure',
+              onSelect: () => onOpenStructure(menu.table),
             },
             ...TABLE_MENU_ITEMS.map((label) => ({ id: label, label })),
           ]}

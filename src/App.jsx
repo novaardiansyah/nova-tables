@@ -8,6 +8,7 @@ import ResultsPanel from './components/ResultsPanel.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import StatusBar from './components/StatusBar.jsx'
 import TabBar from './components/TabBar.jsx'
+import TableDesigner from './components/TableDesigner.jsx'
 import WorkspaceHeader from './components/WorkspaceHeader.jsx'
 
 const STARTER_SQL = `-- Nova Tables
@@ -23,7 +24,23 @@ const EDITOR_DEFAULT_HEIGHT = 320
 const BROWSE_ROWS = 300
 
 function createTab(id, title, sql) {
-  return { id, title, sql, state: IDLE_QUERY, activeSet: 0 }
+  return { id, kind: 'query', title, sql, state: IDLE_QUERY, activeSet: 0 }
+}
+
+function createDesignTab(id, title, target) {
+  return {
+    id,
+    kind: 'design',
+    title,
+    target,
+    design: null,
+    loading: true,
+    error: null,
+    busy: false,
+    sql: '',
+    state: IDLE_QUERY,
+    activeSet: 0,
+  }
 }
 
 function pickDatabase(databases, configured) {
@@ -309,6 +326,182 @@ export default function App() {
     [activeDatabase, showBanner],
   )
 
+  const openDesignTab = useCallback(
+    (title, target) => {
+      tabIdRef.current += 1
+      const id = `tab-${tabIdRef.current}`
+      const liveSql = sqlRef.current
+      setTabs((prev) => [
+        ...prev.map((tab) => (tab.id === activeTabId ? { ...tab, sql: liveSql } : tab)),
+        createDesignTab(id, title, target),
+      ])
+      setActiveTabId(id)
+      return id
+    },
+    [activeTabId],
+  )
+
+  const reloadDesign = useCallback(
+    async (tabId, schema, table) => {
+      const current = sessionRef.current
+      if (!current || !activeDatabase) return
+      const structure = await api.tableStructure(current.connectionId, activeDatabase, schema, table)
+      updateTab(tabId, {
+        loading: false,
+        error: null,
+        title: `Design ${table}`,
+        target: { mode: 'edit', schema, table },
+        design: {
+          schema: structure.schema,
+          table: structure.table,
+          columns: structure.columns.map((column) => ({ ...column, originalName: column.name })),
+          primaryKey: structure.primaryKey[0]?.columns ?? [],
+          primaryKeyName: structure.primaryKey[0]?.name ?? null,
+          uniqueKeys: structure.uniqueKeys,
+          foreignKeys: structure.foreignKeys,
+          indexes: structure.indexes,
+        },
+      })
+    },
+    [activeDatabase, updateTab],
+  )
+
+  const handleOpenStructure = useCallback(
+    async (table) => {
+      const current = sessionRef.current
+      if (!current) {
+        showBanner('warn', 'Open a connection before opening a structure.')
+        return
+      }
+      if (!activeDatabase) {
+        showBanner('warn', 'Select a database before opening a structure.')
+        return
+      }
+
+      const tabId = openDesignTab(`Design ${table.name}`, {
+        mode: 'edit',
+        schema: table.schema,
+        table: table.name,
+      })
+
+      try {
+        await reloadDesign(tabId, table.schema, table.name)
+      } catch (error) {
+        updateTab(tabId, { loading: false, error: error.message })
+      }
+    },
+    [activeDatabase, openDesignTab, reloadDesign, showBanner, updateTab],
+  )
+
+  const handleNewTable = useCallback(
+    (table) => {
+      const current = sessionRef.current
+      if (!current) {
+        showBanner('warn', 'Open a connection before creating a table.')
+        return
+      }
+
+      const tabId = openDesignTab('New table', {
+        mode: 'new',
+        schema: table?.schema || 'dbo',
+        table: '',
+      })
+
+      updateTab(tabId, {
+        loading: false,
+        design: {
+          schema: table?.schema || 'dbo',
+          table: '',
+          columns: [
+            {
+              name: 'id',
+              typeName: 'bigint',
+              maxLength: 8,
+              precision: 19,
+              scale: 0,
+              isNullable: false,
+              isIdentity: true,
+              isComputed: false,
+              computedDefinition: null,
+              seedValue: 1,
+              incrementValue: 1,
+              collation: null,
+              databaseCollation: null,
+              defaultName: null,
+              defaultDefinition: null,
+              originalName: null,
+            },
+          ],
+          primaryKey: ['id'],
+          primaryKeyName: null,
+          uniqueKeys: [],
+          foreignKeys: [],
+          indexes: [],
+        },
+      })
+    },
+    [openDesignTab, showBanner, updateTab],
+  )
+
+  const handleDesignGenerate = useCallback(
+    (sql) => {
+      openTab('Generated SQL', sql)
+    },
+    [openTab],
+  )
+
+  const handleDesignApply = useCallback(
+    async (tabId, sql, draft) => {
+      const current = sessionRef.current
+      if (!current) {
+        showBanner('warn', 'Open a connection before applying changes.')
+        return
+      }
+      if (!activeDatabase) {
+        showBanner('warn', 'Select a database before applying changes.')
+        return
+      }
+
+      updateTab(tabId, { busy: true })
+      try {
+        await api.runQuery({ connectionId: current.connectionId, database: activeDatabase, sql })
+        showBanner('success', 'Structure applied.')
+        await loadTables(current.connectionId, activeDatabase)
+        await reloadDesign(tabId, draft.schema, draft.table)
+      } catch (error) {
+        showBanner('error', error.message)
+      } finally {
+        updateTab(tabId, { busy: false })
+      }
+    },
+    [activeDatabase, loadTables, reloadDesign, showBanner, updateTab],
+  )
+
+  const handleDesignRename = useCallback(
+    async (tabId, draft, nextName) => {
+      const current = sessionRef.current
+      if (!current || !activeDatabase) return
+      if (!nextName || nextName === draft.table) return
+
+      updateTab(tabId, { busy: true })
+      try {
+        await api.runQuery({
+          connectionId: current.connectionId,
+          database: activeDatabase,
+          sql: `EXEC sp_rename N'${quoteIdentifier(draft.schema)}.${quoteIdentifier(draft.table)}', N'${nextName.replace(/'/g, "''")}';`,
+        })
+        showBanner('success', `Renamed table to ${nextName}.`)
+        await loadTables(current.connectionId, activeDatabase)
+        await reloadDesign(tabId, draft.schema, nextName)
+      } catch (error) {
+        showBanner('error', error.message)
+      } finally {
+        updateTab(tabId, { busy: false })
+      }
+    },
+    [activeDatabase, loadTables, reloadDesign, showBanner, updateTab],
+  )
+
   const handleSqlChange = useCallback((value) => {
     sqlRef.current = value
   }, [])
@@ -454,6 +647,8 @@ export default function App() {
           onQueryTable={handleQueryTable}
           onCopyObjectName={handleCopyObjectName}
           onCopyStructure={handleCopyStructure}
+          onOpenStructure={handleOpenStructure}
+          onNewTable={handleNewTable}
           onNewConnection={() => setDialog({ mode: 'create' })}
           onEditConnection={(connection) => setDialog({ mode: 'edit', connection })}
           onDeleteConnection={(connection) => setDeleteTarget(connection)}
@@ -478,27 +673,42 @@ export default function App() {
             onNewTab={handleNewTab}
           />
 
-          <div ref={splitRef} className="flex min-h-0 flex-1 flex-col">
-            <div style={{ height: editorHeight }} className="min-h-[140px] shrink-0 overflow-hidden">
-              <QueryEditor seed={query} onChange={handleSqlChange} onRun={handleRun} />
+          {activeTab?.kind === 'design' ? (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <TableDesigner
+                design={activeTab.design}
+                mode={activeTab.target?.mode}
+                loading={activeTab.loading}
+                error={activeTab.error}
+                busy={activeTab.busy}
+                onGenerate={handleDesignGenerate}
+                onApply={(sql, draft) => handleDesignApply(activeTab.id, sql, draft)}
+                onRenameTable={(nextName) => handleDesignRename(activeTab.id, activeTab.design, nextName)}
+              />
             </div>
+          ) : (
+            <div ref={splitRef} className="flex min-h-0 flex-1 flex-col">
+              <div style={{ height: editorHeight }} className="min-h-[140px] shrink-0 overflow-hidden">
+                <QueryEditor seed={query} onChange={handleSqlChange} onRun={handleRun} />
+              </div>
 
-            <div
-              onPointerDown={handleSplitPointerDown}
-              onDoubleClick={() => setEditorHeight(EDITOR_DEFAULT_HEIGHT)}
-              className="group flex h-1.5 shrink-0 cursor-row-resize items-center justify-center bg-base"
-              title="Drag to resize"
-            >
-              <span className="h-px w-full bg-line transition-colors group-hover:bg-accent/60" />
+              <div
+                onPointerDown={handleSplitPointerDown}
+                onDoubleClick={() => setEditorHeight(EDITOR_DEFAULT_HEIGHT)}
+                className="group flex h-1.5 shrink-0 cursor-row-resize items-center justify-center bg-base"
+                title="Drag to resize"
+              >
+                <span className="h-px w-full bg-line transition-colors group-hover:bg-accent/60" />
+              </div>
+
+              <ResultsPanel
+                key={activeTab.id}
+                state={activeTab.state}
+                activeSet={activeTab.activeSet}
+                onSelectSet={handleSelectSet}
+              />
             </div>
-
-            <ResultsPanel
-              key={activeTab.id}
-              state={activeTab.state}
-              activeSet={activeTab.activeSet}
-              onSelectSet={handleSelectSet}
-            />
-          </div>
+          )}
 
           <StatusBar session={session} activeDatabase={activeDatabase} queryStatus={activeTab.state.status} />
         </main>
