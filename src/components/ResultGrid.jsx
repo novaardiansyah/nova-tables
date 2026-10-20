@@ -3,10 +3,23 @@ import { useMemo } from 'react'
 const RENDER_LIMIT = 2000
 const DATE_RE = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/
 
-export default function ResultGrid({ columns, rows }) {
+export default function ResultGrid({ columns, rows, relations, onRelationClick }) {
   const visibleRows = useMemo(
     () => (rows.length > RENDER_LIMIT ? rows.slice(0, RENDER_LIMIT) : rows),
     [rows],
+  )
+
+  const relationMap = useMemo(() => {
+    const map = new Map()
+    for (const relation of relations ?? []) {
+      map.set(String(relation.column).toLowerCase(), relation)
+    }
+    return map
+  }, [relations])
+
+  const columnRelations = useMemo(
+    () => columns.map((column) => relationMap.get(String(column.name).toLowerCase()) ?? null),
+    [columns, relationMap],
   )
 
   const numericColumns = useMemo(
@@ -68,7 +81,17 @@ export default function ResultGrid({ columns, rows }) {
                     numericColumns[index] ? 'text-right tabular-nums' : ''
                   }`}
                 >
-                  <Cell value={row[index]} />
+                  {columnRelations[index] && row[index] !== null && row[index] !== undefined ? (
+                    <button
+                      type="button"
+                      onClick={() => onRelationClick(columnRelations[index], row[index])}
+                      className="cursor-pointer border-b border-dashed border-slate-500/50 hover:border-slate-300"
+                    >
+                      {String(row[index])}
+                    </button>
+                  ) : (
+                    <Cell value={row[index]} />
+                  )}
                 </td>
               ))}
             </tr>

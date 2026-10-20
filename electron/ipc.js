@@ -10,6 +10,7 @@ import {
   listDatabases,
   listTables,
   runQuery,
+  tableRelations,
   tableStructure,
   testConnection,
 } from './sqlServer.js'
@@ -46,6 +47,8 @@ export function registerIpcHandlers() {
   handle('db:tables', (input) => listTables(input))
 
   handle('db:table-structure', async (input) => tableStructure(input))
+
+  handle('db:table-relations', (input) => tableRelations(input))
 
   handle('query:run', (input) => runQuery(input))
 

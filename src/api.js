@@ -53,6 +53,9 @@ export const api = {
   tableStructure: async (connectionId, database, schema, table) =>
     call(() => bridge().tables.structure({ connectionId, database, schema, table })),
 
+  tableRelations: async (connectionId, database, schema, table) =>
+    (await call(() => bridge().tables.relations({ connectionId, database, schema, table }))).relations,
+
   runQuery: async (input) => call(() => bridge().query.run(input)),
 
   copyText: async (text) => call(() => bridge().clipboard.writeText(text)),

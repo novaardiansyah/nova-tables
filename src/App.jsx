@@ -24,7 +24,7 @@ const EDITOR_DEFAULT_HEIGHT = 320
 const BROWSE_ROWS = 300
 
 function createTab(id, title, sql) {
-  return { id, kind: 'query', title, sql, state: IDLE_QUERY, activeSet: 0 }
+  return { id, kind: 'query', title, sql, state: IDLE_QUERY, activeSet: 0, relations: [] }
 }
 
 function createDesignTab(id, title, target) {
@@ -64,6 +64,21 @@ function browseSql(table) {
   return `SELECT TOP (${BROWSE_ROWS}) *\nFROM ${qualifiedName(table)}${orderBy};`
 }
 
+function relatedSql(relation, value) {
+  const column = quoteIdentifier(relation.referencedColumn)
+  const filter =
+    value === null || value === undefined
+      ? `${column} IS NULL`
+      : `${column} = ${sqlLiteral(value)}`
+  return `SELECT TOP (${BROWSE_ROWS}) *\nFROM ${quoteIdentifier(relation.referencedSchema)}.${quoteIdentifier(relation.referencedTable)}\nWHERE ${filter};`
+}
+
+function sqlLiteral(value) {
+  if (typeof value === 'number') return String(value)
+  if (typeof value === 'boolean') return value ? '1' : '0'
+  return `N'${String(value).replace(/'/g, "''")}'`
+}
+
 function queryTitle(index) {
   return `Query ${index}`
 }
@@ -85,6 +100,7 @@ export default function App() {
   const [deleting, setDeleting] = useState(false)
   const [editorHeight, setEditorHeight] = useState(EDITOR_DEFAULT_HEIGHT)
   const [appVersion, setAppVersion] = useState('')
+  const [selectedTable, setSelectedTable] = useState(null)
 
   const sqlRef = useRef(STARTER_SQL)
   const sessionRef = useRef(null)
@@ -270,22 +286,57 @@ export default function App() {
     [activeTabId, seedEditor],
   )
 
+  const loadRelations = useCallback(
+    async (tabId, table) => {
+      const current = sessionRef.current
+      if (!current || !activeDatabase) return
+      try {
+        const relations = await api.tableRelations(
+          current.connectionId,
+          activeDatabase,
+          table.schema,
+          table.name,
+        )
+        updateTab(tabId, { relations })
+      } catch {}
+    },
+    [activeDatabase, updateTab],
+  )
+
+  const handleOpenRelation = useCallback(
+    (relation, value) => {
+      const sql = relatedSql(relation, value)
+      const tabId = openTab(relation.referencedTable, sql)
+      setSelectedTable(`${relation.referencedSchema}.${relation.referencedTable}`)
+      execute(sql, tabId)
+      loadRelations(tabId, {
+        schema: relation.referencedSchema,
+        name: relation.referencedTable,
+      })
+    },
+    [execute, loadRelations, openTab],
+  )
+
   const handleBrowseTable = useCallback(
     (table) => {
       const sql = browseSql(table)
       const tabId = openTab(table.name, sql)
+      setSelectedTable(`${table.schema}.${table.name}`)
       execute(sql, tabId)
+      loadRelations(tabId, table)
     },
-    [execute, openTab],
+    [execute, loadRelations, openTab],
   )
 
   const handleQueryTable = useCallback(
     (table) => {
       const sql = `SELECT TOP (1000) *\nFROM ${qualifiedName(table)};`
-      updateTab(activeTabId, { sql })
+      updateTab(activeTabId, { sql, relations: [] })
+      setSelectedTable(`${table.schema}.${table.name}`)
       seedEditor(sql)
+      loadRelations(activeTabId, table)
     },
-    [activeTabId, seedEditor, updateTab],
+    [activeTabId, loadRelations, seedEditor, updateTab],
   )
 
   const handleCopyObjectName = useCallback(
@@ -649,6 +700,8 @@ export default function App() {
           onCopyStructure={handleCopyStructure}
           onOpenStructure={handleOpenStructure}
           onNewTable={handleNewTable}
+          selectedTable={selectedTable}
+          onSelectTable={setSelectedTable}
           onNewConnection={() => setDialog({ mode: 'create' })}
           onEditConnection={(connection) => setDialog({ mode: 'edit', connection })}
           onDeleteConnection={(connection) => setDeleteTarget(connection)}
@@ -706,6 +759,8 @@ export default function App() {
                 state={activeTab.state}
                 activeSet={activeTab.activeSet}
                 onSelectSet={handleSelectSet}
+                relations={activeTab.relations}
+                onRelationClick={handleOpenRelation}
               />
             </div>
           )}

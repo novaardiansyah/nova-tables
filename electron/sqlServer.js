@@ -269,6 +269,41 @@ export async function listTables({ connectionId, database }) {
   return { database: database || null, tables: Array.from(tables.values()) }
 }
 
+export async function tableRelations({ connectionId, database, schema, table }) {
+  await getRuntime(connectionId)
+  const pool = await getDatabasePool(connectionId, database)
+
+  const result = await pool
+    .request()
+    .input('schema', sql.NVarChar(128), schema)
+    .input('table', sql.NVarChar(128), table)
+    .query(
+      `SELECT pc.name AS columnName,
+              rs.name AS referencedSchema,
+              rt.name AS referencedTable,
+              rc.name AS referencedColumn
+         FROM sys.foreign_keys fk
+         JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
+         JOIN sys.columns pc ON pc.object_id = fkc.parent_object_id AND pc.column_id = fkc.parent_column_id
+         JOIN sys.tables rt ON rt.object_id = fkc.referenced_object_id
+         JOIN sys.schemas rs ON rs.schema_id = rt.schema_id
+         JOIN sys.columns rc ON rc.object_id = fkc.referenced_object_id AND rc.column_id = fkc.referenced_column_id
+         JOIN sys.tables t ON t.object_id = fk.parent_object_id
+         JOIN sys.schemas s ON s.schema_id = t.schema_id
+        WHERE s.name = @schema AND t.name = @table
+        ORDER BY fk.name, fkc.constraint_column_id`,
+    )
+
+  return {
+    relations: (result.recordset || []).map((row) => ({
+      column: String(row.columnName),
+      referencedSchema: String(row.referencedSchema),
+      referencedTable: String(row.referencedTable),
+      referencedColumn: String(row.referencedColumn),
+    })),
+  }
+}
+
 const PRECISION_SCALE_TYPES = new Set(['decimal', 'numeric'])
 const SCALE_TYPES = new Set(['datetime2', 'datetimeoffset', 'time'])
 const LENGTH_TYPES = new Set(['char', 'varchar', 'binary', 'varbinary'])

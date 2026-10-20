@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('nova', {
   tables: {
     list: (input) => ipcRenderer.invoke('db:tables', input),
     structure: (input) => ipcRenderer.invoke('db:table-structure', input),
+    relations: (input) => ipcRenderer.invoke('db:table-relations', input),
   },
   query: {
     run: (input) => ipcRenderer.invoke('query:run', input),

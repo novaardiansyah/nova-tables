@@ -11,7 +11,7 @@ function formatDuration(ms) {
   return `${(ms / 1000).toFixed(2)} s`
 }
 
-export default function ResultsPanel({ state, activeSet, onSelectSet }) {
+export default function ResultsPanel({ state, activeSet, onSelectSet, relations, onRelationClick }) {
   const { status, result, error } = state
   const resultSets = result?.resultSets ?? []
   const activeIndex = Math.min(activeSet ?? 0, Math.max(resultSets.length - 1, 0))
@@ -108,6 +108,8 @@ export default function ResultsPanel({ state, activeSet, onSelectSet }) {
                   key={activeIndex}
                   columns={activeResultSet.columns}
                   rows={activeResultSet.rows}
+                  relations={relations}
+                  onRelationClick={onRelationClick}
                 />
               </div>
             </div>

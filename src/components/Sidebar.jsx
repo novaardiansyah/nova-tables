@@ -29,10 +29,11 @@ export default function Sidebar({
   onRefreshDatabases,
   onOpenStructure,
   onNewTable,
+  selectedTable,
+  onSelectTable,
 }) {
   const [expandedId, setExpandedId] = useState(null)
   const [expandedDatabase, setExpandedDatabase] = useState(null)
-  const [selectedTable, setSelectedTable] = useState(null)
   const [menu, setMenu] = useState(null)
 
   useEffect(() => {
@@ -60,7 +61,7 @@ export default function Sidebar({
 
   const handleTableContextMenu = (event, table) => {
     event.preventDefault()
-    setSelectedTable(`${table.schema}.${table.name}`)
+    onSelectTable(`${table.schema}.${table.name}`)
     setMenu({ x: event.clientX, y: event.clientY, table })
   }
 
@@ -236,7 +237,7 @@ export default function Sidebar({
                                           <Icon name="table" size={11} className="shrink-0 text-slate-600" />
                                           <button
                                             type="button"
-                                            onClick={() => setSelectedTable(key)}
+                                            onClick={() => onSelectTable(key)}
                                             className={`flex min-w-0 flex-1 items-center truncate text-left ${
                                               selectedTable === key ? 'text-accent' : ''
                                             }`}
