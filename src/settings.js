@@ -6,15 +6,17 @@ export const THEMES = [
   { id: 'rose', label: 'Rose Quartz' },
 ]
 
-const SANS_STACK =
-  "ui-sans-serif, -apple-system, system-ui, 'Segoe UI', 'Helvetica Neue', Arial, 'Liberation Sans', 'DejaVu Sans', 'Noto Sans', 'Noto Sans CJK JP', sans-serif"
+const SANS_FALLBACK =
+  "-apple-system, system-ui, 'Segoe UI', 'Helvetica Neue', Arial, 'Liberation Sans', 'DejaVu Sans', 'Noto Sans', 'Noto Sans CJK JP', sans-serif"
 
-const MONO_STACK =
-  "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', 'Noto Sans Mono', monospace"
+const MONO_FALLBACK =
+  "ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', 'Noto Sans Mono', monospace"
 
 export const FONT_FAMILIES = [
-  { id: 'system', label: 'System UI', value: SANS_STACK },
-  { id: 'mono', label: 'Monospace', value: MONO_STACK },
+  { id: 'system', label: 'System UI', value: `ui-sans-serif, ${SANS_FALLBACK}` },
+  { id: 'inter', label: 'Inter', value: `'Inter', ${SANS_FALLBACK}` },
+  { id: 'jetbrains', label: 'JetBrains Mono', value: `'JetBrains Mono', ${MONO_FALLBACK}` },
+  { id: 'mono', label: 'Monospace', value: MONO_FALLBACK },
 ]
 
 export const FONT_SIZES = [11, 12, 13, 14, 15, 16]
