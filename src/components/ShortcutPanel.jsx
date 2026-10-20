@@ -58,7 +58,7 @@ export default function ShortcutPanel({ open, onClose }) {
       >
         <div className="flex items-center gap-2.5 border-b border-line px-5 py-4">
           <Icon name="question" size={15} className="text-accent" />
-          <h2 className="text-[length:calc(14px*var(--app-font-scale))] font-semibold text-slate-100">Keyboard shortcuts</h2>
+          <h2 className="text-[length:var(--app-text-14)] font-semibold text-slate-100">Keyboard shortcuts</h2>
           <button type="button" className="icon-btn ml-auto h-6 w-6" title="Close" onClick={onClose}>
             <Icon name="x" size={13} />
           </button>
@@ -67,7 +67,7 @@ export default function ShortcutPanel({ open, onClose }) {
         <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
           {GROUPS.map((group) => (
             <div key={group.title} className="mb-4 last:mb-0">
-              <p className="mb-2 text-[length:calc(10px*var(--app-font-scale))] font-semibold uppercase tracking-wider text-slate-600">
+              <p className="mb-2 text-[length:var(--app-text-10)] font-semibold uppercase tracking-wider text-slate-600">
                 {group.title}
               </p>
               <div className="space-y-1.5">
@@ -80,14 +80,14 @@ export default function ShortcutPanel({ open, onClose }) {
                         </span>
                       ))}
                     </span>
-                    <span className="text-[length:calc(12.5px*var(--app-font-scale))] text-slate-400">{item.label}</span>
+                    <span className="text-[length:var(--app-text-12)] text-slate-400">{item.label}</span>
                   </div>
                 ))}
               </div>
             </div>
           ))}
 
-          <p className="mt-1 border-t border-line pt-3 text-[length:calc(11.5px*var(--app-font-scale))] text-slate-600">
+          <p className="mt-1 border-t border-line pt-3 text-[length:var(--app-text-11)] text-slate-600">
             In the editor, Monaco keeps its own keys, so Ctrl+F, Ctrl+D and friends still work there.
           </p>
         </div>

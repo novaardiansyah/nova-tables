@@ -20,8 +20,8 @@ function Row({ label, hint, children }) {
   return (
     <div className="flex items-center justify-between gap-4 py-2">
       <div>
-        <p className="text-[length:calc(12.5px*var(--app-font-scale))] text-slate-200">{label}</p>
-        {hint ? <p className="text-[length:calc(11px*var(--app-font-scale))] text-slate-500">{hint}</p> : null}
+        <p className="text-[length:var(--app-text-12)] text-slate-200">{label}</p>
+        {hint ? <p className="text-[length:var(--app-text-11)] text-slate-500">{hint}</p> : null}
       </div>
       {children}
     </div>
@@ -84,8 +84,8 @@ export default function SettingsDialog({ open, settings, onClose, onSave }) {
             <Icon name="settings" size={16} />
           </span>
           <div className="flex-1">
-            <h2 className="text-[length:calc(14px*var(--app-font-scale))] font-semibold text-slate-100">Preferences</h2>
-            <p className="text-[length:calc(11.5px*var(--app-font-scale))] text-slate-500">Theme and typography for the workspace.</p>
+            <h2 className="text-[length:var(--app-text-14)] font-semibold text-slate-100">Preferences</h2>
+            <p className="text-[length:var(--app-text-11)] text-slate-500">Theme and typography for the workspace.</p>
           </div>
           <button type="button" className="icon-btn" onClick={handleCancel} title="Close" disabled={saving}>
             <Icon name="x" size={15} />

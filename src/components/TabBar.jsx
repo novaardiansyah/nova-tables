@@ -19,7 +19,7 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose, onNewTab 
                 type="button"
                 onClick={() => onSelect(tab.id)}
                 title={tab.title}
-                className={`flex min-w-0 flex-1 items-center gap-1.5 py-2 pl-3 pr-1 text-left text-[length:calc(12px*var(--app-font-scale))] ${
+                className={`flex min-w-0 flex-1 items-center gap-1.5 py-2 pl-3 pr-1 text-left text-[length:var(--app-text-12)] ${
                   isActive ? 'text-slate-100' : 'text-slate-500 hover:text-slate-300'
                 }`}
               >

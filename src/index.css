@@ -16,7 +16,13 @@
     --color-row-hover: 22 28 38;
     --color-scrollbar: #232a35;
     --color-scrollbar-hover: #333d4c;
-    --app-font-scale: 1;
+    --app-text-9: 9px;
+    --app-text-10: 10px;
+    --app-text-11: 11px;
+    --app-text-12: 12px;
+    --app-text-13: 13px;
+    --app-text-14: 14px;
+    --app-text-15: 15px;
     --app-font-family: 'Inter', system-ui, 'Segoe UI', Helvetica, Arial, sans-serif;
     --grid-font-size: 12.5px;
     --grid-font-family: 'Inter', system-ui, 'Segoe UI', Helvetica, Arial, sans-serif;
@@ -87,7 +93,7 @@
   }
 
   body {
-    @apply bg-base font-sans text-[length:calc(13px*var(--app-font-scale))] text-slate-200 antialiased;
+    @apply bg-base font-sans text-[length:var(--app-text-13)] text-slate-200 antialiased;
     overflow: hidden;
     margin: 0;
   }
@@ -117,7 +123,7 @@
 
 @layer components {
   .btn {
-    @apply inline-flex select-none items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-[length:calc(12.5px*var(--app-font-scale))] font-medium transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex select-none items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-[length:var(--app-text-12)] font-medium transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50;
   }
 
   .btn-primary {
@@ -141,19 +147,19 @@
   }
 
   .field {
-    @apply w-full rounded-md border border-line-strong bg-base px-2.5 py-[7px] text-[length:calc(13px*var(--app-font-scale))] text-slate-200 transition-colors placeholder:text-slate-600 focus:border-accent/70 focus:ring-2 focus:ring-accent/20;
+    @apply w-full rounded-md border border-line-strong bg-base px-2.5 py-[7px] text-[length:var(--app-text-13)] text-slate-200 transition-colors placeholder:text-slate-600 focus:border-accent/70 focus:ring-2 focus:ring-accent/20;
   }
 
   .field-label {
-    @apply mb-1.5 block text-[length:calc(11.5px*var(--app-font-scale))] font-medium uppercase tracking-wide text-slate-500;
+    @apply mb-1.5 block text-[length:var(--app-text-11)] font-medium uppercase tracking-wide text-slate-500;
   }
 
   .kbd {
-    @apply inline-flex h-[17px] min-w-[17px] items-center justify-center rounded border border-line-strong bg-black/25 px-1 font-mono text-[length:calc(10px*var(--app-font-scale))] text-slate-500;
+    @apply inline-flex h-[17px] min-w-[17px] items-center justify-center rounded border border-line-strong bg-black/25 px-1 font-mono text-[length:var(--app-text-10)] text-slate-500;
   }
 
   .tree-row {
-    @apply flex w-full items-center gap-1.5 rounded px-2 py-[5px] text-left text-[length:calc(12.5px*var(--app-font-scale))] text-slate-400 transition-colors duration-100 hover:bg-white/[0.04] hover:text-slate-200;
+    @apply flex w-full items-center gap-1.5 rounded px-2 py-[5px] text-left text-[length:var(--app-text-12)] text-slate-400 transition-colors duration-100 hover:bg-white/[0.04] hover:text-slate-200;
   }
 
   .tree-row-active {

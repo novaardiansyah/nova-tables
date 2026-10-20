@@ -6,41 +6,30 @@ export const THEMES = [
   { id: 'rose', label: 'Rose Quartz' },
 ]
 
+const SANS_STACK =
+  "ui-sans-serif, -apple-system, system-ui, 'Segoe UI', 'Helvetica Neue', Arial, 'Liberation Sans', 'DejaVu Sans', 'Noto Sans', 'Noto Sans CJK JP', sans-serif"
+
+const MONO_STACK =
+  "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', 'Noto Sans Mono', monospace"
+
 export const FONT_FAMILIES = [
-  {
-    id: 'inter',
-    label: 'Inter',
-    value: "'Inter', system-ui, 'Segoe UI', Helvetica, Arial, sans-serif",
-  },
-  {
-    id: 'system',
-    label: 'System UI',
-    value: "system-ui, 'Segoe UI', Helvetica, Arial, sans-serif",
-  },
-  {
-    id: 'jetbrains',
-    label: 'JetBrains Mono',
-    value: "'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace",
-  },
-  {
-    id: 'mono',
-    label: 'Monospace',
-    value: "ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace",
-  },
+  { id: 'system', label: 'System UI', value: SANS_STACK },
+  { id: 'mono', label: 'Monospace', value: MONO_STACK },
 ]
 
-export const FONT_SIZES = [11, 11.5, 12, 12.5, 13, 13.5, 14, 15, 16]
+export const FONT_SIZES = [11, 12, 13, 14, 15, 16]
 
 const APP_BASE_SIZE = 13
+const APP_LADDER = [9, 10, 11, 12, 13, 14, 15]
 
 export const DEFAULT_SETTINGS = {
   theme: 'nova',
   appFontSize: 13,
-  appFontFamily: 'inter',
-  gridFontSize: 12.5,
-  gridFontFamily: 'inter',
-  jsonFontSize: 12.5,
-  jsonFontFamily: 'jetbrains',
+  appFontFamily: 'system',
+  gridFontSize: 12,
+  gridFontFamily: 'system',
+  jsonFontSize: 12,
+  jsonFontFamily: 'mono',
 }
 
 function normalizeFontSize(value, fallback) {
@@ -74,9 +63,12 @@ export function fontFamilyValue(id) {
 export function applySettings(input) {
   const settings = normalizeSettings(input)
   const root = document.documentElement
+  const scale = settings.appFontSize / APP_BASE_SIZE
 
   root.dataset.theme = settings.theme
-  root.style.setProperty('--app-font-scale', String(settings.appFontSize / APP_BASE_SIZE))
+  APP_LADDER.forEach((size) => {
+    root.style.setProperty(`--app-text-${size}`, `${Math.round(size * scale)}px`)
+  })
   root.style.setProperty('--app-font-family', fontFamilyValue(settings.appFontFamily))
   root.style.setProperty('--grid-font-size', `${settings.gridFontSize}px`)
   root.style.setProperty('--grid-font-family', fontFamilyValue(settings.gridFontFamily))

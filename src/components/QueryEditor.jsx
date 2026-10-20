@@ -81,7 +81,7 @@ export default function QueryEditor({ seed, theme, onChange, onRun }) {
         }}
         options={EDITOR_OPTIONS}
         loading={
-          <div className="flex items-center gap-2 p-4 text-[length:calc(12px*var(--app-font-scale))] text-slate-500">
+          <div className="flex items-center gap-2 p-4 text-[length:var(--app-text-12)] text-slate-500">
             <Spinner size={13} />
             Loading editor…
           </div>

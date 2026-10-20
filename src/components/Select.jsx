@@ -40,7 +40,7 @@ export default function Select({
         type="button"
         disabled={disabled}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex h-8 max-w-[240px] items-center gap-2 rounded-md border border-line-strong bg-elevated px-2.5 text-[length:calc(12.5px*var(--app-font-scale))] text-slate-200 transition-colors hover:border-accent/50 disabled:pointer-events-none disabled:opacity-50"
+        className="flex h-8 max-w-[240px] items-center gap-2 rounded-md border border-line-strong bg-elevated px-2.5 text-[length:var(--app-text-12)] text-slate-200 transition-colors hover:border-accent/50 disabled:pointer-events-none disabled:opacity-50"
       >
         <Icon name={icon} size={13} className="shrink-0 text-slate-500" />
         <span className="truncate">{current?.label ?? value ?? placeholder}</span>
@@ -54,7 +54,7 @@ export default function Select({
       {open ? (
         <div className="absolute left-0 top-[calc(100%+6px)] z-40 max-h-80 w-64 origin-top-left animate-fade-in overflow-auto rounded-lg border border-line-strong bg-elevated p-1 shadow-2xl shadow-black/60">
           {options.length === 0 ? (
-            <p className="px-2 py-3 text-center text-[length:calc(12px*var(--app-font-scale))] text-slate-500">{emptyLabel}</p>
+            <p className="px-2 py-3 text-center text-[length:var(--app-text-12)] text-slate-500">{emptyLabel}</p>
           ) : (
             options.map((option) => (
               <button
@@ -64,7 +64,7 @@ export default function Select({
                   onChange(option.value)
                   setOpen(false)
                 }}
-                className={`flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-[length:calc(12.5px*var(--app-font-scale))] transition-colors hover:bg-white/5 ${
+                className={`flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-[length:var(--app-text-12)] transition-colors hover:bg-white/5 ${
                   option.value === value ? 'text-accent' : 'text-slate-300'
                 }`}
               >

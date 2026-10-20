@@ -29,7 +29,7 @@ export default function Banner({ type = 'info', message, onDismiss }) {
 
   return (
     <div
-      className={`flex items-start gap-2.5 border-b px-4 py-2 text-[length:calc(12.5px*var(--app-font-scale))] animate-fade-in ${style.wrap}`}
+      className={`flex items-start gap-2.5 border-b px-4 py-2 text-[length:var(--app-text-12)] animate-fade-in ${style.wrap}`}
       role="status"
     >
       <Icon name={style.icon} size={14} className={`mt-0.5 shrink-0 ${style.iconClass}`} />
