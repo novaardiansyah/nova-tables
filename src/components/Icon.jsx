@@ -146,6 +146,13 @@ const ICONS = {
       <path d="M8 14l4 4 4-4" />
     </>
   ),
+  question: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.4 9.2a2.7 2.7 0 015.2 1c0 1.8-2.6 2.3-2.6 4" />
+      <path d="M12 17.3h.01" />
+    </>
+  ),
 }
 
 export default function Icon({ name, size = 15, className = '', strokeWidth = 1.7 }) {

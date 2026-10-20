@@ -54,7 +54,7 @@ export default function QueryEditor({ seed, onChange, onRun }) {
     editor.setValue(seed.value)
     seedingRef.current = false
     editor.setPosition({ lineNumber: 1, column: 1 })
-    editor.focus()
+    if (seed.focus !== false) editor.focus()
   }, [seed])
 
   function handleMount(editor, monaco) {

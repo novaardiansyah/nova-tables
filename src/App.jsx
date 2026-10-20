@@ -9,6 +9,7 @@ import PromptDialog from './components/PromptDialog.jsx'
 import QueryEditor from './components/QueryEditor.jsx'
 import ResultsPanel from './components/ResultsPanel.jsx'
 import Sidebar from './components/Sidebar.jsx'
+import ShortcutPanel from './components/ShortcutPanel.jsx'
 import StatusBar from './components/StatusBar.jsx'
 import TabBar from './components/TabBar.jsx'
 import TableDesigner from './components/TableDesigner.jsx'
@@ -86,6 +87,14 @@ function queryTitle(index) {
   return `Query ${index}`
 }
 
+function nextQueryTitle(tabs) {
+  const highest = tabs.reduce((max, tab) => {
+    const match = /^Query (\d+)$/.exec(tab.title)
+    return match ? Math.max(max, Number(match[1])) : max
+  }, 0)
+  return queryTitle(highest + 1)
+}
+
 function constraintName(prefix, table, columns) {
   return `${prefix}_${table}_${columns.join('_')}`.slice(0, 128)
 }
@@ -141,13 +150,13 @@ export default function App() {
   const [dropTarget, setDropTarget] = useState(null)
   const [tableBusy, setTableBusy] = useState(false)
   const [pinnedTables, setPinnedTables] = useState([])
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
   const sqlRef = useRef(STARTER_SQL)
   const sessionsRef = useRef({})
   const activeIdRef = useRef(null)
   const seedIdRef = useRef(0)
   const tabIdRef = useRef(1)
-  const queryIdRef = useRef(1)
   const splitRef = useRef(null)
   const tablesRequestRef = useRef({})
 
@@ -251,17 +260,17 @@ export default function App() {
     [patchSession],
   )
 
-  const seedEditor = useCallback((sql) => {
+  const seedEditor = useCallback((sql, focus = true) => {
     seedIdRef.current += 1
     sqlRef.current = sql
-    setQuery({ id: seedIdRef.current, value: sql })
+    setQuery({ id: seedIdRef.current, value: sql, focus })
   }, [])
 
   const seedSessionEditor = useCallback(
     (target) => {
       if (!target) return
       const tab = target.tabs.find((item) => item.id === target.activeTabId) || target.tabs[0]
-      if (tab) seedEditor(tab.sql)
+      if (tab) seedEditor(tab.sql, false)
     },
     [seedEditor],
   )
@@ -319,8 +328,7 @@ export default function App() {
         const database = pickDatabase(result.databases, result.database)
 
         tabIdRef.current += 1
-        queryIdRef.current += 1
-        const tab = createTab(`tab-${tabIdRef.current}`, queryTitle(queryIdRef.current), STARTER_SQL)
+        const tab = createTab(`tab-${tabIdRef.current}`, queryTitle(1), STARTER_SQL)
         const created = createSession(result, connection, database, tab)
 
         setSessions((prev) => ({ ...prev, [connection.id]: created }))
@@ -887,9 +895,8 @@ export default function App() {
       const remaining = current.tabs.filter((tab) => tab.id !== tabId)
 
       if (remaining.length === 0) {
-        queryIdRef.current += 1
         tabIdRef.current += 1
-        const tab = createTab(`tab-${tabIdRef.current}`, queryTitle(queryIdRef.current), '')
+        const tab = createTab(`tab-${tabIdRef.current}`, queryTitle(1), '')
         patchSession(current.connectionId, { tabs: [tab], activeTabId: tab.id })
         seedEditor(tab.sql)
         return
@@ -910,8 +917,7 @@ export default function App() {
   const handleNewTab = useCallback(() => {
     const current = activeSession()
     if (!current) return
-    queryIdRef.current += 1
-    openTab(current.connectionId, queryTitle(queryIdRef.current), '')
+    openTab(current.connectionId, nextQueryTitle(current.tabs), '')
   }, [activeSession, openTab])
 
   const handleSelectSet = useCallback(
@@ -1039,6 +1045,127 @@ export default function App() {
     window.addEventListener('pointerup', stop)
   }, [])
 
+  const handleCloseActiveTab = useCallback(() => {
+    const current = activeSession()
+    if (!current) return
+    handleCloseTab(current.activeTabId)
+  }, [activeSession, handleCloseTab])
+
+  const handleCycleTab = useCallback(
+    (direction) => {
+      const current = activeSession()
+      if (!current || current.tabs.length === 0) return
+      const index = current.tabs.findIndex((tab) => tab.id === current.activeTabId)
+      const next = (index + direction + current.tabs.length) % current.tabs.length
+      handleSelectTab(current.tabs[next].id)
+    },
+    [activeSession, handleSelectTab],
+  )
+
+  const handleSelectTabIndex = useCallback(
+    (index) => {
+      const current = activeSession()
+      if (!current) return
+      const tab = current.tabs[index]
+      if (!tab) return
+      handleSelectTab(tab.id)
+    },
+    [activeSession, handleSelectTab],
+  )
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'F1') {
+        event.preventDefault()
+        setShortcutsOpen((value) => !value)
+        return
+      }
+
+      const target = event.target
+      const inEditor = Boolean(target?.closest?.('.monaco-editor'))
+      const tagName = target?.tagName
+      const isFormField =
+        !inEditor &&
+        (tagName === 'INPUT' ||
+          tagName === 'TEXTAREA' ||
+          tagName === 'SELECT' ||
+          Boolean(target?.isContentEditable))
+      const hasDialog =
+        Boolean(dialog) ||
+        Boolean(tablePrompt) ||
+        Boolean(dropTarget) ||
+        Boolean(deleteTarget) ||
+        shortcutsOpen
+
+      if (!event.ctrlKey && !event.metaKey) {
+        if (event.key === 'F5' && !hasDialog && !isFormField) {
+          event.preventDefault()
+          handleRun()
+        }
+        return
+      }
+
+      if (event.altKey) return
+
+      if (event.key === 'Enter') {
+        if (inEditor || hasDialog || isFormField) return
+        event.preventDefault()
+        handleRun()
+        return
+      }
+
+      if (isFormField || hasDialog) return
+
+      if (event.key.toLowerCase() === 'n' && !event.shiftKey) {
+        event.preventDefault()
+        setDialog({ mode: 'create' })
+        return
+      }
+
+      if (screen !== 'workspace') return
+
+      const key = event.key.toLowerCase()
+
+      if (key === 'w') {
+        event.preventDefault()
+        handleCloseActiveTab()
+        return
+      }
+
+      if (key === 't') {
+        event.preventDefault()
+        handleNewTab()
+        return
+      }
+
+      if (event.key === 'Tab') {
+        event.preventDefault()
+        handleCycleTab(event.shiftKey ? -1 : 1)
+        return
+      }
+
+      if (/^[1-9]$/.test(event.key)) {
+        event.preventDefault()
+        handleSelectTabIndex(Number(event.key) - 1)
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [
+    deleteTarget,
+    dialog,
+    dropTarget,
+    handleCloseActiveTab,
+    handleCycleTab,
+    handleNewTab,
+    handleRun,
+    handleSelectTabIndex,
+    screen,
+    shortcutsOpen,
+    tablePrompt,
+  ])
+
   const session = activeConnectionId ? sessions[activeConnectionId] || null : null
   const activeTab = session
     ? session.tabs.find((tab) => tab.id === session.activeTabId) || null
@@ -1090,6 +1217,7 @@ export default function App() {
               onSelectDatabase={handleSelectDatabase}
               onRun={handleRun}
               onDisconnect={() => closeSession(session.connectionId)}
+              onShowShortcuts={() => setShortcutsOpen(true)}
             />
 
             <TabBar
@@ -1165,6 +1293,8 @@ export default function App() {
           onMoveConnection={handleMoveConnection}
         />
       )}
+
+      <ShortcutPanel open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
       {dialog ? (
         <ConnectionDialog

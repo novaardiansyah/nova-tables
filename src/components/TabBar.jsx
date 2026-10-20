@@ -41,7 +41,7 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose, onNewTab 
               <button
                 type="button"
                 onClick={() => onClose(tab.id)}
-                title="Close tab"
+                title="Close tab (Ctrl+W)"
                 className={`icon-btn mr-1 h-5 w-5 shrink-0 ${
                   isActive ? 'opacity-60' : 'opacity-0 group-hover:opacity-60'
                 } hover:opacity-100`}
@@ -55,7 +55,7 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose, onNewTab 
         <button
           type="button"
           onClick={onNewTab}
-          title="New tab"
+          title="New tab (Ctrl+T)"
           className="icon-btn ml-1 my-1.5 h-6 w-6 shrink-0"
         >
           <Icon name="plus" size={13} />

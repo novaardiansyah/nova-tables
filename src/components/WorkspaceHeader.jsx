@@ -8,6 +8,7 @@ export default function WorkspaceHeader({
   onSelectDatabase,
   onRun,
   onDisconnect,
+  onShowShortcuts,
 }) {
   const options = (session?.databases ?? []).map((database) => ({
     value: database.name,
@@ -44,6 +45,15 @@ export default function WorkspaceHeader({
       )}
 
       <div className="ml-auto flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          className="icon-btn"
+          onClick={onShowShortcuts}
+          title="Keyboard shortcuts (F1)"
+        >
+          <Icon name="question" size={15} />
+        </button>
+
         <button
           type="button"
           className="btn-primary"
