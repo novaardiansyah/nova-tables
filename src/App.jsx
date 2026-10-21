@@ -527,7 +527,11 @@ export default function App() {
           database: current.activeDatabase,
           sql,
         })
-        updateTab(current.connectionId, tabId, { state: { status: 'success', result, error: null } })
+        const firstFilled = result.resultSets.findIndex((set) => set.rowCount > 0)
+        updateTab(current.connectionId, tabId, {
+          state: { status: 'success', result, error: null },
+          activeSet: firstFilled === -1 ? 0 : firstFilled,
+        })
       } catch (error) {
         updateTab(current.connectionId, tabId, {
           state: {
