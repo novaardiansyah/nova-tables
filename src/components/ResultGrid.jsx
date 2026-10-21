@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Icon from './Icon.jsx'
 
 const RENDER_LIMIT = 2000
@@ -20,14 +20,17 @@ export default function ResultGrid({
   rows,
   relations,
   onRelationClick,
-  onRowClick,
-  selectedIndex,
+  selection = null,
+  onSelectionChange,
+  onCellContextMenu,
   editable = false,
   edits = {},
   onCellChange,
 }) {
   const [sort, setSort] = useState(null)
   const [active, setActive] = useState(null)
+  const draggingRef = useRef(false)
+  const draggedRef = useRef(false)
 
   useEffect(() => {
     setSort(null)
@@ -36,6 +39,17 @@ export default function ResultGrid({
   useEffect(() => {
     setActive(null)
   }, [editable, rows])
+
+  useEffect(() => {
+    const stop = () => {
+      draggingRef.current = false
+      window.setTimeout(() => {
+        draggedRef.current = false
+      }, 0)
+    }
+    window.addEventListener('mouseup', stop)
+    return () => window.removeEventListener('mouseup', stop)
+  }, [])
 
   const orderedRows = useMemo(() => {
     const entries = rows.map((row, origIndex) => ({ row, origIndex }))
@@ -99,10 +113,80 @@ export default function ResultGrid({
 
   const cellValue = (origIndex, columnIndex) => rows[origIndex]?.[columnIndex]
 
+  const bounds = useMemo(() => {
+    if (!selection) return null
+    return {
+      rowStart: Math.min(selection.anchor.row, selection.focus.row),
+      rowEnd: Math.max(selection.anchor.row, selection.focus.row),
+      colStart: Math.min(selection.anchor.col, selection.focus.col),
+      colEnd: Math.max(selection.anchor.col, selection.focus.col),
+    }
+  }, [selection])
+
+  const inSelection = (origIndex, colIndex) =>
+    Boolean(
+      bounds &&
+        origIndex >= bounds.rowStart &&
+        origIndex <= bounds.rowEnd &&
+        colIndex >= bounds.colStart &&
+        colIndex <= bounds.colEnd,
+    )
+
+  const rowSelected = (origIndex) =>
+    Boolean(bounds && origIndex >= bounds.rowStart && origIndex <= bounds.rowEnd)
+
   const handleCellClick = (origIndex, columnIndex) => {
+    if (draggedRef.current) return
     if (!editable || !onCellChange) return
     if (columnRelations[columnIndex]) return
     setActive({ row: origIndex, col: columnIndex })
+  }
+
+  const handleCellContextMenu = (event, origIndex, columnIndex) => {
+    event.preventDefault()
+    setActive(null)
+    if (!inSelection(origIndex, columnIndex) && onSelectionChange) {
+      onSelectionChange({ anchor: { row: origIndex, col: columnIndex }, focus: { row: origIndex, col: columnIndex } })
+    }
+    onCellContextMenu?.(event.clientX, event.clientY, origIndex, columnIndex)
+  }
+
+  const handleCellMouseDown = (event, origIndex, columnIndex) => {
+    if (event.button !== 0 || !onSelectionChange) return
+    event.stopPropagation()
+    draggingRef.current = true
+    if (event.shiftKey) {
+      onSelectionChange((current) =>
+        current ? { anchor: current.anchor, focus: { row: origIndex, col: columnIndex } } : current,
+      )
+      return
+    }
+    onSelectionChange({ anchor: { row: origIndex, col: columnIndex }, focus: { row: origIndex, col: columnIndex } })
+  }
+
+  const handleCellMouseEnter = (origIndex, columnIndex) => {
+    if (!draggingRef.current || !onSelectionChange) return
+    draggedRef.current = true
+    onSelectionChange((current) =>
+      current ? { anchor: current.anchor, focus: { row: origIndex, col: columnIndex } } : current,
+    )
+  }
+
+  const handleRowHeaderMouseDown = (event, origIndex) => {
+    if (event.button !== 0 || !onSelectionChange) return
+    event.stopPropagation()
+    draggingRef.current = true
+    const last = Math.max(columns.length - 1, 0)
+    onSelectionChange({ anchor: { row: origIndex, col: 0 }, focus: { row: origIndex, col: last } })
+  }
+
+  const handleRowHeaderMouseEnter = (origIndex) => {
+    if (!draggingRef.current || !onSelectionChange) return
+    draggedRef.current = true
+    const last = Math.max(columns.length - 1, 0)
+    onSelectionChange((current) =>
+      current ? { anchor: current.anchor, focus: { row: origIndex, col: last } } : current,
+    )
   }
 
   const commitEdit = (value) => {
@@ -175,14 +259,12 @@ export default function ResultGrid({
         </thead>
         <tbody>
           {visibleRows.map(({ row, origIndex }, visibleIdx) => (
-            <tr
-              key={origIndex}
-              onClick={() => onRowClick(origIndex)}
-              className={`group cursor-pointer ${selectedIndex === origIndex ? 'bg-tint/[0.04]' : ''}`}
-            >
+            <tr key={origIndex} className={`group ${rowSelected(origIndex) ? 'bg-tint/[0.04]' : ''}`}>
               <td
-                className={`sticky left-0 z-10 border-b border-r border-line px-2 py-[5px] text-right font-mono text-[length:calc(var(--grid-font-size)-2px)] text-text-faint group-hover:bg-row-hover ${
-                  selectedIndex === origIndex ? 'bg-tint/[0.04]' : 'bg-surface'
+                onMouseDown={(event) => handleRowHeaderMouseDown(event, origIndex)}
+                onMouseEnter={() => handleRowHeaderMouseEnter(origIndex)}
+                className={`sticky left-0 z-10 cursor-pointer border-b border-r border-line px-2 py-[5px] text-right font-mono text-[length:calc(var(--grid-font-size)-2px)] text-text-faint group-hover:bg-row-hover ${
+                  rowSelected(origIndex) ? 'bg-tint/[0.04]' : 'bg-surface'
                 }`}
               >
                 {visibleIdx + 1}
@@ -195,10 +277,13 @@ export default function ResultGrid({
                   <td
                     key={column.name}
                     onClick={() => handleCellClick(origIndex, colIndex)}
+                    onMouseDown={(event) => handleCellMouseDown(event, origIndex, colIndex)}
+                    onMouseEnter={() => handleCellMouseEnter(origIndex, colIndex)}
+                    onContextMenu={(event) => handleCellContextMenu(event, origIndex, colIndex)}
                     title={dirty ? 'Pending update' : undefined}
                     className={`relative whitespace-nowrap border-b border-line/70 px-3 py-[5px] group-hover:bg-row-hover ${
                       numericColumns[colIndex] ? 'text-right tabular-nums' : ''
-                    } ${dirty ? 'bg-warning/[0.08]' : ''} ${
+                    } ${inSelection(origIndex, colIndex) ? 'bg-accent/[0.12]' : dirty ? 'bg-warning/[0.08]' : ''} ${
                       editable && !columnRelations[colIndex] ? 'cursor-text' : ''
                     }`}
                   >

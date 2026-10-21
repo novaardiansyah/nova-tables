@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Icon, { Spinner } from './Icon.jsx'
+import ContextMenu from './ContextMenu.jsx'
 import JsonView from './JsonView.jsx'
 import ResultGrid from './ResultGrid.jsx'
+import { cleanText, jsonRecords, sqlInsertRows } from '../resultFormats.js'
 
 const ROW_PANEL_DEFAULT_WIDTH = 360
 
@@ -15,14 +17,11 @@ function formatDuration(ms) {
   return `${(ms / 1000).toFixed(2)} s`
 }
 
-function rowJson(columns, row) {
-  if (!row) return ''
-  const record = {}
-  columns.forEach((column, index) => {
-    record[column.name] = row[index] ?? null
-  })
-  return JSON.stringify(record, null, 2)
-}
+const SPECIAL_OPTIONS = [
+  { id: 'null', label: 'NULL', value: null },
+  { id: 'default', label: 'Default', value: { special: 'DEFAULT' } },
+  { id: 'getdate', label: 'GETDATE()', value: { special: 'GETDATE()' } },
+]
 
 export default function ResultsPanel({
   state,
@@ -30,21 +29,24 @@ export default function ResultsPanel({
   onSelectSet,
   relations,
   onRelationClick,
-  onCopyJson,
+  onCopyText,
   editSource,
   edits = {},
   onCellChange,
+  onSetCellValue,
   onDiscardEdits,
   onCopyUpdate,
   onOpenUpdate,
+  onDeleteRows,
 }) {
   const { status, result, error } = state
   const resultSets = result?.resultSets ?? []
   const activeIndex = Math.min(activeSet ?? 0, Math.max(resultSets.length - 1, 0))
   const activeResultSet = resultSets[activeIndex]
   const rowsAffected = (result?.rowsAffected ?? []).reduce((total, count) => total + count, 0)
-  const [selectedRow, setSelectedRow] = useState(null)
+  const [selection, setSelection] = useState(null)
   const [editMode, setEditMode] = useState(false)
+  const [menu, setMenu] = useState(null)
   const [panelWidth, setPanelWidth] = useState(ROW_PANEL_DEFAULT_WIDTH)
   const splitRef = useRef(null)
 
@@ -52,21 +54,72 @@ export default function ResultsPanel({
   const editable = hasKey && Boolean(activeResultSet) && resultSets.length === 1
   const changeCount = Object.keys(edits).length
 
-  const handleSelectRow = useCallback(
-    (index) => {
-      if (editMode) return
-      setSelectedRow((prev) => (prev === index ? null : index))
-    },
-    [editMode],
-  )
-
   useEffect(() => {
-    setSelectedRow(null)
+    setSelection(null)
   }, [result])
 
   useEffect(() => {
     setEditMode(false)
   }, [result, editSource])
+
+  const columnNames = useMemo(
+    () => (activeResultSet?.columns ?? []).map((column) => column.name),
+    [activeResultSet],
+  )
+
+  const selectionBounds = useMemo(() => {
+    if (!selection || !activeResultSet) return null
+    return {
+      rowStart: Math.min(selection.anchor.row, selection.focus.row),
+      rowEnd: Math.max(selection.anchor.row, selection.focus.row),
+      colStart: Math.min(selection.anchor.col, selection.focus.col),
+      colEnd: Math.max(selection.anchor.col, selection.focus.col),
+    }
+  }, [activeResultSet, selection])
+
+  const selectionCells = useMemo(() => {
+    if (!selectionBounds || !activeResultSet) return []
+    const cells = []
+    for (let row = selectionBounds.rowStart; row <= selectionBounds.rowEnd; row += 1) {
+      const values = activeResultSet.rows[row]
+      if (!values) continue
+      const cellsInRow = []
+      for (let col = selectionBounds.colStart; col <= selectionBounds.colEnd; col += 1) {
+        const column = activeResultSet.columns[col]
+        if (!column) continue
+        const edit = edits[`${row}:${column.name}`]
+        cellsInRow.push(edit ? edit.value : values[col])
+      }
+      cells.push(cellsInRow)
+    }
+    return cells
+  }, [activeResultSet, edits, selectionBounds])
+
+  const selectionRows = useMemo(() => {
+    if (!selectionBounds || !activeResultSet) return []
+    const rows = []
+    for (let row = selectionBounds.rowStart; row <= selectionBounds.rowEnd; row += 1) {
+      const values = activeResultSet.rows[row]
+      if (!values) continue
+      rows.push(
+        activeResultSet.columns.map((column, col) => {
+          const edit = edits[`${row}:${column.name}`]
+          return edit ? edit.value : values[col]
+        }),
+      )
+    }
+    return rows
+  }, [activeResultSet, edits, selectionBounds])
+
+  const selectedColumns = useMemo(
+    () =>
+      !selectionBounds
+        ? []
+        : (activeResultSet?.columns ?? [])
+            .slice(selectionBounds.colStart, selectionBounds.colEnd + 1)
+            .map((column) => column.name),
+    [activeResultSet, selectionBounds],
+  )
 
   const handlePanelPointerDown = useCallback(
     (event) => {
@@ -97,11 +150,7 @@ export default function ResultsPanel({
     [panelWidth],
   )
 
-  const selectedValues =
-    selectedRow === null || !activeResultSet ? null : activeResultSet.rows[selectedRow] ?? null
-
-  const selectedJson =
-    selectedValues && activeResultSet ? rowJson(activeResultSet.columns, selectedValues) : ''
+  const selectedJson = selectionRows.length ? jsonRecords(columnNames, selectionRows) : ''
 
   const [copied, setCopied] = useState(false)
   const copyTimer = useRef(null)
@@ -113,13 +162,145 @@ export default function ResultsPanel({
   useEffect(() => () => window.clearTimeout(copyTimer.current), [])
 
   const handleCopy = useCallback(async () => {
-    if (!selectedJson || !onCopyJson) return
-    const written = await onCopyJson(selectedJson)
+    if (!selectedJson || !onCopyText) return
+    const written = await onCopyText(selectedJson, 'Copied row JSON.')
     if (!written) return
     setCopied(true)
     window.clearTimeout(copyTimer.current)
     copyTimer.current = window.setTimeout(() => setCopied(false), 1500)
-  }, [onCopyJson, selectedJson])
+  }, [onCopyText, selectedJson])
+
+  const copy = useCallback(
+    (payload, message) => {
+      onCopyText?.(payload, message)
+    },
+    [onCopyText],
+  )
+
+  const handleCellContextMenu = useCallback(
+    (x, y, columnIndex) => {
+      const column = activeResultSet?.columns[columnIndex] ?? null
+      setMenu({ x, y, column })
+    },
+    [activeResultSet],
+  )
+
+  const table = editSource ? { schema: editSource.schema, name: editSource.table } : null
+
+  const menuItems = useMemo(() => {
+    if (!menu) return []
+    const items = []
+
+    if (editable) {
+      items.push({
+        id: 'edit-result',
+        label: editMode ? 'Stop editing' : 'Edit Result',
+        onSelect: () => {
+          setSelection(null)
+          setEditMode(!editMode)
+        },
+      })
+    }
+
+    if (editable && menu.column) {
+      items.push({
+        id: 'set-value',
+        label: 'Set Value',
+        children: SPECIAL_OPTIONS.map((option) => ({
+          id: option.id,
+          label: option.label,
+          onSelect: () => {
+            if (!selectionBounds) return
+            setEditMode(true)
+            for (let row = selectionBounds.rowStart; row <= selectionBounds.rowEnd; row += 1) {
+              onSetCellValue?.(row, menu.column.name, option.value)
+            }
+          },
+        })),
+      })
+    }
+
+    items.push({
+      id: 'copy-cells-as',
+      label: 'Copy Cells As',
+      children: [
+        {
+          id: 'cells-clean-text',
+          label: 'Clean Text',
+          onSelect: () => copy(cleanText(selectionCells), 'Copied selected cells as clean text.'),
+        },
+        {
+          id: 'cells-sql-insert',
+          label: 'SQL Insert',
+          onSelect: () => {
+            if (!table) return
+            copy(
+              sqlInsertRows(table, selectedColumns, selectionCells),
+              'Copied selected cells as INSERT statements.',
+            )
+          },
+        },
+        {
+          id: 'cells-json',
+          label: 'JSON',
+          onSelect: () =>
+            copy(
+              jsonRecords(selectedColumns, selectionCells),
+              'Copied selected cells as JSON.',
+            ),
+        },
+      ],
+    })
+
+    items.push({
+      id: 'copy-rows-as',
+      label: 'Copy Rows As',
+      children: [
+        {
+          id: 'rows-clean-text',
+          label: 'Clean Text',
+          onSelect: () => copy(cleanText(selectionRows), 'Copied selected rows as clean text.'),
+        },
+        {
+          id: 'rows-sql-insert',
+          label: 'SQL Insert',
+          onSelect: () => {
+            if (!table) return
+            copy(sqlInsertRows(table, columnNames, selectionRows), 'Copied selected rows as INSERT statements.')
+          },
+        },
+        {
+          id: 'rows-json',
+          label: 'JSON',
+          onSelect: () => copy(jsonRecords(columnNames, selectionRows), 'Copied selected rows as JSON.'),
+        },
+      ],
+    })
+
+    if (hasKey && onDeleteRows && selectionBounds) {
+      items.push({
+        id: 'delete-rows',
+        label: 'Delete Rows',
+        onSelect: () => onDeleteRows(selectionBounds.rowStart, selectionBounds.rowEnd),
+      })
+    }
+
+    return items
+  }, [
+    columnNames,
+    copy,
+    editMode,
+    editable,
+    hasKey,
+    menu,
+    onDeleteRows,
+    onSetCellValue,
+    selectedColumns,
+    selectionBounds,
+    selectionCells,
+    selectionRows,
+    table,
+  ])
 
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-surface">
@@ -151,7 +332,7 @@ export default function ResultsPanel({
                 type="button"
                 onClick={() => {
                   onSelectSet(index)
-                  setSelectedRow(null)
+                  setSelection(null)
                 }}
                 className={`flex h-6 shrink-0 items-center gap-1.5 rounded px-2 text-[length:var(--app-text-11)] transition-colors ${
                   index === activeIndex
@@ -168,56 +349,6 @@ export default function ResultsPanel({
           : null}
 
         <div className="ml-auto flex shrink-0 items-center gap-3 pl-3 text-[length:var(--app-text-11)] text-text-muted">
-          {status === 'success' && editable ? (
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setEditMode((prev) => !prev)}
-                title="Edit cells and generate UPDATE statements"
-                className={`flex h-6 items-center gap-1 rounded px-1.5 text-[length:var(--app-text-11)] transition-colors ${
-                  editMode
-                    ? 'bg-accent/15 text-accent'
-                    : 'text-text-muted hover:bg-tint/[0.05] hover:text-text'
-                }`}
-              >
-                <Icon name="pencil" size={11} />
-                {editMode ? 'Editing' : 'Edit'}
-              </button>
-              {changeCount > 0 ? (
-                <>
-                  <span className="rounded bg-warning/15 px-1.5 text-[length:var(--app-text-10)] font-medium tabular-nums text-warning">
-                    {changeCount} change{changeCount === 1 ? '' : 's'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={onCopyUpdate}
-                    title="Copy UPDATE statements for the changes"
-                    className="flex h-6 items-center gap-1 rounded px-1.5 text-[length:var(--app-text-11)] text-text-soft hover:bg-tint/[0.05] hover:text-text"
-                  >
-                    <Icon name="copy" size={11} />
-                    Copy update
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onOpenUpdate}
-                    title="Open the UPDATE statements in a new query tab"
-                    className="flex h-6 items-center gap-1 rounded px-1.5 text-[length:var(--app-text-11)] text-text-soft hover:bg-tint/[0.05] hover:text-text"
-                  >
-                    <Icon name="code" size={11} />
-                    Open update
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onDiscardEdits}
-                    title="Discard pending changes"
-                    className="flex h-6 items-center rounded px-1.5 text-[length:var(--app-text-11)] text-text-muted hover:bg-tint/[0.05] hover:text-text"
-                  >
-                    Discard
-                  </button>
-                </>
-              ) : null}
-            </div>
-          ) : null}
           {status === 'success' && editSource && !hasKey ? (
             <span
               title="Editing needs a primary key so each row can be identified in the UPDATE WHERE clause."
@@ -226,6 +357,45 @@ export default function ResultsPanel({
               <Icon name="lock" size={10} />
               Read-only · no primary key
             </span>
+          ) : null}
+          {status === 'success' && editMode ? (
+            <span className="flex items-center gap-1 rounded bg-accent/15 px-1.5 text-[length:var(--app-text-10)] font-medium text-accent">
+              <Icon name="pencil" size={10} />
+              Editing
+            </span>
+          ) : null}
+          {status === 'success' && changeCount > 0 ? (
+            <div className="flex items-center gap-1">
+              <span className="rounded bg-warning/15 px-1.5 text-[length:var(--app-text-10)] font-medium tabular-nums text-warning">
+                {changeCount} change{changeCount === 1 ? '' : 's'}
+              </span>
+              <button
+                type="button"
+                onClick={onCopyUpdate}
+                title="Copy UPDATE statements for the changes"
+                className="flex h-6 items-center gap-1 rounded px-1.5 text-[length:var(--app-text-11)] text-text-soft hover:bg-tint/[0.05] hover:text-text"
+              >
+                <Icon name="copy" size={11} />
+                Copy update
+              </button>
+              <button
+                type="button"
+                onClick={onOpenUpdate}
+                title="Open the UPDATE statements in a new query tab"
+                className="flex h-6 items-center gap-1 rounded px-1.5 text-[length:var(--app-text-11)] text-text-soft hover:bg-tint/[0.05] hover:text-text"
+              >
+                <Icon name="code" size={11} />
+                Open update
+              </button>
+              <button
+                type="button"
+                onClick={onDiscardEdits}
+                title="Discard pending changes"
+                className="flex h-6 items-center rounded px-1.5 text-[length:var(--app-text-11)] text-text-muted hover:bg-tint/[0.05] hover:text-text"
+              >
+                Discard
+              </button>
+            </div>
           ) : null}
           {status === 'success' && result ? (
             <>
@@ -276,15 +446,16 @@ export default function ResultsPanel({
                     rows={activeResultSet.rows}
                     relations={relations}
                     onRelationClick={onRelationClick}
-                    onRowClick={handleSelectRow}
-                    selectedIndex={selectedRow}
+                    selection={selection}
+                    onSelectionChange={setSelection}
+                    onCellContextMenu={handleCellContextMenu}
                     editable={editMode && editable}
                     edits={edits}
                     onCellChange={onCellChange}
                   />
                 </div>
 
-                {!editMode && selectedRow !== null && selectedValues ? (
+                {!editMode && selectionBounds ? (
                   <>
                     <div
                       onPointerDown={handlePanelPointerDown}
@@ -301,7 +472,9 @@ export default function ResultsPanel({
                       <div className="flex h-8 shrink-0 items-center gap-2 border-b border-line px-3">
                         <Icon name="grid" size={12} className="shrink-0 text-text-muted" />
                         <span className="text-[length:var(--app-text-11)] font-medium text-text-soft">
-                          Row {selectedRow + 1}
+                          {selection.anchor.row === selection.focus.row
+                            ? `Row ${selection.focus.row + 1}`
+                            : `Rows ${selectionBounds.rowStart + 1}–${selectionBounds.rowEnd + 1}`}
                         </span>
                         <button
                           type="button"
@@ -319,12 +492,12 @@ export default function ResultsPanel({
                           type="button"
                           className="icon-btn h-5 w-5"
                           title="Close"
-                          onClick={() => setSelectedRow(null)}
+                          onClick={() => setSelection(null)}
                         >
                           <Icon name="x" size={12} />
                         </button>
                       </div>
-                      <JsonView text={selectedJson} onCopy={onCopyJson} />
+                      <JsonView text={selectedJson} />
                     </div>
                   </>
                 ) : null}
@@ -333,6 +506,10 @@ export default function ResultsPanel({
           )
         ) : null}
       </div>
+
+      {menu ? (
+        <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />
+      ) : null}
     </section>
   )
 }

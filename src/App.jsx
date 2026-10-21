@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from './api.js'
 import { DEFAULT_SETTINGS, applySettings } from './settings.js'
 import { generateCreateTable } from './designSql.js'
+import { quoteIdentifier, rowCondition, sqlLiteral } from './resultFormats.js'
 import Banner from './components/Banner.jsx'
 import ConfirmDialog from './components/ConfirmDialog.jsx'
 import ConnectionDialog from './components/ConnectionDialog.jsx'
@@ -66,10 +67,6 @@ function pickDatabase(databases, configured) {
   return online?.name || names[0] || configured || 'master'
 }
 
-function quoteIdentifier(name) {
-  return `[${String(name).replace(/]/g, ']]')}]`
-}
-
 function qualifiedName(table) {
   return `${quoteIdentifier(table.schema)}.${quoteIdentifier(table.name)}`
 }
@@ -103,14 +100,6 @@ function relatedSql(relation, value) {
   return `SELECT TOP (${BROWSE_ROWS}) *\nFROM ${quoteIdentifier(relation.referencedSchema)}.${quoteIdentifier(relation.referencedTable)}\nWHERE ${filter};`
 }
 
-function sqlLiteral(value) {
-  if (value === null || value === undefined) return 'NULL'
-  if (typeof value === 'number') return String(value)
-  if (typeof value === 'boolean') return value ? '1' : '0'
-  if (typeof value === 'object') return value.special
-  return `N'${String(value).replace(/'/g, "''")}'`
-}
-
 function buildUpdateStatements(editSource, resultSet, edits) {
   if (!editSource || !resultSet) return []
   const { schema, table, primaryKey } = editSource
@@ -136,15 +125,28 @@ function buildUpdateStatements(editSource, resultSet, edits) {
     const assignments = rowEdits
       .map((edit) => `${quoteIdentifier(edit.column)} = ${sqlLiteral(edit.value)}`)
       .join(',\n       ')
-    const conditions = primaryKey
-      .map((name, position) => {
-        const original = row[keyIndexes[position]]
-        if (original === null || original === undefined) return `${quoteIdentifier(name)} IS NULL`
-        return `${quoteIdentifier(name)} = ${sqlLiteral(original)}`
-      })
-      .join('\n   AND ')
     statements.push(
-      `UPDATE ${quoteIdentifier(schema)}.${quoteIdentifier(table)}\n   SET ${assignments}\n WHERE ${conditions};`
+      `UPDATE ${quoteIdentifier(schema)}.${quoteIdentifier(table)}\n   SET ${assignments}\n WHERE ${rowCondition(primaryKey, keyIndexes, row)};`
+    )
+  }
+  return statements
+}
+
+function buildDeleteStatements(editSource, resultSet, rowStart, rowEnd) {
+  if (!editSource || !resultSet) return []
+  const { schema, table, primaryKey } = editSource
+  if (!primaryKey.length) return []
+
+  const columnIndex = new Map(resultSet.columns.map((column, index) => [column.name.toLowerCase(), index]))
+  const keyIndexes = primaryKey.map((name) => columnIndex.get(name.toLowerCase()))
+  if (keyIndexes.some((index) => index === undefined)) return []
+
+  const statements = []
+  for (let rowIndex = rowStart; rowIndex <= rowEnd; rowIndex += 1) {
+    const row = resultSet.rows[rowIndex]
+    if (!row) continue
+    statements.push(
+      `DELETE FROM ${quoteIdentifier(schema)}.${quoteIdentifier(table)}\n WHERE ${rowCondition(primaryKey, keyIndexes, row)};`
     )
   }
   return statements
@@ -688,11 +690,12 @@ export default function App() {
     [activeSession, showBanner],
   )
 
-  const handleCopyJson = useCallback(
-    async (text) => {
+  const handleCopyText = useCallback(
+    async (text, message = 'Copied to clipboard.') => {
       if (!text) return false
       try {
         await api.copyText(text)
+        showBanner('success', message)
         return true
       } catch (error) {
         showBanner('error', error.message)
@@ -714,12 +717,8 @@ export default function App() {
     return resultSets[tab.activeSet ?? 0] ?? null
   }
 
-  const handleCellChange = useCallback(
-    (rowIndex, column, value, original) => {
-      const target = activeQueryTab()
-      if (!target) return
-      const { connectionId, tab } = target
-      if (!tab.editSource || !tab.editSource.primaryKey.length) return
+  const setCellEdit = useCallback(
+    (connectionId, tab, rowIndex, column, value, original) => {
       const sameValue = value?.special ? value.special === original?.special : value === original
       if (sameValue) {
         updateTab(connectionId, tab.id, (current) => {
@@ -736,7 +735,56 @@ export default function App() {
         },
       }))
     },
-    [activeQueryTab, updateTab],
+    [updateTab],
+  )
+
+  const handleCellChange = useCallback(
+    (rowIndex, column, value, original) => {
+      const target = activeQueryTab()
+      if (!target) return
+      const { connectionId, tab } = target
+      if (!tab.editSource || !tab.editSource.primaryKey.length) return
+      setCellEdit(connectionId, tab, rowIndex, column, value, original)
+    },
+    [activeQueryTab, setCellEdit],
+  )
+
+  const handleSetCellValue = useCallback(
+    (rowIndex, column, value) => {
+      const target = activeQueryTab()
+      if (!target) return
+      const { connectionId, tab } = target
+      const resultSet = tabResultSet(tab)
+      if (!tab.editSource || !resultSet) return
+      const columnIndex = resultSet.columns.findIndex((item) => item.name === column)
+      if (columnIndex === -1) return
+      const row = resultSet.rows[rowIndex]
+      if (!row) return
+      setCellEdit(connectionId, tab, rowIndex, column, value, row[columnIndex])
+    },
+    [activeQueryTab, setCellEdit],
+  )
+
+  const handleDeleteRows = useCallback(
+    (rowStart, rowEnd) => {
+      const target = activeQueryTab()
+      if (!target) return
+      const { connectionId, tab } = target
+      const resultSet = tabResultSet(tab)
+      const statements = buildDeleteStatements(tab.editSource, resultSet, rowStart, rowEnd)
+      if (!statements.length) return
+      const count = statements.length
+      openTab(
+        connectionId,
+        `Delete ${tab.editSource.table}`,
+        `${statements.join('\n\n')}\n`,
+      )
+      showBanner(
+        'warn',
+        `Delete preview for ${count} row${count === 1 ? '' : 's'} is not executed. Review and run it manually.`,
+      )
+    },
+    [activeQueryTab, openTab, showBanner],
   )
 
   const handleDiscardEdits = useCallback(() => {
@@ -1500,13 +1548,15 @@ export default function App() {
                   onSelectSet={handleSelectSet}
                   relations={activeTab?.relations || []}
                   onRelationClick={handleOpenRelation}
-                  onCopyJson={handleCopyJson}
+                  onCopyText={handleCopyText}
                   editSource={activeTab?.editSource ?? null}
                   edits={activeTab?.edits ?? {}}
                   onCellChange={handleCellChange}
+                  onSetCellValue={handleSetCellValue}
                   onDiscardEdits={handleDiscardEdits}
                   onCopyUpdate={handleCopyUpdate}
                   onOpenUpdate={handleOpenUpdate}
+                  onDeleteRows={handleDeleteRows}
                 />
               </div>
             )}
