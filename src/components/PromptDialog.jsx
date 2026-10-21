@@ -10,9 +10,12 @@ export default function PromptDialog({
   confirmLabel = 'Confirm',
   initialValue,
   placeholder,
+  type = 'text',
+  error = null,
   busy,
   onCancel,
   onConfirm,
+  detail,
 }) {
   const [value, setValue] = useState(initialValue ?? '')
 
@@ -54,7 +57,7 @@ export default function PromptDialog({
           <div className="min-w-0 flex-1">
             <h2 className="text-[length:var(--app-text-14)] font-semibold text-text-strong">{title}</h2>
             {description ? (
-              <p className="mt-1 text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] text-text-soft">{description}</p>
+              <p className="mt-1 whitespace-pre-wrap break-words text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] text-text-soft">{description}</p>
             ) : null}
           </div>
           <button type="button" className="icon-btn h-6 w-6" onClick={onCancel} disabled={busy}>
@@ -70,11 +73,24 @@ export default function PromptDialog({
             id="prompt-dialog-input"
             className="field"
             value={value}
+            type={type}
             autoFocus
             placeholder={placeholder}
             onChange={(event) => setValue(event.target.value)}
           />
-          {hint ? <p className="mt-2 text-[length:var(--app-text-11)] leading-[calc(var(--app-text-12)+4px)] text-text-muted">{hint}</p> : null}
+          {error ? (
+            <p className="mt-2 text-[length:var(--app-text-11)] text-danger">{error}</p>
+          ) : null}
+          {hint ? (
+            <p className="mt-2 text-[length:var(--app-text-11)] leading-[calc(var(--app-text-12)+4px)] text-text-muted">
+              {hint}
+            </p>
+          ) : null}
+          {detail ? (
+            <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-panel px-2.5 py-2 font-mono text-[length:var(--app-text-11)] leading-[calc(var(--app-text-11)+6px)] text-text-soft">
+              {detail}
+            </pre>
+          ) : null}
         </div>
 
         <div className="flex justify-end gap-2 border-t border-line px-5 py-3.5">

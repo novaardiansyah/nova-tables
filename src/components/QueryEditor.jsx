@@ -29,16 +29,24 @@ const EDITOR_OPTIONS = {
   fixedOverflowWidgets: true,
 }
 
-export default function QueryEditor({ seed, theme, settings, onChange, onRun }) {
+export default function QueryEditor({
+  seed,
+  theme,
+  settings,
+  onChange,
+  onRun,
+  onRunSelection,
+  onSelectionChange,
+}) {
   const editorRef = useRef(null)
-  const handlersRef = useRef({ onChange, onRun })
+  const handlersRef = useRef({ onChange, onRun, onRunSelection, onSelectionChange })
   const lastSeedRef = useRef(null)
   const seedingRef = useRef(false)
   const { fontFamily, fontSize, lineHeight } = queryFontOptions(settings)
 
   useEffect(() => {
-    handlersRef.current = { onChange, onRun }
-  }, [onChange, onRun])
+    handlersRef.current = { onChange, onRun, onRunSelection, onSelectionChange }
+  }, [onChange, onRun, onRunSelection, onSelectionChange])
 
   useEffect(() => {
     editorRef.current?.updateOptions({ fontFamily, fontSize, lineHeight })
@@ -76,6 +84,16 @@ export default function QueryEditor({ seed, theme, settings, onChange, onRun }) 
       label: 'Run query',
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, monaco.KeyCode.F5],
       run: () => handlersRef.current.onRun?.(),
+    })
+    editor.addAction({
+      id: 'nova.runSelection',
+      label: 'Run selection',
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter],
+      run: () => handlersRef.current.onRunSelection?.(),
+    })
+    editor.onDidChangeCursorSelection((event) => {
+      const text = event.selection.toString().trim()
+      handlersRef.current.onSelectionChange?.(text)
     })
     editor.focus()
   }

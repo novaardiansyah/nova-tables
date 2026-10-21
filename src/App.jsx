@@ -3,12 +3,14 @@ import { api } from './api.js'
 import { DEFAULT_SETTINGS, applySettings } from './settings.js'
 import { generateCreateTable } from './designSql.js'
 import { quoteIdentifier, rowCondition, sqlLiteral } from './resultFormats.js'
+import { executionGuard, getModeById } from './queryModes.js'
 import Banner from './components/Banner.jsx'
 import ConfirmDialog from './components/ConfirmDialog.jsx'
 import ConnectionDialog from './components/ConnectionDialog.jsx'
 import ConnectionsScreen from './components/ConnectionsScreen.jsx'
 import PromptDialog from './components/PromptDialog.jsx'
 import QueryEditor from './components/QueryEditor.jsx'
+import QueryGuardDialog from './components/QueryGuardDialog.jsx'
 import ResultsPanel from './components/ResultsPanel.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import ShortcutPanel from './components/ShortcutPanel.jsx'
@@ -233,8 +235,11 @@ export default function App() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
+  const [runGuard, setRunGuard] = useState(null)
+  const [selectionText, setSelectionText] = useState('')
 
   const sqlRef = useRef(STARTER_SQL)
+  const selectionRef = useRef('')
   const sessionsRef = useRef({})
   const activeIdRef = useRef(null)
   const seedIdRef = useRef(0)
@@ -606,14 +611,67 @@ export default function App() {
     [activeSession, showBanner, updateTab],
   )
 
+  const runWithGuard = useCallback(
+    (sql, tabId) => {
+      const guard = executionGuard(settings.queryExecutionMode, sql)
+      if (guard) {
+        setRunGuard({ kind: guard.kind, sql, tabId })
+        return
+      }
+      execute(sql, tabId)
+    },
+    [execute, settings.queryExecutionMode],
+  )
+
   const handleRun = useCallback(() => {
     const current = activeSession()
     if (!current) {
       showBanner('warn', 'Open a connection before running a query.')
       return
     }
-    execute(sqlRef.current, current.activeTabId)
-  }, [activeSession, execute, showBanner])
+    runWithGuard(sqlRef.current, current.activeTabId)
+  }, [activeSession, runWithGuard, showBanner])
+
+  const handleRunSelection = useCallback(() => {
+    const current = activeSession()
+    if (!current) {
+      showBanner('warn', 'Open a connection before running a query.')
+      return
+    }
+    const selected = selectionRef.current
+    if (!selected) {
+      showBanner('warn', 'Select the SQL you want to run first.')
+      return
+    }
+    runWithGuard(selected, current.activeTabId)
+  }, [activeSession, runWithGuard, showBanner])
+
+  const handleSelectionChange = useCallback((text) => {
+    selectionRef.current = text
+    setSelectionText(text)
+  }, [])
+
+  const handleGuardConfirm = useCallback(() => {
+    const pending = runGuard
+    setRunGuard(null)
+    if (!pending) return
+    execute(pending.sql, pending.tabId)
+  }, [execute, runGuard])
+
+  const handleChangeExecutionMode = useCallback(
+    async (modeId) => {
+      const next = applySettings({ ...settings, queryExecutionMode: modeId })
+      setSettings(next)
+      try {
+        const saved = await api.saveSettings(next)
+        setSettings(applySettings(saved))
+      } catch (error) {
+        applySettings(settings)
+        showBanner('error', error.message)
+      }
+    },
+    [settings, showBanner],
+  )
 
   const openTab = useCallback(
     (connectionId, title, sql, editSource = null) => {
@@ -1465,6 +1523,7 @@ export default function App() {
         Boolean(tablePrompt) ||
         Boolean(dropTarget) ||
         Boolean(deleteTarget) ||
+        Boolean(runGuard) ||
         shortcutsOpen ||
         settingsOpen
 
@@ -1481,7 +1540,8 @@ export default function App() {
       if (event.key === 'Enter') {
         if (inEditor || hasDialog || isFormField) return
         event.preventDefault()
-        handleRun()
+        if (event.shiftKey) handleRunSelection()
+        else handleRun()
         return
       }
 
@@ -1543,8 +1603,10 @@ export default function App() {
     handleCycleTab,
     handleNewTab,
     handleRun,
+    handleRunSelection,
     handleSelectTabIndex,
     openConnectionScreen,
+    runGuard,
     screen,
     settingsOpen,
     shortcutsOpen,
@@ -1599,8 +1661,12 @@ export default function App() {
               session={session}
               activeDatabase={session.activeDatabase}
               running={running}
+              queryExecutionMode={settings.queryExecutionMode}
+              hasSelection={selectionText.length > 0}
               onSelectDatabase={handleSelectDatabase}
+              onChangeExecutionMode={handleChangeExecutionMode}
               onRun={handleRun}
+              onRunSelection={handleRunSelection}
               onDisconnect={() => closeSession(session.connectionId)}
               onShowShortcuts={() => setShortcutsOpen(true)}
             />
@@ -1637,6 +1703,8 @@ export default function App() {
                     settings={settings}
                     onChange={handleSqlChange}
                     onRun={handleRun}
+                    onRunSelection={handleRunSelection}
+                    onSelectionChange={handleSelectionChange}
                   />
                 </div>
 
@@ -1734,6 +1802,16 @@ export default function App() {
         busy={tableBusy}
         onCancel={() => setTablePrompt(null)}
         onConfirm={handleTablePromptConfirm}
+      />
+
+      <QueryGuardDialog
+        open={Boolean(runGuard)}
+        kind={runGuard?.kind}
+        sql={runGuard?.sql}
+        mode={getModeById(settings.queryExecutionMode)}
+        connectionId={session?.connectionId}
+        onCancel={() => setRunGuard(null)}
+        onConfirm={handleGuardConfirm}
       />
 
       <ConfirmDialog

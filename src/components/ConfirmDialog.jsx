@@ -5,6 +5,7 @@ export default function ConfirmDialog({
   open,
   title,
   message,
+  detail,
   confirmLabel = 'Confirm',
   danger = false,
   busy = false,
@@ -35,7 +36,16 @@ export default function ConfirmDialog({
           </span>
           <div className="min-w-0">
             <h2 className="text-[length:var(--app-text-14)] font-semibold text-text-strong">{title}</h2>
-            {message ? <p className="mt-1 text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] text-text-soft">{message}</p> : null}
+            {message ? (
+              <p className="mt-1 whitespace-pre-wrap break-words text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] text-text-soft">
+                {message}
+              </p>
+            ) : null}
+            {detail ? (
+              <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-panel px-2.5 py-2 font-mono text-[length:var(--app-text-11)] leading-[calc(var(--app-text-11)+6px)] text-text-soft">
+                {detail}
+              </pre>
+            ) : null}
           </div>
         </div>
 
