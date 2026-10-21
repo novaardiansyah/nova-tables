@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Icon, { Spinner } from './Icon.jsx'
 import ContextMenu from './ContextMenu.jsx'
+import FilterDialog from './FilterDialog.jsx'
 import JsonView from './JsonView.jsx'
 import ResultGrid from './ResultGrid.jsx'
 import { cleanText, jsonRecords, sqlInsertRows } from '../resultFormats.js'
@@ -38,6 +39,7 @@ export default function ResultsPanel({
   onCopyUpdate,
   onOpenUpdate,
   onDeleteRows,
+  onApplyFilter,
 }) {
   const { status, result, error } = state
   const resultSets = result?.resultSets ?? []
@@ -49,6 +51,8 @@ export default function ResultsPanel({
   const [editMode, setEditMode] = useState(false)
   const [view, setView] = useState('results')
   const [menu, setMenu] = useState(null)
+  const [headerMenu, setHeaderMenu] = useState(null)
+  const [filterColumn, setFilterColumn] = useState(null)
   const [panelWidth, setPanelWidth] = useState(ROW_PANEL_DEFAULT_WIDTH)
   const [panelOpen, setPanelOpen] = useState(false)
   const splitRef = useRef(null)
@@ -194,6 +198,15 @@ export default function ResultsPanel({
     (x, y, columnIndex) => {
       const column = activeResultSet?.columns[columnIndex] ?? null
       setMenu({ x, y, column })
+    },
+    [activeResultSet],
+  )
+
+  const handleHeaderContextMenu = useCallback(
+    (x, y, columnIndex) => {
+      const column = activeResultSet?.columns[columnIndex] ?? null
+      if (!column) return
+      setHeaderMenu({ x, y, column })
     },
     [activeResultSet],
   )
@@ -511,6 +524,7 @@ export default function ResultsPanel({
                   selection={selection}
                   onSelectionChange={setSelection}
                   onCellContextMenu={handleCellContextMenu}
+                  onHeaderContextMenu={handleHeaderContextMenu}
                   editable={editable}
                   editing={editMode}
                   edits={edits}
@@ -572,6 +586,37 @@ export default function ResultsPanel({
       {menu ? (
         <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />
       ) : null}
+
+      {headerMenu ? (
+        <ContextMenu
+          x={headerMenu.x}
+          y={headerMenu.y}
+          items={[
+            {
+              id: 'copy-object-name',
+              label: 'Copy object name',
+              onSelect: () => copy(headerMenu.column.name, `Copied column name ${headerMenu.column.name}.`),
+            },
+            {
+              id: 'filter-by-column',
+              label: 'Filter by column',
+              onSelect: () => setFilterColumn(headerMenu.column.name),
+            },
+          ]}
+          onClose={() => setHeaderMenu(null)}
+        />
+      ) : null}
+
+      <FilterDialog
+        open={filterColumn !== null}
+        columns={activeResultSet?.columns ?? []}
+        initialColumn={filterColumn ?? ''}
+        onCancel={() => setFilterColumn(null)}
+        onApply={(conditions) => {
+          setFilterColumn(null)
+          onApplyFilter?.(conditions)
+        }}
+      />
     </section>
   )
 }

@@ -3,6 +3,7 @@ import { api } from './api.js'
 import { DEFAULT_SETTINGS, applySettings } from './settings.js'
 import { generateCreateTable } from './designSql.js'
 import { quoteIdentifier, rowCondition, sqlLiteral } from './resultFormats.js'
+import { buildFilteredSql, buildFilterWhere } from './filters.js'
 import { executionGuard } from './queryModes.js'
 import Banner from './components/Banner.jsx'
 import ConfirmDialog from './components/ConfirmDialog.jsx'
@@ -969,6 +970,28 @@ export default function App() {
     updateTab(connectionId, tab.id, { edits: {} })
   }, [activeQueryTab, openTab, updateTab])
 
+  const handleApplyFilter = useCallback(
+    (conditions) => {
+      const current = activeSession()
+      if (!current) {
+        showBanner('warn', 'Open a connection before filtering a result.')
+        return
+      }
+      const source = sqlRef.current.trim()
+      if (!source) {
+        showBanner('warn', 'There is no query to filter.')
+        return
+      }
+      const where = buildFilterWhere(conditions)
+      if (!where) return
+      const sql = buildFilteredSql(source, where)
+      const column = conditions[0]?.column ?? null
+      const tabId = openTab(current.connectionId, column ? `Filter ${column}` : 'Filtered', sql)
+      execute(sql, tabId)
+    },
+    [activeSession, execute, openTab, showBanner],
+  )
+
   const openDesignTab = useCallback(
     (connectionId, title, target) => {
       tabIdRef.current += 1
@@ -1726,6 +1749,7 @@ export default function App() {
                   onCopyUpdate={handleCopyUpdate}
                   onOpenUpdate={handleOpenUpdate}
                   onDeleteRows={handleDeleteRows}
+                  onApplyFilter={handleApplyFilter}
                 />
               </div>
             )}

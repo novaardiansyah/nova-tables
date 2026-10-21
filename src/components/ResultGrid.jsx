@@ -89,6 +89,7 @@ export default function ResultGrid({
   selection = null,
   onSelectionChange,
   onCellContextMenu,
+  onHeaderContextMenu,
   editable = false,
   editing = false,
   edits = {},
@@ -405,6 +406,10 @@ export default function ResultGrid({
               {columns.map((column, index) => (
                 <th
                   key={`${column.name}-${index}`}
+                  onContextMenu={(event) => {
+                    event.preventDefault()
+                    onHeaderContextMenu?.(event.clientX, event.clientY, index)
+                  }}
                   className={`sticky top-0 z-20 whitespace-nowrap border-b border-line bg-elevated text-[length:calc(var(--grid-font-size)-1px)] font-semibold tracking-wide text-text-soft ${
                     numericColumns[index] ? 'text-right' : 'text-left'
                   }`}
