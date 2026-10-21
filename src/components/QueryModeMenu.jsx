@@ -5,9 +5,7 @@ import { EXECUTION_MODES, getModeById } from '../queryModes.js'
 const TONE_CLASS = {
   success: 'bg-success',
   warning: 'bg-warning',
-  'warning-outline': 'border border-warning',
   danger: 'bg-danger',
-  'danger-outline': 'border border-danger',
 }
 
 export default function QueryModeMenu({ value, onChange }) {

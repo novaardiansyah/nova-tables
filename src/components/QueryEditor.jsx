@@ -35,18 +35,17 @@ export default function QueryEditor({
   settings,
   onChange,
   onRun,
-  onRunSelection,
   onSelectionChange,
 }) {
   const editorRef = useRef(null)
-  const handlersRef = useRef({ onChange, onRun, onRunSelection, onSelectionChange })
+  const handlersRef = useRef({ onChange, onRun, onSelectionChange })
   const lastSeedRef = useRef(null)
   const seedingRef = useRef(false)
   const { fontFamily, fontSize, lineHeight } = queryFontOptions(settings)
 
   useEffect(() => {
-    handlersRef.current = { onChange, onRun, onRunSelection, onSelectionChange }
-  }, [onChange, onRun, onRunSelection, onSelectionChange])
+    handlersRef.current = { onChange, onRun, onSelectionChange }
+  }, [onChange, onRun, onSelectionChange])
 
   useEffect(() => {
     editorRef.current?.updateOptions({ fontFamily, fontSize, lineHeight })
@@ -85,14 +84,9 @@ export default function QueryEditor({
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, monaco.KeyCode.F5],
       run: () => handlersRef.current.onRun?.(),
     })
-    editor.addAction({
-      id: 'nova.runSelection',
-      label: 'Run selection',
-      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter],
-      run: () => handlersRef.current.onRunSelection?.(),
-    })
     editor.onDidChangeCursorSelection((event) => {
-      const text = event.selection.toString().trim()
+      const model = editor.getModel()
+      const text = model ? model.getValueInRange(event.selection).trim() : ''
       handlersRef.current.onSelectionChange?.(text)
     })
     editor.focus()
