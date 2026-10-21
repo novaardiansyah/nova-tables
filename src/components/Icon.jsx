@@ -166,6 +166,18 @@ const ICONS = {
       <path d="M13.5 5l-3 14" />
     </>
   ),
+  copy: (
+    <>
+      <rect x="9" y="9" width="12" height="12" rx="2" />
+      <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+    </>
+  ),
+  lock: (
+    <>
+      <rect x="4" y="10.5" width="16" height="10.5" rx="2" />
+      <path d="M8 10.5V7a4 4 0 018 0v3.5" />
+    </>
+  ),
 }
 
 export default function Icon({ name, size = 15, className = '', strokeWidth = 1.7 }) {

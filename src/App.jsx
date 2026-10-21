@@ -29,8 +29,18 @@ const IDLE_QUERY = { status: 'idle', result: null, error: null }
 const EDITOR_DEFAULT_HEIGHT = 320
 const BROWSE_ROWS = 300
 
-function createTab(id, title, sql) {
-  return { id, kind: 'query', title, sql, state: IDLE_QUERY, activeSet: 0, relations: [] }
+function createTab(id, title, sql, editSource = null) {
+  return {
+    id,
+    kind: 'query',
+    title,
+    sql,
+    state: IDLE_QUERY,
+    activeSet: 0,
+    relations: [],
+    editSource,
+    edits: {},
+  }
 }
 
 function createDesignTab(id, title, target) {
@@ -70,6 +80,20 @@ function browseSql(table) {
   return `SELECT TOP (${BROWSE_ROWS}) *\nFROM ${qualifiedName(table)}${orderBy};`
 }
 
+function buildEditSource(table, sql) {
+  return {
+    schema: table.schema,
+    table: table.name,
+    primaryKey: table.primaryKey ?? [],
+    sql,
+  }
+}
+
+function sessionTableFor(session, schema, name) {
+  const tables = session.tables?.tables ?? []
+  return tables.find((table) => table.schema === schema && table.name === name) ?? null
+}
+
 function relatedSql(relation, value) {
   const column = quoteIdentifier(relation.referencedColumn)
   const filter =
@@ -80,9 +104,49 @@ function relatedSql(relation, value) {
 }
 
 function sqlLiteral(value) {
+  if (value === null || value === undefined) return 'NULL'
   if (typeof value === 'number') return String(value)
   if (typeof value === 'boolean') return value ? '1' : '0'
   return `N'${String(value).replace(/'/g, "''")}'`
+}
+
+function buildUpdateStatements(editSource, resultSet, edits) {
+  if (!editSource || !resultSet) return []
+  const { schema, table, primaryKey } = editSource
+  if (!primaryKey.length) return []
+
+  const columnIndex = new Map(resultSet.columns.map((column, index) => [column.name.toLowerCase(), index]))
+  const keyIndexes = primaryKey.map((name) => columnIndex.get(name.toLowerCase()))
+  if (keyIndexes.some((index) => index === undefined)) return []
+
+  const byRow = new Map()
+  for (const [key, edit] of Object.entries(edits)) {
+    const [rowKey, colName] = key.split(':')
+    const rowIndex = Number(rowKey)
+    const list = byRow.get(rowIndex) || []
+    list.push({ column: colName, value: edit.value, original: edit.original })
+    byRow.set(rowIndex, list)
+  }
+
+  const statements = []
+  for (const [rowIndex, rowEdits] of byRow) {
+    const row = resultSet.rows[rowIndex]
+    if (!row) continue
+    const assignments = rowEdits
+      .map((edit) => `${quoteIdentifier(edit.column)} = ${sqlLiteral(edit.value)}`)
+      .join(',\n       ')
+    const conditions = primaryKey
+      .map((name, position) => {
+        const original = row[keyIndexes[position]]
+        if (original === null || original === undefined) return `${quoteIdentifier(name)} IS NULL`
+        return `${quoteIdentifier(name)} = ${sqlLiteral(original)}`
+      })
+      .join('\n   AND ')
+    statements.push(
+      `UPDATE ${quoteIdentifier(schema)}.${quoteIdentifier(table)}\n   SET ${assignments}\n WHERE ${conditions};`
+    )
+  }
+  return statements
 }
 
 function queryTitle(index) {
@@ -197,7 +261,10 @@ export default function App() {
         ...prev,
         [connectionId]: {
           ...current,
-          tabs: current.tabs.map((tab) => (tab.id === tabId ? { ...tab, ...patch } : tab)),
+          tabs: current.tabs.map((tab) => {
+            if (tab.id !== tabId) return tab
+            return { ...tab, ...(typeof patch === 'function' ? patch(tab) : patch) }
+          }),
         },
       }
     })
@@ -445,10 +512,15 @@ export default function App() {
         return
       }
 
-      updateTab(current.connectionId, tabId, {
+      const tab = current.tabs.find((item) => item.id === tabId)
+      const patch = {
         state: { status: 'running', result: null, error: null },
         activeSet: 0,
-      })
+        edits: {},
+      }
+      if (tab?.editSource && tab.editSource.sql !== sql) patch.editSource = null
+
+      updateTab(current.connectionId, tabId, patch)
       try {
         const result = await api.runQuery({
           connectionId: current.connectionId,
@@ -486,7 +558,7 @@ export default function App() {
   }, [activeSession, execute, showBanner])
 
   const openTab = useCallback(
-    (connectionId, title, sql) => {
+    (connectionId, title, sql, editSource = null) => {
       tabIdRef.current += 1
       const id = `tab-${tabIdRef.current}`
       const liveSql = sqlRef.current
@@ -499,7 +571,7 @@ export default function App() {
             ...current,
             tabs: [
               ...current.tabs.map((tab) => (tab.id === current.activeTabId ? { ...tab, sql: liveSql } : tab)),
-              createTab(id, title, sql),
+              createTab(id, title, sql, editSource),
             ],
             activeTabId: id,
           },
@@ -533,7 +605,13 @@ export default function App() {
       const current = activeSession()
       if (!current) return
       const sql = relatedSql(relation, value)
-      const tabId = openTab(current.connectionId, relation.referencedTable, sql)
+      const table = sessionTableFor(
+        current,
+        relation.referencedSchema,
+        relation.referencedTable,
+      )
+      const editSource = table ? buildEditSource(table, sql) : null
+      const tabId = openTab(current.connectionId, relation.referencedTable, sql, editSource)
       patchSession(current.connectionId, {
         selectedTable: `${relation.referencedSchema}.${relation.referencedTable}`,
       })
@@ -551,7 +629,8 @@ export default function App() {
       const current = activeSession()
       if (!current) return
       const sql = browseSql(table)
-      const tabId = openTab(current.connectionId, table.name, sql)
+      const editSource = buildEditSource(table, sql)
+      const tabId = openTab(current.connectionId, table.name, sql, editSource)
       patchSession(current.connectionId, { selectedTable: `${table.schema}.${table.name}` })
       execute(sql, tabId)
       loadRelations(tabId, table)
@@ -596,6 +675,90 @@ export default function App() {
     },
     [activeSession, showBanner],
   )
+
+  const handleCopyJson = useCallback(
+    async (text) => {
+      if (!text) return false
+      try {
+        await api.copyText(text)
+        return true
+      } catch (error) {
+        showBanner('error', error.message)
+        return false
+      }
+    },
+    [showBanner],
+  )
+
+  const activeQueryTab = useCallback(() => {
+    const current = activeSession()
+    if (!current) return null
+    const tab = current.tabs.find((item) => item.id === current.activeTabId)
+    return tab ? { connectionId: current.connectionId, tab } : null
+  }, [activeSession])
+
+  const tabResultSet = (tab) => {
+    const resultSets = tab.state?.result?.resultSets ?? []
+    return resultSets[tab.activeSet ?? 0] ?? null
+  }
+
+  const handleCellChange = useCallback(
+    (rowIndex, column, value, original) => {
+      const target = activeQueryTab()
+      if (!target) return
+      const { connectionId, tab } = target
+      if (!tab.editSource || !tab.editSource.primaryKey.length) return
+      if (value === original) {
+        updateTab(connectionId, tab.id, (current) => {
+          const edits = { ...(current.edits || {}) }
+          delete edits[`${rowIndex}:${column}`]
+          return { edits }
+        })
+        return
+      }
+      updateTab(connectionId, tab.id, (current) => ({
+        edits: {
+          ...(current.edits || {}),
+          [`${rowIndex}:${column}`]: { value, original },
+        },
+      }))
+    },
+    [activeQueryTab, updateTab],
+  )
+
+  const handleDiscardEdits = useCallback(() => {
+    const target = activeQueryTab()
+    if (!target) return
+    updateTab(target.connectionId, target.tab.id, { edits: {} })
+  }, [activeQueryTab, updateTab])
+
+  const handleCopyUpdate = useCallback(async () => {
+    const target = activeQueryTab()
+    if (!target) return
+    const { tab } = target
+    const statements = buildUpdateStatements(tab.editSource, tabResultSet(tab), tab.edits || {})
+    if (!statements.length) return
+    try {
+      await api.copyText(statements.join('\n\n'))
+      showBanner(
+        'success',
+        `Copied ${statements.length} UPDATE statement${statements.length === 1 ? '' : 's'}.`,
+      )
+    } catch (error) {
+      showBanner('error', error.message)
+    }
+  }, [activeQueryTab, showBanner])
+
+  const handleOpenUpdate = useCallback(() => {
+    const target = activeQueryTab()
+    if (!target) return
+    const { connectionId, tab } = target
+    const statements = buildUpdateStatements(tab.editSource, tabResultSet(tab), tab.edits || {})
+    if (!statements.length) return
+    const title = `Update ${tab.editSource.table}`
+    openTab(connectionId, title, `${statements.join('\n\n')}\n`)
+    updateTab(connectionId, tab.id, { edits: {} })
+  }, [activeQueryTab, openTab, updateTab])
 
   const openDesignTab = useCallback(
     (connectionId, title, target) => {
@@ -1324,6 +1487,13 @@ export default function App() {
                   onSelectSet={handleSelectSet}
                   relations={activeTab?.relations || []}
                   onRelationClick={handleOpenRelation}
+                  onCopyJson={handleCopyJson}
+                  editSource={activeTab?.editSource ?? null}
+                  edits={activeTab?.edits ?? {}}
+                  onCellChange={handleCellChange}
+                  onDiscardEdits={handleDiscardEdits}
+                  onCopyUpdate={handleCopyUpdate}
+                  onOpenUpdate={handleOpenUpdate}
                 />
               </div>
             )}

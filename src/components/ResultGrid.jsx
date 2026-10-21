@@ -16,15 +16,23 @@ export default function ResultGrid({
   onRelationClick,
   onRowClick,
   selectedIndex,
+  editable = false,
+  edits = {},
+  onCellChange,
 }) {
   const [sort, setSort] = useState(null)
+  const [active, setActive] = useState(null)
 
   useEffect(() => {
     setSort(null)
   }, [rows])
 
+  useEffect(() => {
+    setActive(null)
+  }, [editable, rows])
+
   const orderedRows = useMemo(() => {
-    const entries = rows.map((row, index) => ({ row, index }))
+    const entries = rows.map((row, origIndex) => ({ row, origIndex }))
     if (!sort || sort.index >= columns.length) return entries
 
     const factor = sort.direction === 'asc' ? 1 : -1
@@ -82,6 +90,24 @@ export default function ResultGrid({
       }),
     [columns, visibleRows],
   )
+
+  const cellValue = (origIndex, columnIndex) => rows[origIndex]?.[columnIndex]
+
+  const handleCellClick = (origIndex, columnIndex) => {
+    if (!editable || !onCellChange) return
+    if (columnRelations[columnIndex]) return
+    setActive({ row: origIndex, col: columnIndex })
+  }
+
+  const commitEdit = (value) => {
+    if (!active || !onCellChange) return
+    const column = columns[active.col]
+    if (!column) return
+    onCellChange(active.row, column.name, value, cellValue(active.row, active.col))
+    setActive(null)
+  }
+
+  const cancelEdit = () => setActive(null)
 
   if (rows.length === 0) {
     return (
@@ -142,42 +168,57 @@ export default function ResultGrid({
           </tr>
         </thead>
         <tbody>
-          {visibleRows.map(({ row, index }, rowIndex) => (
+          {visibleRows.map(({ row, origIndex }, visibleIdx) => (
             <tr
-              key={index}
-              onClick={() => onRowClick(index)}
-              className={`group cursor-pointer ${selectedIndex === index ? 'bg-tint/[0.04]' : ''}`}
+              key={origIndex}
+              onClick={() => onRowClick(origIndex)}
+              className={`group cursor-pointer ${selectedIndex === origIndex ? 'bg-tint/[0.04]' : ''}`}
             >
               <td
                 className={`sticky left-0 z-10 border-b border-r border-line px-2 py-[5px] text-right font-mono text-[length:calc(var(--grid-font-size)-2px)] text-text-faint group-hover:bg-row-hover ${
-                  selectedIndex === index ? 'bg-tint/[0.04]' : 'bg-surface'
+                  selectedIndex === origIndex ? 'bg-tint/[0.04]' : 'bg-surface'
                 }`}
               >
-                {rowIndex + 1}
+                {visibleIdx + 1}
               </td>
-              {columns.map((_, index) => (
-                <td
-                  key={index}
-                  className={`whitespace-nowrap border-b border-line/70 px-3 py-[5px] group-hover:bg-row-hover ${
-                    numericColumns[index] ? 'text-right tabular-nums' : ''
-                  }`}
-                >
-                  {columnRelations[index] && row[index] !== null && row[index] !== undefined ? (
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        onRelationClick(columnRelations[index], row[index])
-                      }}
-                      className="cursor-pointer border-b border-dashed border-text-muted/50 hover:border-text-soft"
-                    >
-                      {String(row[index])}
-                    </button>
-                  ) : (
-                    <Cell value={row[index]} />
-                  )}
-                </td>
-              ))}
+              {columns.map((column, colIndex) => {
+                const cellKey = `${origIndex}:${column.name}`
+                const dirty = cellKey in edits
+                const display = dirty ? edits[cellKey].value : row[colIndex]
+                return (
+                  <td
+                    key={column.name}
+                    onClick={() => handleCellClick(origIndex, colIndex)}
+                    title={dirty ? 'Pending update' : undefined}
+                    className={`whitespace-nowrap border-b border-line/70 px-3 py-[5px] group-hover:bg-row-hover ${
+                      numericColumns[colIndex] ? 'text-right tabular-nums' : ''
+                    } ${dirty ? 'bg-warning/[0.08]' : ''} ${
+                      editable && !columnRelations[colIndex] ? 'cursor-text' : ''
+                    }`}
+                  >
+                    {active?.row === origIndex && active?.col === colIndex ? (
+                      <CellEditor
+                        value={display}
+                        onCommit={commitEdit}
+                        onCancel={cancelEdit}
+                      />
+                    ) : columnRelations[colIndex] && display !== null && display !== undefined ? (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onRelationClick(columnRelations[colIndex], display)
+                        }}
+                        className="cursor-pointer border-b border-dashed border-text-muted/50 hover:border-text-soft"
+                      >
+                        {String(display)}
+                      </button>
+                    ) : (
+                      <Cell value={display} />
+                    )}
+                  </td>
+                )
+              })}
             </tr>
           ))}
         </tbody>
@@ -213,6 +254,71 @@ function Cell({ value }) {
       title={isLong ? text : undefined}
     >
       {text}
+    </span>
+  )
+}
+
+function CellEditor({ value, onCommit, onCancel }) {
+  const isNull = value === null || value === undefined
+  const initial = isNull ? '' : String(value)
+  const [draft, setDraft] = useState(initial)
+
+  const finish = (next) => {
+    if (next === null) {
+      onCommit(null)
+      return
+    }
+    if (isNull) {
+      onCommit(next === '' ? null : next)
+      return
+    }
+    if (typeof value === 'number') {
+      const trimmed = next.trim()
+      if (trimmed === '') {
+        onCommit(null)
+        return
+      }
+      const parsed = Number(trimmed)
+      if (Number.isFinite(parsed)) {
+        onCommit(parsed)
+        return
+      }
+    }
+    onCommit(next)
+  }
+
+  return (
+    <span className="flex items-center gap-1">
+      <input
+        type="text"
+        defaultValue={initial}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            finish(draft)
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            onCancel()
+          }
+        }}
+        onBlur={() => finish(draft)}
+        autoFocus
+        className="min-w-0 flex-1 rounded border border-accent/60 bg-base px-1 py-0 text-[length:inherit] text-text outline-none"
+        style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
+      />
+      {isNull ? (
+        <button
+          type="button"
+          title="Set NULL"
+          className="text-[length:var(--app-text-10)] text-text-faint hover:text-text"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => onCommit(null)}
+        >
+          NULL
+        </button>
+      ) : null}
     </span>
   )
 }

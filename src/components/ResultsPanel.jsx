@@ -24,15 +24,33 @@ function rowJson(columns, row) {
   return JSON.stringify(record, null, 2)
 }
 
-export default function ResultsPanel({ state, activeSet, onSelectSet, relations, onRelationClick }) {
+export default function ResultsPanel({
+  state,
+  activeSet,
+  onSelectSet,
+  relations,
+  onRelationClick,
+  onCopyJson,
+  editSource,
+  edits = {},
+  onCellChange,
+  onDiscardEdits,
+  onCopyUpdate,
+  onOpenUpdate,
+}) {
   const { status, result, error } = state
   const resultSets = result?.resultSets ?? []
   const activeIndex = Math.min(activeSet ?? 0, Math.max(resultSets.length - 1, 0))
   const activeResultSet = resultSets[activeIndex]
   const rowsAffected = (result?.rowsAffected ?? []).reduce((total, count) => total + count, 0)
   const [selectedRow, setSelectedRow] = useState(null)
+  const [editMode, setEditMode] = useState(false)
   const [panelWidth, setPanelWidth] = useState(ROW_PANEL_DEFAULT_WIDTH)
   const splitRef = useRef(null)
+
+  const hasKey = Boolean(editSource && editSource.primaryKey.length)
+  const editable = hasKey && Boolean(activeResultSet) && resultSets.length === 1
+  const changeCount = Object.keys(edits).length
 
   const handleSelectRow = useCallback((index) => {
     setSelectedRow((prev) => (prev === index ? null : index))
@@ -41,6 +59,10 @@ export default function ResultsPanel({ state, activeSet, onSelectSet, relations,
   useEffect(() => {
     setSelectedRow(null)
   }, [result])
+
+  useEffect(() => {
+    setEditMode(false)
+  }, [result, editSource])
 
   const handlePanelPointerDown = useCallback(
     (event) => {
@@ -73,6 +95,27 @@ export default function ResultsPanel({ state, activeSet, onSelectSet, relations,
 
   const selectedValues =
     selectedRow === null || !activeResultSet ? null : activeResultSet.rows[selectedRow] ?? null
+
+  const selectedJson =
+    selectedValues && activeResultSet ? rowJson(activeResultSet.columns, selectedValues) : ''
+
+  const [copied, setCopied] = useState(false)
+  const copyTimer = useRef(null)
+
+  useEffect(() => {
+    setCopied(false)
+  }, [selectedJson])
+
+  useEffect(() => () => window.clearTimeout(copyTimer.current), [])
+
+  const handleCopy = useCallback(async () => {
+    if (!selectedJson || !onCopyJson) return
+    const written = await onCopyJson(selectedJson)
+    if (!written) return
+    setCopied(true)
+    window.clearTimeout(copyTimer.current)
+    copyTimer.current = window.setTimeout(() => setCopied(false), 1500)
+  }, [onCopyJson, selectedJson])
 
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-surface">
@@ -121,6 +164,65 @@ export default function ResultsPanel({ state, activeSet, onSelectSet, relations,
           : null}
 
         <div className="ml-auto flex shrink-0 items-center gap-3 pl-3 text-[length:var(--app-text-11)] text-text-muted">
+          {status === 'success' && editable ? (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setEditMode((prev) => !prev)}
+                title="Edit cells and generate UPDATE statements"
+                className={`flex h-6 items-center gap-1 rounded px-1.5 text-[length:var(--app-text-11)] transition-colors ${
+                  editMode
+                    ? 'bg-accent/15 text-accent'
+                    : 'text-text-muted hover:bg-tint/[0.05] hover:text-text'
+                }`}
+              >
+                <Icon name="pencil" size={11} />
+                {editMode ? 'Editing' : 'Edit'}
+              </button>
+              {changeCount > 0 ? (
+                <>
+                  <span className="rounded bg-warning/15 px-1.5 text-[length:var(--app-text-10)] font-medium tabular-nums text-warning">
+                    {changeCount} change{changeCount === 1 ? '' : 's'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={onCopyUpdate}
+                    title="Copy UPDATE statements for the changes"
+                    className="flex h-6 items-center gap-1 rounded px-1.5 text-[length:var(--app-text-11)] text-text-soft hover:bg-tint/[0.05] hover:text-text"
+                  >
+                    <Icon name="copy" size={11} />
+                    Copy update
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onOpenUpdate}
+                    title="Open the UPDATE statements in a new query tab"
+                    className="flex h-6 items-center gap-1 rounded px-1.5 text-[length:var(--app-text-11)] text-text-soft hover:bg-tint/[0.05] hover:text-text"
+                  >
+                    <Icon name="code" size={11} />
+                    Open update
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onDiscardEdits}
+                    title="Discard pending changes"
+                    className="flex h-6 items-center rounded px-1.5 text-[length:var(--app-text-11)] text-text-muted hover:bg-tint/[0.05] hover:text-text"
+                  >
+                    Discard
+                  </button>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+          {status === 'success' && editSource && !hasKey ? (
+            <span
+              title="Editing needs a primary key so each row can be identified in the UPDATE WHERE clause."
+              className="flex items-center gap-1 rounded bg-tint/[0.05] px-1.5 text-[length:var(--app-text-10)] text-text-faint"
+            >
+              <Icon name="lock" size={10} />
+              Read-only · no primary key
+            </span>
+          ) : null}
           {status === 'success' && result ? (
             <>
               <span className="tabular-nums">{formatNumber(result.rowCount)} rows</span>
@@ -172,6 +274,9 @@ export default function ResultsPanel({ state, activeSet, onSelectSet, relations,
                     onRelationClick={onRelationClick}
                     onRowClick={handleSelectRow}
                     selectedIndex={selectedRow}
+                    editable={editMode && editable}
+                    edits={edits}
+                    onCellChange={onCellChange}
                   />
                 </div>
 
@@ -197,13 +302,25 @@ export default function ResultsPanel({ state, activeSet, onSelectSet, relations,
                         <button
                           type="button"
                           className="icon-btn ml-auto h-5 w-5"
+                          title="Copy JSON"
+                          onClick={handleCopy}
+                        >
+                          <Icon
+                            name="copy"
+                            size={12}
+                            className={copied ? 'text-success' : undefined}
+                          />
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-btn h-5 w-5"
                           title="Close"
                           onClick={() => setSelectedRow(null)}
                         >
                           <Icon name="x" size={12} />
                         </button>
                       </div>
-                      <JsonView text={rowJson(activeResultSet.columns, selectedValues)} />
+                      <JsonView text={selectedJson} onCopy={onCopyJson} />
                     </div>
                   </>
                 ) : null}
