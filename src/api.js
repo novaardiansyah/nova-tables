@@ -65,6 +65,12 @@ export const api = {
   tableRelations: async (connectionId, database, schema, table) =>
     (await call(() => bridge().tables.relations({ connectionId, database, schema, table }))).relations,
 
+  listModules: async (connectionId, database) =>
+    (await call(() => bridge().modules.list({ connectionId, database }))).modules,
+
+  moduleDefinition: async (connectionId, database, schema, name) =>
+    call(() => bridge().modules.definition({ connectionId, database, schema, name })),
+
   runQuery: async (input) => call(() => bridge().query.run(input)),
 
   copyText: async (text) => call(() => bridge().clipboard.writeText(text)),

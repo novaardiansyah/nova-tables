@@ -25,7 +25,16 @@ SELECT TOP (100) *
 FROM sys.databases;
 `
 
+const NEW_FUNCTION_SQL = `CREATE FUNCTION dbo.fn_name()
+RETURNS INT
+AS
+BEGIN
+    RETURN 0
+END
+`
+
 const EMPTY_TABLES = { status: 'idle', database: null, tables: [], error: null }
+const EMPTY_MODULES = { status: 'idle', database: null, modules: [], error: null }
 const IDLE_QUERY = { status: 'idle', result: null, error: null }
 const EDITOR_DEFAULT_HEIGHT = 320
 const BROWSE_ROWS = 300
@@ -195,9 +204,11 @@ function createSession(result, connection, database, tab) {
     connection,
     activeDatabase: database,
     tables: EMPTY_TABLES,
+    modules: EMPTY_MODULES,
     tabs: [tab],
     activeTabId: tab.id,
     selectedTable: null,
+    selectedModule: null,
   }
 }
 
@@ -230,6 +241,7 @@ export default function App() {
   const tabIdRef = useRef(1)
   const splitRef = useRef(null)
   const tablesRequestRef = useRef({})
+  const modulesRequestRef = useRef({})
 
   useEffect(() => {
     sessionsRef.current = sessions
@@ -347,6 +359,23 @@ export default function App() {
     [patchSession],
   )
 
+  const loadModules = useCallback(
+    async (connectionId, database) => {
+      const requestId = (modulesRequestRef.current[connectionId] || 0) + 1
+      modulesRequestRef.current[connectionId] = requestId
+      patchSession(connectionId, { modules: { status: 'loading', database, modules: [], error: null } })
+      try {
+        const modules = await api.listModules(connectionId, database)
+        if (modulesRequestRef.current[connectionId] !== requestId) return
+        patchSession(connectionId, { modules: { status: 'ready', database, modules, error: null } })
+      } catch (error) {
+        if (modulesRequestRef.current[connectionId] !== requestId) return
+        patchSession(connectionId, { modules: { status: 'error', database, modules: [], error: error.message } })
+      }
+    },
+    [patchSession],
+  )
+
   const seedEditor = useCallback((sql, focus = true) => {
     seedIdRef.current += 1
     sqlRef.current = sql
@@ -423,6 +452,7 @@ export default function App() {
         setScreen('workspace')
         seedEditor(tab.sql)
         await loadTables(connection.id, database)
+        await loadModules(connection.id, database)
       } catch (error) {
         if (error.code === 'PASSWORD_MISSING') {
           setDialog({
@@ -437,7 +467,7 @@ export default function App() {
         setConnectingId(null)
       }
     },
-    [activateSession, loadTables, seedEditor, showBanner],
+    [activateSession, loadModules, loadTables, seedEditor, showBanner],
   )
 
   const openConnectionScreen = useCallback(() => {
@@ -481,8 +511,9 @@ export default function App() {
       if (!current || !database) return
       patchSession(current.connectionId, { activeDatabase: database })
       await loadTables(current.connectionId, database)
+      await loadModules(current.connectionId, database)
     },
-    [activeSession, loadTables, patchSession],
+    [activeSession, loadModules, loadTables, patchSession],
   )
 
   const handleRefreshDatabases = useCallback(
@@ -492,12 +523,17 @@ export default function App() {
       try {
         const databases = await api.listDatabases(connectionId)
         patchSession(connectionId, { databases })
+        const database = current.activeDatabase
+        if (database) {
+          await loadTables(connectionId, database)
+          await loadModules(connectionId, database)
+        }
         showBanner('success', `Refreshed databases (${databases.length}).`)
       } catch (error) {
         showBanner('error', error.message)
       }
     },
-    [patchSession, showBanner],
+    [loadModules, loadTables, patchSession, showBanner],
   )
 
   const handleSelectTable = useCallback(
@@ -505,6 +541,15 @@ export default function App() {
       const current = activeSession()
       if (!current) return
       patchSession(current.connectionId, { selectedTable: key })
+    },
+    [activeSession, patchSession],
+  )
+
+  const handleSelectModule = useCallback(
+    (key) => {
+      const current = activeSession()
+      if (!current) return
+      patchSession(current.connectionId, { selectedModule: key })
     },
     [activeSession, patchSession],
   )
@@ -689,6 +734,66 @@ export default function App() {
     },
     [activeSession, showBanner],
   )
+
+  const handleOpenModule = useCallback(
+    async (module) => {
+      const current = activeSession()
+      if (!current) return
+      if (!current.activeDatabase) {
+        showBanner('warn', 'Select a database before opening a routine.')
+        return
+      }
+      try {
+        const result = await api.moduleDefinition(
+          current.connectionId,
+          current.activeDatabase,
+          module.schema,
+          module.name,
+        )
+        openTab(current.connectionId, module.name, `${result.statement}\n`)
+        showBanner(
+          'warn',
+          `ALTER statement for ${module.schema}.${module.name} is not executed. Review and run it manually.`,
+        )
+      } catch (error) {
+        showBanner('error', error.message)
+      }
+    },
+    [activeSession, openTab, showBanner],
+  )
+
+  const handleCopyModuleDefinition = useCallback(
+    async (module) => {
+      const current = activeSession()
+      if (!current) {
+        showBanner('warn', 'Open a connection before copying a definition.')
+        return
+      }
+      if (!current.activeDatabase) {
+        showBanner('warn', 'Select a database before copying a definition.')
+        return
+      }
+      try {
+        const result = await api.moduleDefinition(
+          current.connectionId,
+          current.activeDatabase,
+          module.schema,
+          module.name,
+        )
+        await api.copyText(result.definition)
+        showBanner('success', `Copied definition of ${module.schema}.${module.name}.`)
+      } catch (error) {
+        showBanner('error', error.message)
+      }
+    },
+    [activeSession, showBanner],
+  )
+
+  const handleNewFunction = useCallback(() => {
+    const current = activeSession()
+    if (!current) return
+    openTab(current.connectionId, 'New function', NEW_FUNCTION_SQL)
+  }, [activeSession, openTab])
 
   const handleCopyText = useCallback(
     async (text, message = 'Copied to clipboard.') => {
@@ -1463,8 +1568,6 @@ export default function App() {
           <Sidebar
             sessions={Object.values(sessions)}
             activeConnectionId={activeConnectionId}
-            activeDatabase={session.activeDatabase}
-            tablesState={session.tables}
             appVersion={appVersion}
             pinnedTables={pinnedTables}
             onActivateSession={activateSession}
@@ -1474,6 +1577,9 @@ export default function App() {
             onCopyObjectName={handleCopyObjectName}
             onCopyStructure={handleCopyStructure}
             onOpenStructure={handleOpenStructure}
+            onOpenModule={handleOpenModule}
+            onCopyModuleDefinition={handleCopyModuleDefinition}
+            onNewFunction={handleNewFunction}
             onNewTable={handleNewTable}
             onRenameTable={handleRenameTable}
             onCloneTable={handleCloneTable}
@@ -1483,6 +1589,8 @@ export default function App() {
             onOpenConnections={openConnectionScreen}
             selectedTable={session.selectedTable}
             onSelectTable={handleSelectTable}
+            selectedModule={session.selectedModule}
+            onSelectModule={handleSelectModule}
             onRefreshDatabases={handleRefreshDatabases}
           />
 

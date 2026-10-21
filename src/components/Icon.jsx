@@ -49,6 +49,19 @@ const ICONS = {
       <path d="M9.5 9.5V20" />
     </>
   ),
+  procedure: (
+    <>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="2" />
+      <path d="M9 8h4.5a2.25 2.25 0 010 4.5H9z" />
+      <path d="M9 8v8" />
+    </>
+  ),
+  function: (
+    <>
+      <path d="M15.5 4.5c-2.6 0-3.8 1.6-4.2 4.1L10 16c-.3 1.9-1.2 3-2.9 3" />
+      <path d="M9.5 11.5h6" />
+    </>
+  ),
   play: (
     <>
       <path d="M7.5 4.5l11 7.5-11 7.5z" />
