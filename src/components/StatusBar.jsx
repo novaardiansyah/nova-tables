@@ -2,23 +2,23 @@ import Icon, { Spinner } from './Icon.jsx'
 
 export default function StatusBar({ session, activeDatabase, queryStatus }) {
   return (
-    <footer className="flex h-7 shrink-0 items-center justify-between gap-4 border-t border-line bg-panel px-3 text-[length:var(--app-text-10)] text-slate-500">
+    <footer className="flex h-7 shrink-0 items-center justify-between gap-4 border-t border-line bg-panel px-3 text-[length:var(--app-text-10)] text-text-muted">
       <div className="flex min-w-0 items-center gap-3">
         {session ? (
           <>
             <span className="flex min-w-0 items-center gap-1.5">
-              <Icon name="server" size={11} className="shrink-0 text-slate-600" />
+              <Icon name="server" size={11} className="shrink-0 text-text-faint" />
               <span className="truncate">{session.serverName}</span>
             </span>
             {session.serverVersion ? (
               <>
-                <span className="text-slate-700">•</span>
+                <span className="text-text-faint">•</span>
                 <span className="shrink-0">SQL Server {session.serverVersion}</span>
               </>
             ) : null}
             {session.edition ? (
               <>
-                <span className="text-slate-700">•</span>
+                <span className="text-text-faint">•</span>
                 <span className="hidden truncate xl:block">{session.edition}</span>
               </>
             ) : null}
@@ -31,7 +31,7 @@ export default function StatusBar({ session, activeDatabase, queryStatus }) {
       <div className="flex shrink-0 items-center gap-3">
         {activeDatabase ? (
           <span className="flex items-center gap-1.5">
-            <Icon name="database" size={10} className="text-slate-600" />
+            <Icon name="database" size={10} className="text-text-faint" />
             {activeDatabase}
           </span>
         ) : null}
@@ -43,13 +43,13 @@ export default function StatusBar({ session, activeDatabase, queryStatus }) {
           </span>
         ) : null}
         {queryStatus === 'success' ? (
-          <span className="flex items-center gap-1.5 text-emerald-400/80">
+          <span className="flex items-center gap-1.5 text-success/80">
             <Icon name="check-circle" size={10} />
             Query succeeded
           </span>
         ) : null}
         {queryStatus === 'error' ? (
-          <span className="flex items-center gap-1.5 text-rose-400">
+          <span className="flex items-center gap-1.5 text-danger">
             <Icon name="alert-triangle" size={10} />
             Query failed
           </span>

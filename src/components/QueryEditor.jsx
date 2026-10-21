@@ -93,7 +93,7 @@ export default function QueryEditor({ seed, theme, settings, onChange, onRun }) 
         }}
         options={{ ...EDITOR_OPTIONS, fontFamily, fontSize, lineHeight }}
         loading={
-          <div className="flex items-center gap-2 p-4 text-[length:var(--app-text-12)] text-slate-500">
+          <div className="flex items-center gap-2 p-4 text-[length:var(--app-text-12)] text-text-muted">
             <Spinner size={13} />
             Loading editor…
           </div>

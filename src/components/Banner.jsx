@@ -3,23 +3,23 @@ import Icon from './Icon.jsx'
 const STYLES = {
   info: {
     icon: 'info',
-    wrap: 'border-accent/25 bg-accent-soft text-slate-200',
+    wrap: 'border-accent/25 bg-accent-soft text-text',
     iconClass: 'text-accent',
   },
   success: {
     icon: 'check-circle',
-    wrap: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100',
-    iconClass: 'text-emerald-400',
+    wrap: 'border-success/25 bg-success/10 text-success',
+    iconClass: 'text-success',
   },
   warn: {
     icon: 'alert-triangle',
-    wrap: 'border-amber-500/25 bg-amber-500/10 text-amber-100',
-    iconClass: 'text-amber-400',
+    wrap: 'border-warning/25 bg-warning/10 text-warning',
+    iconClass: 'text-warning',
   },
   error: {
     icon: 'alert-triangle',
-    wrap: 'border-rose-500/30 bg-rose-500/10 text-rose-100',
-    iconClass: 'text-rose-400',
+    wrap: 'border-danger/30 bg-danger/10 text-danger',
+    iconClass: 'text-danger',
   },
 }
 

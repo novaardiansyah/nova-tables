@@ -12,7 +12,7 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose, onNewTab 
             <div
               key={tab.id}
               className={`group flex min-w-0 max-w-[220px] shrink-0 items-center border-r border-line ${
-                isActive ? 'bg-base' : 'hover:bg-white/[0.03]'
+                isActive ? 'bg-base' : 'hover:bg-tint/[0.03]'
               }`}
             >
               <button
@@ -20,7 +20,7 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose, onNewTab 
                 onClick={() => onSelect(tab.id)}
                 title={tab.title}
                 className={`flex min-w-0 flex-1 items-center gap-1.5 py-2 pl-3 pr-1 text-left text-[length:var(--app-text-12)] ${
-                  isActive ? 'text-slate-100' : 'text-slate-500 hover:text-slate-300'
+                  isActive ? 'text-text-strong' : 'text-text-muted hover:text-text'
                 }`}
               >
                 {status === 'running' ? (
@@ -29,10 +29,10 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose, onNewTab 
                   <span
                     className={`h-[6px] w-[6px] shrink-0 rounded-full ${
                       status === 'error'
-                        ? 'bg-rose-400'
+                        ? 'bg-danger'
                         : status === 'success'
-                          ? 'bg-emerald-400/80'
-                          : 'bg-slate-700'
+                          ? 'bg-success/80'
+                          : 'bg-line-strong'
                     }`}
                   />
                 )}

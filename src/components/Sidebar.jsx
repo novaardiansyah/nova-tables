@@ -64,9 +64,9 @@ export default function Sidebar({
         key={key}
         onDoubleClick={() => onBrowseTable(table)}
         onContextMenu={(event) => handleTableContextMenu(event, table)}
-        className="group/table flex items-center gap-1.5 rounded px-2 py-[3px] text-[length:var(--app-text-12)] text-slate-400 hover:bg-white/[0.04]"
+        className="group/table flex items-center gap-1.5 rounded px-2 py-[3px] text-[length:var(--app-text-12)] text-text hover:bg-tint/[0.04]"
       >
-        <Icon name="table" size={11} className="shrink-0 text-slate-600" />
+        <Icon name="table" size={11} className="shrink-0 text-text-faint" />
         <button
           type="button"
           onClick={() => onSelectTable(key)}
@@ -75,7 +75,7 @@ export default function Sidebar({
           }`}
           title={`${table.schema}.${table.name}`}
         >
-          {table.schema !== 'dbo' ? <span className="text-slate-600">{table.schema}.</span> : null}
+          {table.schema !== 'dbo' ? <span className="text-text-faint">{table.schema}.</span> : null}
           <span className="truncate">{table.name}</span>
         </button>
         <button
@@ -108,12 +108,12 @@ export default function Sidebar({
           <Icon
             name="chevron-right"
             size={11}
-            className={`shrink-0 text-slate-600 transition-transform ${isOpen ? 'rotate-90' : ''}`}
+            className={`shrink-0 text-text-faint transition-transform ${isOpen ? 'rotate-90' : ''}`}
           />
-          <Icon name="database" size={12} className="shrink-0 text-slate-500" />
+          <Icon name="database" size={12} className="shrink-0 text-text-muted" />
           <span className="truncate">{database.name}</span>
           {!database.isOnline ? (
-            <span className="ml-auto rounded bg-amber-500/15 px-1 text-[length:var(--app-text-9)] font-medium uppercase text-amber-400">
+            <span className="ml-auto rounded bg-warning/15 px-1 text-[length:var(--app-text-9)] font-medium uppercase text-warning">
               offline
             </span>
           ) : null}
@@ -122,18 +122,18 @@ export default function Sidebar({
         {showTables ? (
           <div className="ml-3 space-y-px border-l border-line pl-1.5">
             {tablesState.status === 'loading' ? (
-              <div className="flex items-center gap-2 px-2 py-1 text-[length:var(--app-text-11)] text-slate-500">
+              <div className="flex items-center gap-2 px-2 py-1 text-[length:var(--app-text-11)] text-text-muted">
                 <Spinner size={11} />
                 Loading tables…
               </div>
             ) : null}
 
             {tablesState.status === 'error' ? (
-              <div className="px-2 py-1 text-[length:var(--app-text-11)] leading-[calc(var(--app-text-12)+4px)] text-rose-400">{tablesState.error}</div>
+              <div className="px-2 py-1 text-[length:var(--app-text-11)] leading-[calc(var(--app-text-12)+4px)] text-text-danger">{tablesState.error}</div>
             ) : null}
 
             {tablesState.status === 'ready' && tablesState.tables.length === 0 ? (
-              <p className="px-2 py-1 text-[length:var(--app-text-11)] text-slate-600">No tables</p>
+              <p className="px-2 py-1 text-[length:var(--app-text-11)] text-text-faint">No tables</p>
             ) : null}
 
             {tablesState.status === 'ready' ? orderedTables.map(renderTable) : null}
@@ -152,7 +152,7 @@ export default function Sidebar({
       <div key={item.connectionId} className="mb-1">
         <div
           className={`group relative flex items-center gap-1.5 rounded-md pr-1 ${
-            isActive ? 'bg-accent-soft' : 'hover:bg-white/[0.03]'
+            isActive ? 'bg-accent-soft' : 'hover:bg-tint/[0.03]'
           }`}
         >
           <button
@@ -163,18 +163,18 @@ export default function Sidebar({
           >
             <span
               className={`h-[7px] w-[7px] shrink-0 rounded-full ${
-                isActive ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]' : 'bg-slate-600'
+                isActive ? 'bg-success shadow-[0_0_6px_rgba(52,211,153,0.6)]' : 'bg-line-strong'
               }`}
             />
             <span className="min-w-0 flex-1">
               <span
                 className={`block truncate text-[length:var(--app-text-12)] font-medium ${
-                  isActive ? 'text-slate-100' : 'text-slate-400'
+                  isActive ? 'text-text-strong' : 'text-text-soft'
                 }`}
               >
                 {item.connection.name}
               </span>
-              <span className="block truncate text-[length:var(--app-text-10)] leading-[calc(var(--app-text-12)+4px)] text-slate-500">
+              <span className="block truncate text-[length:var(--app-text-10)] leading-[calc(var(--app-text-12)+4px)] text-text-muted">
                 {item.connection.host}:{item.connection.port}
                 {item.connection.database ? ` · ${item.connection.database}` : ''}
               </span>
@@ -205,14 +205,14 @@ export default function Sidebar({
           expanded ? (
             <div className="mt-0.5 space-y-px pl-3">
               {item.databases.length === 0 ? (
-                <p className="px-2 py-1 text-[length:var(--app-text-11)] text-slate-600">No databases visible</p>
+                <p className="px-2 py-1 text-[length:var(--app-text-11)] text-text-faint">No databases visible</p>
               ) : activeDatabaseInfo ? (
                 renderDatabase(activeDatabaseInfo)
               ) : null}
             </div>
           ) : null
         ) : (
-          <p className="mt-0.5 truncate px-2 py-1 pl-4 text-[length:var(--app-text-10)] text-slate-600">
+          <p className="mt-0.5 truncate px-2 py-1 pl-4 text-[length:var(--app-text-10)] text-text-faint">
             {item.databases.length} {item.databases.length === 1 ? 'database' : 'databases'}
           </p>
         )}
@@ -224,8 +224,8 @@ export default function Sidebar({
     <aside className="flex w-[272px] shrink-0 flex-col border-r border-line bg-panel">
       <div className="flex h-12 shrink-0 items-center gap-2.5 border-b border-line px-4">
         <BrandMark size={20} />
-        <span className="text-[length:var(--app-text-13)] font-semibold tracking-tight text-slate-100">Nova Tables</span>
-        <span className="ml-auto rounded border border-line-strong bg-white/[0.03] px-1.5 py-0.5 text-[length:var(--app-text-9)] font-semibold uppercase tracking-wider text-slate-500">
+        <span className="text-[length:var(--app-text-13)] font-semibold tracking-tight text-text-strong">Nova Tables</span>
+        <span className="ml-auto rounded border border-line-strong bg-tint/[0.03] px-1.5 py-0.5 text-[length:var(--app-text-9)] font-semibold uppercase tracking-wider text-text-muted">
           MSSQL
         </span>
       </div>
@@ -238,7 +238,7 @@ export default function Sidebar({
       </div>
 
       <div className="flex items-center justify-between px-4 pb-1.5">
-        <span className="text-[length:var(--app-text-10)] font-semibold uppercase tracking-wider text-slate-600">
+        <span className="text-[length:var(--app-text-10)] font-semibold uppercase tracking-wider text-text-faint">
           Open connections
         </span>
       </div>
@@ -246,16 +246,16 @@ export default function Sidebar({
       <div className="flex-1 overflow-y-auto px-2 pb-3">
         {sessions.length === 0 ? (
           <div className="mx-1 mt-2 rounded-lg border border-dashed border-line-strong px-3 py-6 text-center">
-            <Icon name="server" size={18} className="mx-auto mb-2 text-slate-600" />
-            <p className="text-[length:var(--app-text-12)] text-slate-500">No connection open</p>
-            <p className="mt-1 text-[length:var(--app-text-11)] text-slate-600">Pick one to browse its databases.</p>
+            <Icon name="server" size={18} className="mx-auto mb-2 text-text-faint" />
+            <p className="text-[length:var(--app-text-12)] text-text-muted">No connection open</p>
+            <p className="mt-1 text-[length:var(--app-text-11)] text-text-faint">Pick one to browse its databases.</p>
           </div>
         ) : (
           sessions.map(renderSession)
         )}
       </div>
 
-      <div className="flex h-8 shrink-0 items-center justify-between border-t border-line px-4 text-[length:var(--app-text-10)] text-slate-600">
+      <div className="flex h-8 shrink-0 items-center justify-between border-t border-line px-4 text-[length:var(--app-text-10)] text-text-faint">
         <span>Microsoft SQL Server</span>
         <span>{appVersion ? `v${appVersion}` : ''}</span>
       </div>

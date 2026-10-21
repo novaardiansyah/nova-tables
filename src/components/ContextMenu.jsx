@@ -56,7 +56,7 @@ export default function ContextMenu({ x, y, items, onClose }) {
             item.onSelect?.()
             onClose()
           }}
-          className="flex w-full items-center px-3 py-[5px] text-left text-[length:var(--app-text-12)] text-slate-300 hover:bg-white/[0.06] hover:text-slate-100"
+          className="flex w-full items-center px-3 py-[5px] text-left text-[length:var(--app-text-12)] text-text hover:bg-tint/[0.06] hover:text-text-strong"
         >
           {item.label}
         </button>

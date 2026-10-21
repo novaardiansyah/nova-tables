@@ -4,6 +4,11 @@ export const THEMES = [
   { id: 'graphite', label: 'Graphite Amber' },
   { id: 'forest', label: 'Forest Green' },
   { id: 'rose', label: 'Rose Quartz' },
+  { id: 'light-nova', label: 'Light Nova' },
+  { id: 'light-midnight', label: 'Light Midnight' },
+  { id: 'light-graphite', label: 'Light Graphite' },
+  { id: 'light-forest', label: 'Light Forest' },
+  { id: 'light-rose', label: 'Light Rose' },
 ]
 
 const SANS_FALLBACK =

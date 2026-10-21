@@ -94,7 +94,7 @@ export default function ConnectionsScreen({
       <div
         key={connection.id}
         style={{ marginLeft: depth * 14 }}
-        className="group/conn flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-white/[0.04]"
+        className="group/conn flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-tint/[0.04]"
       >
         <button
           type="button"
@@ -108,20 +108,20 @@ export default function ConnectionsScreen({
           ) : (
             <span
               className={`h-[7px] w-[7px] shrink-0 rounded-full ${
-                isOpen ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]' : 'bg-slate-700'
+                isOpen ? 'bg-success shadow-[0_0_6px_rgba(52,211,153,0.6)]' : 'bg-line-strong'
               }`}
             />
           )}
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-1.5">
-              <span className="truncate text-[length:var(--app-text-12)] text-slate-200">{connection.name}</span>
+              <span className="truncate text-[length:var(--app-text-12)] text-text">{connection.name}</span>
               {isOpen ? (
-                <span className="shrink-0 rounded border border-emerald-500/30 bg-emerald-500/10 px-1 text-[length:var(--app-text-9)] font-semibold uppercase tracking-wide text-emerald-400">
+                <span className="shrink-0 rounded border border-success/30 bg-success/10 px-1 text-[length:var(--app-text-9)] font-semibold uppercase tracking-wide text-success">
                   open
                 </span>
               ) : null}
             </span>
-            <span className="block truncate text-[length:var(--app-text-10)] leading-[calc(var(--app-text-12)+4px)] text-slate-600">
+            <span className="block truncate text-[length:var(--app-text-10)] leading-[calc(var(--app-text-12)+4px)] text-text-faint">
               {connection.host}:{connection.port}
               {connection.database ? ` · ${connection.database}` : ''}
             </span>
@@ -147,7 +147,7 @@ export default function ConnectionsScreen({
           </button>
           <button
             type="button"
-            className="icon-btn h-6 w-6 hover:text-rose-400"
+            className="icon-btn h-6 w-6 hover:text-danger"
             title="Delete connection"
             onClick={() => onDeleteConnection(connection)}
           >
@@ -168,7 +168,7 @@ export default function ConnectionsScreen({
       <div key={folder.id}>
         <div
           style={{ marginLeft: depth * 14 }}
-          className="group/folder flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-white/[0.03]"
+          className="group/folder flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-tint/[0.03]"
         >
           <button
             type="button"
@@ -179,11 +179,11 @@ export default function ConnectionsScreen({
             <Icon
               name="chevron-right"
               size={11}
-              className={`shrink-0 text-slate-600 transition-transform ${isOpen ? 'rotate-90' : ''}`}
+              className={`shrink-0 text-text-faint transition-transform ${isOpen ? 'rotate-90' : ''}`}
             />
-            <Icon name="folder" size={13} className="shrink-0 text-amber-400/70" />
-            <span className="truncate text-[length:var(--app-text-12)] font-medium text-slate-200">{folder.name}</span>
-            <span className="shrink-0 text-[length:var(--app-text-10)] tabular-nums text-slate-600">{childCount}</span>
+            <Icon name="folder" size={13} className="shrink-0 text-warning/70" />
+            <span className="truncate text-[length:var(--app-text-12)] font-medium text-text">{folder.name}</span>
+            <span className="shrink-0 text-[length:var(--app-text-10)] tabular-nums text-text-faint">{childCount}</span>
           </button>
 
           <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/folder:opacity-100">
@@ -205,7 +205,7 @@ export default function ConnectionsScreen({
             </button>
             <button
               type="button"
-              className="icon-btn h-6 w-6 hover:text-rose-400"
+              className="icon-btn h-6 w-6 hover:text-danger"
               title="Delete folder"
               onClick={() => setDeleteTarget(folder)}
             >
@@ -221,7 +221,7 @@ export default function ConnectionsScreen({
             {childCount === 0 ? (
               <p
                 style={{ marginLeft: (depth + 1) * 14 }}
-                className="px-2 py-1 text-[length:var(--app-text-11)] text-slate-600"
+                className="px-2 py-1 text-[length:var(--app-text-11)] text-text-faint"
               >
                 Empty folder
               </p>
@@ -240,8 +240,8 @@ export default function ConnectionsScreen({
     <div className="flex min-h-0 flex-1 flex-col bg-base">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line px-6">
         <BrandMark size={22} />
-        <span className="text-[length:var(--app-text-13)] font-semibold tracking-tight text-slate-100">Nova Tables</span>
-        <span className="rounded border border-line-strong bg-white/[0.03] px-1.5 py-0.5 text-[length:var(--app-text-9)] font-semibold uppercase tracking-wider text-slate-500">
+        <span className="text-[length:var(--app-text-13)] font-semibold tracking-tight text-text-strong">Nova Tables</span>
+        <span className="rounded border border-line-strong bg-tint/[0.03] px-1.5 py-0.5 text-[length:var(--app-text-9)] font-semibold uppercase tracking-wider text-text-muted">
           MSSQL
         </span>
 
@@ -259,16 +259,16 @@ export default function ConnectionsScreen({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-7">
         <div className="mx-auto w-full max-w-3xl">
-          <h1 className="text-[length:var(--app-text-15)] font-semibold text-slate-100">Connections</h1>
-          <p className="mt-1 text-[length:var(--app-text-12)] text-slate-500">
+          <h1 className="text-[length:var(--app-text-15)] font-semibold text-text-strong">Connections</h1>
+          <p className="mt-1 text-[length:var(--app-text-12)] text-text-muted">
             Pick a connection to open it, or group them into folders.
           </p>
 
           {isEmpty ? (
             <div className="mt-8 rounded-xl border border-dashed border-line-strong px-6 py-12 text-center">
-              <Icon name="server" size={22} className="mx-auto mb-3 text-slate-600" />
-              <p className="text-[length:var(--app-text-13)] text-slate-400">No saved connections</p>
-              <p className="mt-1 text-[length:var(--app-text-12)] text-slate-600">
+              <Icon name="server" size={22} className="mx-auto mb-3 text-text-faint" />
+              <p className="text-[length:var(--app-text-13)] text-text-soft">No saved connections</p>
+              <p className="mt-1 text-[length:var(--app-text-12)] text-text-faint">
                 Create one to start browsing your databases.
               </p>
               <button type="button" className="btn-primary mt-4" onClick={onNewConnection}>
@@ -285,7 +285,7 @@ export default function ConnectionsScreen({
         </div>
       </div>
 
-      <footer className="flex h-9 shrink-0 items-center justify-between border-t border-line px-6 text-[length:var(--app-text-10)] text-slate-600">
+      <footer className="flex h-9 shrink-0 items-center justify-between border-t border-line px-6 text-[length:var(--app-text-10)] text-text-faint">
         <span>
           {connections.length} {connections.length === 1 ? 'connection' : 'connections'}
           {folders.length > 0 ? ` · ${folders.length} ${folders.length === 1 ? 'folder' : 'folders'}` : ''}

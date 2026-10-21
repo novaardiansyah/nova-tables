@@ -86,7 +86,7 @@ export default function ResultGrid({
   if (rows.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
-        <p className="text-[var(--grid-font-size)] text-slate-500">
+        <p className="text-[var(--grid-font-size)] text-text-muted">
           Query returned no rows
           {columns.length > 0 ? ` (${columns.length} columns)` : ''}
         </p>
@@ -102,13 +102,13 @@ export default function ResultGrid({
       >
         <thead>
           <tr>
-            <th className="sticky left-0 top-0 z-30 w-12 border-b border-r border-line bg-elevated px-2 py-1.5 text-right text-[length:calc(var(--grid-font-size)-2px)] font-medium text-slate-600">
+            <th className="sticky left-0 top-0 z-30 w-12 border-b border-r border-line bg-elevated px-2 py-1.5 text-right text-[length:calc(var(--grid-font-size)-2px)] font-medium text-text-faint">
               #
             </th>
             {columns.map((column, index) => (
               <th
                 key={`${column.name}-${index}`}
-                className={`sticky top-0 z-20 whitespace-nowrap border-b border-line bg-elevated text-[length:calc(var(--grid-font-size)-1px)] font-semibold tracking-wide text-slate-400 ${
+                className={`sticky top-0 z-20 whitespace-nowrap border-b border-line bg-elevated text-[length:calc(var(--grid-font-size)-1px)] font-semibold tracking-wide text-text-soft ${
                   numericColumns[index] ? 'text-right' : 'text-left'
                 }`}
               >
@@ -116,7 +116,7 @@ export default function ResultGrid({
                   type="button"
                   onClick={() => handleSort(index)}
                   title={`Sort by ${column.name}`}
-                  className={`group/sort flex w-full items-center gap-1.5 px-3 py-1.5 hover:text-slate-200 ${
+                  className={`group/sort flex w-full items-center gap-1.5 px-3 py-1.5 hover:text-text ${
                     numericColumns[index] ? 'justify-end' : ''
                   }`}
                 >
@@ -133,7 +133,7 @@ export default function ResultGrid({
                     className={`shrink-0 ${
                       sort?.index === index
                         ? 'text-accent'
-                        : 'text-slate-600 opacity-0 group-hover/sort:opacity-100'
+                        : 'text-text-faint opacity-0 group-hover/sort:opacity-100'
                     }`}
                   />
                 </button>
@@ -146,11 +146,11 @@ export default function ResultGrid({
             <tr
               key={index}
               onClick={() => onRowClick(index)}
-              className={`group cursor-pointer ${selectedIndex === index ? 'bg-white/[0.04]' : ''}`}
+              className={`group cursor-pointer ${selectedIndex === index ? 'bg-tint/[0.04]' : ''}`}
             >
               <td
-                className={`sticky left-0 z-10 border-b border-r border-line px-2 py-[5px] text-right font-mono text-[length:calc(var(--grid-font-size)-2px)] text-slate-600 group-hover:bg-row-hover ${
-                  selectedIndex === index ? 'bg-white/[0.04]' : 'bg-surface'
+                className={`sticky left-0 z-10 border-b border-r border-line px-2 py-[5px] text-right font-mono text-[length:calc(var(--grid-font-size)-2px)] text-text-faint group-hover:bg-row-hover ${
+                  selectedIndex === index ? 'bg-tint/[0.04]' : 'bg-surface'
                 }`}
               >
                 {rowIndex + 1}
@@ -169,7 +169,7 @@ export default function ResultGrid({
                         event.stopPropagation()
                         onRelationClick(columnRelations[index], row[index])
                       }}
-                      className="cursor-pointer border-b border-dashed border-slate-500/50 hover:border-slate-300"
+                      className="cursor-pointer border-b border-dashed border-text-muted/50 hover:border-text-soft"
                     >
                       {String(row[index])}
                     </button>
@@ -184,7 +184,7 @@ export default function ResultGrid({
       </table>
 
       {orderedRows.length > RENDER_LIMIT ? (
-        <p className="px-3 py-2 text-[length:calc(var(--grid-font-size)-1px)] text-slate-500">
+        <p className="px-3 py-2 text-[length:calc(var(--grid-font-size)-1px)] text-text-muted">
           Showing the first {RENDER_LIMIT.toLocaleString()} of {orderedRows.length.toLocaleString()} rows.
         </p>
       ) : null}
@@ -194,11 +194,11 @@ export default function ResultGrid({
 
 function Cell({ value }) {
   if (value === null || value === undefined) {
-    return <span className="font-mono text-[length:calc(var(--grid-font-size)-1px)] italic text-slate-600">NULL</span>
+    return <span className="font-mono text-[length:calc(var(--grid-font-size)-1px)] italic text-text-faint">NULL</span>
   }
 
   if (typeof value === 'number') {
-    return <span className="text-slate-200">{String(value)}</span>
+    return <span className="text-text">{String(value)}</span>
   }
 
   const text = String(value)
@@ -208,7 +208,7 @@ function Cell({ value }) {
   return (
     <span
       className={`inline-block max-w-[420px] truncate align-bottom ${
-        isDate ? 'text-sky-300' : 'text-slate-300'
+        isDate ? 'text-info' : 'text-text'
       }`}
       title={isLong ? text : undefined}
     >

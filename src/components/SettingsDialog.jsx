@@ -23,8 +23,8 @@ function Row({ label, hint, children }) {
   return (
     <div className="flex items-center justify-between gap-4 py-2">
       <div>
-        <p className="text-[length:var(--app-text-12)] text-slate-200">{label}</p>
-        {hint ? <p className="text-[length:var(--app-text-11)] text-slate-500">{hint}</p> : null}
+        <p className="text-[length:var(--app-text-12)] text-text">{label}</p>
+        {hint ? <p className="text-[length:var(--app-text-11)] text-text-muted">{hint}</p> : null}
       </div>
       {children}
     </div>
@@ -80,7 +80,7 @@ export default function SettingsDialog({ open, settings, onClose, onSave }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6 backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-6 backdrop-blur-[2px]"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !saving) handleCancel()
       }}
@@ -91,8 +91,8 @@ export default function SettingsDialog({ open, settings, onClose, onSave }) {
             <Icon name="settings" size={16} />
           </span>
           <div className="flex-1">
-            <h2 className="text-[length:var(--app-text-14)] font-semibold text-slate-100">Preferences</h2>
-            <p className="text-[length:var(--app-text-11)] text-slate-500">Theme and typography for the workspace.</p>
+            <h2 className="text-[length:var(--app-text-14)] font-semibold text-text-strong">Preferences</h2>
+            <p className="text-[length:var(--app-text-11)] text-text-muted">Theme and typography for the workspace.</p>
           </div>
           <button type="button" className="icon-btn" onClick={handleCancel} title="Close" disabled={saving}>
             <Icon name="x" size={15} />

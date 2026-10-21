@@ -129,7 +129,7 @@ export default function ConnectionDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6 backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-6 backdrop-blur-[2px]"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !saving) onClose()
       }}
@@ -140,10 +140,10 @@ export default function ConnectionDialog({
             <Icon name="server" size={16} />
           </span>
           <div className="flex-1">
-            <h2 className="text-[length:var(--app-text-14)] font-semibold text-slate-100">
+            <h2 className="text-[length:var(--app-text-14)] font-semibold text-text-strong">
               {isEdit ? 'Edit connection' : 'New SQL Server connection'}
             </h2>
-            <p className="text-[length:var(--app-text-11)] text-slate-500">
+            <p className="text-[length:var(--app-text-11)] text-text-muted">
               {isEdit ? 'Update the connection details below.' : 'Connect to a Microsoft SQL Server instance.'}
             </p>
           </div>
@@ -154,8 +154,8 @@ export default function ConnectionDialog({
 
         <form ref={formRef} onSubmit={handleSubmit} className="space-y-4 px-5 py-4">
           {notice ? (
-            <div className="flex items-start gap-2 rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] text-amber-200">
-              <Icon name="info" size={13} className="mt-0.5 shrink-0 text-amber-400" />
+            <div className="flex items-start gap-2 rounded-md border border-warning/25 bg-warning/10 px-3 py-2 text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] text-warning">
+              <Icon name="info" size={13} className="mt-0.5 shrink-0 text-warning" />
               <span>{notice}</span>
             </div>
           ) : null}
@@ -208,7 +208,7 @@ export default function ConnectionDialog({
 
           <div>
             <label className="field-label" htmlFor="conn-database">
-              Database <span className="normal-case text-slate-600">(optional)</span>
+              Database <span className="normal-case text-text-faint">(optional)</span>
             </label>
             <input
               id="conn-database"
@@ -263,13 +263,13 @@ export default function ConnectionDialog({
           </div>
 
           {isEdit && connection?.hasPassword ? (
-            <p className="-mt-2 text-[length:var(--app-text-11)] text-slate-500">
+            <p className="-mt-2 text-[length:var(--app-text-11)] text-text-muted">
               Leave the password blank to keep the saved password.
             </p>
           ) : null}
 
           <div className="space-y-2 rounded-lg border border-line bg-base px-3 py-2.5">
-            <label className="flex cursor-pointer items-center gap-2.5 text-[length:var(--app-text-12)] text-slate-300">
+            <label className="flex cursor-pointer items-center gap-2.5 text-[length:var(--app-text-12)] text-text">
               <input
                 type="checkbox"
                 checked={form.encrypt}
@@ -278,7 +278,7 @@ export default function ConnectionDialog({
               />
               Encrypt connection (TLS)
             </label>
-            <label className="flex cursor-pointer items-center gap-2.5 text-[length:var(--app-text-12)] text-slate-300">
+            <label className="flex cursor-pointer items-center gap-2.5 text-[length:var(--app-text-12)] text-text">
               <input
                 type="checkbox"
                 checked={form.trustServerCertificate}
@@ -289,7 +289,7 @@ export default function ConnectionDialog({
             </label>
           </div>
 
-          <p className="text-[length:var(--app-text-11)] leading-[calc(var(--app-text-12)+4px)] text-slate-600">
+          <p className="text-[length:var(--app-text-11)] leading-[calc(var(--app-text-12)+4px)] text-text-faint">
             Passwords are protected with Electron safeStorage and are never exposed to the interface.
           </p>
 
@@ -297,22 +297,22 @@ export default function ConnectionDialog({
             <div
               className={`flex items-start gap-2 rounded-md border px-3 py-2 text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] ${
                 testResult.ok
-                  ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
-                  : 'border-rose-500/25 bg-rose-500/10 text-rose-200'
+                  ? 'border-success/25 bg-success/10 text-success'
+                  : 'border-danger/25 bg-danger/10 text-danger'
               }`}
             >
               <Icon
                 name={testResult.ok ? 'check-circle' : 'alert-triangle'}
                 size={13}
-                className={`mt-0.5 shrink-0 ${testResult.ok ? 'text-emerald-400' : 'text-rose-400'}`}
+                className={`mt-0.5 shrink-0 ${testResult.ok ? 'text-success' : 'text-danger'}`}
               />
               <span className="break-words">{testResult.message}</span>
             </div>
           ) : null}
 
           {error ? (
-            <div className="flex items-start gap-2 rounded-md border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] text-rose-200">
-              <Icon name="alert-triangle" size={13} className="mt-0.5 shrink-0 text-rose-400" />
+            <div className="flex items-start gap-2 rounded-md border border-danger/25 bg-danger/10 px-3 py-2 text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] text-danger">
+              <Icon name="alert-triangle" size={13} className="mt-0.5 shrink-0 text-danger" />
               <span className="break-words">{error}</span>
             </div>
           ) : null}
@@ -340,5 +340,5 @@ export default function ConnectionDialog({
 
 function FieldError({ message }) {
   if (!message) return null
-  return <p className="mt-1 text-[length:var(--app-text-11)] text-rose-400">{message}</p>
+  return <p className="mt-1 text-[length:var(--app-text-11)] text-danger">{message}</p>
 }
