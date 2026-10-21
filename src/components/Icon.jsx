@@ -107,6 +107,13 @@ const ICONS = {
       <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
     </>
   ),
+  'panel-right': (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M14.5 4v16" />
+      <path d="M17.8 8h.01M17.8 12h.01M17.8 16h.01" />
+    </>
+  ),
   key: (
     <>
       <circle cx="7.5" cy="15.5" r="3.5" />

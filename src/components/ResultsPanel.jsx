@@ -48,6 +48,7 @@ export default function ResultsPanel({
   const [editMode, setEditMode] = useState(false)
   const [menu, setMenu] = useState(null)
   const [panelWidth, setPanelWidth] = useState(ROW_PANEL_DEFAULT_WIDTH)
+  const [panelOpen, setPanelOpen] = useState(false)
   const splitRef = useRef(null)
 
   const hasKey = Boolean(editSource && editSource.primaryKey.length)
@@ -150,7 +151,11 @@ export default function ResultsPanel({
     [panelWidth],
   )
 
-  const selectedJson = selectionRows.length ? jsonRecords(columnNames, selectionRows) : ''
+  const selectedJson = useMemo(
+    () => (panelOpen && selectionRows.length ? jsonRecords(columnNames, selectionRows) : ''),
+    [columnNames, panelOpen, selectionRows],
+  )
+  const showPanel = panelOpen && !editMode && resultSets.length > 0
 
   const [copied, setCopied] = useState(false)
   const copyTimer = useRef(null)
@@ -303,10 +308,14 @@ export default function ResultsPanel({
   ])
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col bg-surface">
-      {status === 'running' ? <div className="progress-track shrink-0" /> : <div className="h-px shrink-0 bg-line" />}
+    <section ref={splitRef} className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto_minmax(0,1fr)] bg-surface">
+      {status === 'running' ? (
+        <div className="progress-track col-span-2 row-start-1 shrink-0" />
+      ) : (
+        <div className="col-span-2 row-start-1 h-px shrink-0 bg-line" />
+      )}
 
-      <div className="flex h-9 shrink-0 items-center gap-1 overflow-x-auto border-b border-line bg-panel px-2">
+      <div className="col-start-1 row-start-2 flex h-9 shrink-0 items-center gap-1 overflow-x-auto border-b border-line bg-panel px-2">
         {status === 'error' ? (
           <span className="flex items-center gap-1.5 px-2 text-[length:var(--app-text-11)] font-medium text-danger">
             <Icon name="alert-triangle" size={12} />
@@ -349,6 +358,17 @@ export default function ResultsPanel({
           : null}
 
         <div className="ml-auto flex shrink-0 items-center gap-3 pl-3 text-[length:var(--app-text-11)] text-text-muted">
+          {resultSets.length > 0 && !editMode ? (
+            <button
+              type="button"
+              onClick={() => setPanelOpen((open) => !open)}
+              title={panelOpen ? 'Hide JSON panel' : 'Show JSON panel'}
+              className={`icon-btn h-6 w-6 ${panelOpen ? 'bg-tint/[0.06] text-text-strong' : ''}`}
+            >
+              <Icon name="panel-right" size={13} />
+            </button>
+          ) : null}
+          {resultSets.length > 0 && !editMode ? <span className="h-4 w-px bg-line-strong" /> : null}
           {status === 'success' && editSource && !hasKey ? (
             <span
               title="Editing needs a primary key so each row can be identified in the UPDATE WHERE clause."
@@ -416,7 +436,7 @@ export default function ResultsPanel({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className="col-start-1 row-start-3 min-h-0 overflow-hidden">
         {status === 'idle' ? <IdleState /> : null}
         {status === 'running' ? (
           <div className="flex h-full items-center justify-center">
@@ -438,74 +458,71 @@ export default function ResultsPanel({
                   {formatNumber(result.maxRows)} rows of each set were loaded.
                 </p>
               ) : null}
-              <div ref={splitRef} className="flex min-h-0 flex-1">
-                <div className="min-h-0 min-w-0 flex-1">
-                  <ResultGrid
-                    key={activeIndex}
-                    columns={activeResultSet.columns}
-                    rows={activeResultSet.rows}
-                    relations={relations}
-                    onRelationClick={onRelationClick}
-                    selection={selection}
-                    onSelectionChange={setSelection}
-                    onCellContextMenu={handleCellContextMenu}
-                    editable={editMode && editable}
-                    edits={edits}
-                    onCellChange={onCellChange}
-                  />
-                </div>
-
-                {!editMode && selectionBounds ? (
-                  <>
-                    <div
-                      onPointerDown={handlePanelPointerDown}
-                      className="group flex w-1.5 shrink-0 cursor-col-resize items-center justify-center bg-base"
-                      title="Drag to resize"
-                    >
-                      <span className="h-full w-px bg-line transition-colors group-hover:bg-accent/60" />
-                    </div>
-
-                    <div
-                      style={{ width: panelWidth }}
-                      className="flex min-h-0 shrink-0 flex-col border-l border-line bg-panel"
-                    >
-                      <div className="flex h-8 shrink-0 items-center gap-2 border-b border-line px-3">
-                        <Icon name="grid" size={12} className="shrink-0 text-text-muted" />
-                        <span className="text-[length:var(--app-text-11)] font-medium text-text-soft">
-                          {selection.anchor.row === selection.focus.row
-                            ? `Row ${selection.focus.row + 1}`
-                            : `Rows ${selectionBounds.rowStart + 1}–${selectionBounds.rowEnd + 1}`}
-                        </span>
-                        <button
-                          type="button"
-                          className="icon-btn ml-auto h-5 w-5"
-                          title="Copy JSON"
-                          onClick={handleCopy}
-                        >
-                          <Icon
-                            name="copy"
-                            size={12}
-                            className={copied ? 'text-success' : undefined}
-                          />
-                        </button>
-                        <button
-                          type="button"
-                          className="icon-btn h-5 w-5"
-                          title="Close"
-                          onClick={() => setSelection(null)}
-                        >
-                          <Icon name="x" size={12} />
-                        </button>
-                      </div>
-                      <JsonView text={selectedJson} />
-                    </div>
-                  </>
-                ) : null}
+              <div className="min-h-0 flex-1">
+                <ResultGrid
+                  key={activeIndex}
+                  columns={activeResultSet.columns}
+                  rows={activeResultSet.rows}
+                  relations={relations}
+                  onRelationClick={onRelationClick}
+                  selection={selection}
+                  onSelectionChange={setSelection}
+                  onCellContextMenu={handleCellContextMenu}
+                  editable={editMode && editable}
+                  edits={edits}
+                  onCellChange={onCellChange}
+                />
               </div>
             </div>
           )
         ) : null}
       </div>
+
+      {showPanel ? (
+        <div
+          style={{ width: panelWidth }}
+          className="col-start-2 row-span-2 row-start-2 relative flex min-h-0 flex-col border-l border-line bg-panel"
+        >
+          <div className="flex h-9 shrink-0 items-center gap-2 border-b border-line px-3">
+            <Icon name="grid" size={12} className="shrink-0 text-text-muted" />
+            <span className="text-[length:var(--app-text-11)] font-medium text-text-soft">
+              {selectionBounds
+                ? selection.anchor.row === selection.focus.row
+                  ? `Row ${selection.focus.row + 1}`
+                  : `Rows ${selectionBounds.rowStart + 1}–${selectionBounds.rowEnd + 1}`
+                : 'Selection'}
+            </span>
+            <button
+              type="button"
+              className="icon-btn ml-auto h-6 w-6"
+              title="Copy JSON"
+              onClick={handleCopy}
+            >
+              <Icon name="copy" size={12} className={copied ? 'text-success' : undefined} />
+            </button>
+            <button
+              type="button"
+              className="icon-btn h-6 w-6"
+              title="Hide JSON panel"
+              onClick={() => setPanelOpen(false)}
+            >
+              <Icon name="x" size={12} />
+            </button>
+          </div>
+          {selectionBounds ? (
+            <JsonView text={selectedJson} />
+          ) : (
+            <p className="px-3 py-2 text-[length:var(--app-text-11)] text-text-faint">
+              Select rows or cells to view JSON.
+            </p>
+          )}
+          <div
+            onPointerDown={handlePanelPointerDown}
+            className="absolute inset-y-0 left-0 w-1.5 -translate-x-1/2 cursor-col-resize transition-colors hover:bg-accent/40"
+            title="Drag to resize"
+          />
+        </div>
+      ) : null}
 
       {menu ? (
         <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />
