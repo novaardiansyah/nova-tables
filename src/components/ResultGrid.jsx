@@ -68,6 +68,19 @@ function frameRect(bounds, table) {
   }
 }
 
+function editRange(active, bounds) {
+  const within =
+    bounds &&
+    active.row >= bounds.rowStart &&
+    active.row <= bounds.rowEnd &&
+    active.col >= bounds.colStart &&
+    active.col <= bounds.colEnd
+  if (!within) {
+    return { rowStart: active.row, rowEnd: active.row, colStart: active.col, colEnd: active.col }
+  }
+  return bounds
+}
+
 export default function ResultGrid({
   columns,
   rows,
@@ -77,8 +90,10 @@ export default function ResultGrid({
   onSelectionChange,
   onCellContextMenu,
   editable = false,
+  editing = false,
   edits = {},
   onCellChange,
+  onStartEdit,
 }) {
   const [sort, setSort] = useState(null)
   const [active, setActive] = useState(null)
@@ -86,6 +101,7 @@ export default function ResultGrid({
   const [frameDragging, setFrameDragging] = useState(false)
   const draggingRef = useRef(false)
   const draggedRef = useRef(false)
+  const preClickBoundsRef = useRef(null)
   const frameDragRef = useRef(null)
   const tableRef = useRef(null)
 
@@ -96,6 +112,10 @@ export default function ResultGrid({
   useEffect(() => {
     setActive(null)
   }, [editable, rows])
+
+  useEffect(() => {
+    if (!editing) setActive(null)
+  }, [editing])
 
   useEffect(() => {
     const stop = () => {
@@ -194,10 +214,26 @@ export default function ResultGrid({
   const rowSelected = (origIndex) =>
     Boolean(bounds && origIndex >= bounds.rowStart && origIndex <= bounds.rowEnd)
 
-  const handleCellClick = (event, origIndex, columnIndex) => {
+  const handleCellDoubleClick = (event, origIndex, columnIndex) => {
     if (draggedRef.current || event.shiftKey) return
     if (!editable || !onCellChange) return
     if (columnRelations[columnIndex]) return
+    const captured = preClickBoundsRef.current
+    preClickBoundsRef.current = null
+    const block =
+      captured &&
+      (captured.rowStart !== captured.rowEnd || captured.colStart !== captured.colEnd) &&
+      origIndex >= captured.rowStart &&
+      origIndex <= captured.rowEnd &&
+      columnIndex >= captured.colStart &&
+      columnIndex <= captured.colEnd
+    if (block) {
+      onSelectionChange?.({
+        anchor: { row: captured.rowStart, col: captured.colStart },
+        focus: { row: captured.rowEnd, col: captured.colEnd },
+      })
+    }
+    onStartEdit?.()
     setActive({ row: origIndex, col: columnIndex })
   }
 
@@ -220,6 +256,7 @@ export default function ResultGrid({
 
   const handleCellMouseDown = (event, origIndex, columnIndex) => {
     if (event.button !== 0 || !onSelectionChange) return
+    if (event.detail === 1) preClickBoundsRef.current = bounds
     const cell = { row: origIndex, col: columnIndex }
     beginDrag(event, event.shiftKey && selection ? selection.anchor : cell, cell)
   }
@@ -302,9 +339,14 @@ export default function ResultGrid({
 
   const commitEdit = (value) => {
     if (!active || !onCellChange) return
-    const column = columns[active.col]
-    if (!column) return
-    onCellChange(active.row, column.name, value, cellValue(active.row, active.col))
+    const range = editRange(active, bounds)
+    for (let row = range.rowStart; row <= range.rowEnd; row += 1) {
+      for (let col = range.colStart; col <= range.colEnd; col += 1) {
+        const column = columns[col]
+        if (!column || columnRelations[col]) continue
+        onCellChange(row, column.name, value, cellValue(row, col))
+      }
+    }
     setActive(null)
   }
 
@@ -416,7 +458,7 @@ export default function ResultGrid({
                     <td
                       key={column.name}
                       data-cell={`${origIndex}:${colIndex}`}
-                      onClick={(event) => handleCellClick(event, origIndex, colIndex)}
+                      onDoubleClick={(event) => handleCellDoubleClick(event, origIndex, colIndex)}
                       onMouseDown={(event) => handleCellMouseDown(event, origIndex, colIndex)}
                       onMouseEnter={() => handleCellMouseEnter(origIndex, colIndex)}
                       onContextMenu={(event) => handleCellContextMenu(event, origIndex, colIndex)}

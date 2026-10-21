@@ -468,9 +468,11 @@ export default function ResultsPanel({
                   selection={selection}
                   onSelectionChange={setSelection}
                   onCellContextMenu={handleCellContextMenu}
-                  editable={editMode && editable}
+                  editable={editable}
+                  editing={editMode}
                   edits={edits}
                   onCellChange={onCellChange}
+                  onStartEdit={() => setEditMode(true)}
                 />
               </div>
             </div>
