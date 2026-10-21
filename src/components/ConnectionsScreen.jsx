@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState } from 'react'
 import ConfirmDialog from './ConfirmDialog.jsx'
 import ContextMenu from './ContextMenu.jsx'
+import EnvironmentBadge from './EnvironmentBadge.jsx'
 import Icon, { BrandMark, Spinner } from './Icon.jsx'
 import PromptDialog from './PromptDialog.jsx'
 
@@ -277,13 +278,16 @@ export default function ConnectionsScreen({
               />
             )}
             <span className="min-w-0 flex-1">
-              <span className="flex items-center gap-1.5">
+              <span className="flex items-center gap-2">
                 <span className="truncate text-[length:var(--app-text-12)] text-text">{connection.name}</span>
-                {isOpen ? (
-                  <span className="shrink-0 rounded border border-success/30 bg-success/10 px-1 text-[length:var(--app-text-9)] font-semibold uppercase tracking-wide text-success">
-                    open
-                  </span>
-                ) : null}
+                <span className="flex shrink-0 items-center gap-1.5">
+                  <EnvironmentBadge environment={connection.environment} />
+                  {isOpen ? (
+                    <span className="shrink-0 rounded border border-success/30 bg-success/10 px-1 text-[length:var(--app-text-9)] font-semibold uppercase tracking-wide text-success">
+                      open
+                    </span>
+                  ) : null}
+                </span>
               </span>
               <span className="block truncate text-[length:var(--app-text-10)] leading-[calc(var(--app-text-12)+4px)] text-text-faint">
                 {connection.host}:{connection.port}
