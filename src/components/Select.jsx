@@ -40,14 +40,14 @@ export default function Select({
         type="button"
         disabled={disabled}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex h-8 max-w-[240px] items-center gap-2 rounded-md border border-line-strong bg-elevated px-2.5 text-[length:var(--app-text-12)] text-text transition-colors hover:border-accent/50 disabled:pointer-events-none disabled:opacity-50"
+        className="flex h-8 w-full max-w-[240px] items-center gap-2 rounded-md border border-line-strong bg-elevated px-2.5 text-[length:var(--app-text-12)] text-text transition-colors hover:border-accent/50 disabled:pointer-events-none disabled:opacity-50"
       >
         <Icon name={icon} size={13} className="shrink-0 text-text-muted" />
-        <span className="truncate">{current?.label ?? value ?? placeholder}</span>
+        <span className="min-w-0 flex-1 truncate text-left">{current?.label ?? value ?? placeholder}</span>
         <Icon
           name="chevron-down"
           size={13}
-          className={`shrink-0 text-text-muted transition-transform ${open ? 'rotate-180' : ''}`}
+          className={`ml-auto shrink-0 text-text-muted transition-transform ${open ? 'rotate-180' : ''}`}
         />
       </button>
 
