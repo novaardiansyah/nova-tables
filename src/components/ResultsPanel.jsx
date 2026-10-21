@@ -408,10 +408,22 @@ export default function ResultsPanel({
             </span>
           ) : null}
           {status === 'success' && editMode ? (
-            <span className="flex items-center gap-1 rounded bg-accent/15 px-1.5 text-[length:var(--app-text-10)] font-medium text-accent">
-              <Icon name="pencil" size={10} />
-              Editing
-            </span>
+            changeCount === 0 ? (
+              <button
+                type="button"
+                onClick={() => setEditMode(false)}
+                title="Stop editing"
+                className="flex h-6 items-center gap-1 rounded bg-accent/15 px-1.5 text-[length:var(--app-text-10)] font-medium text-accent transition-colors hover:bg-accent/25"
+              >
+                <Icon name="x" size={10} />
+                Cancel
+              </button>
+            ) : (
+              <span className="flex items-center gap-1 rounded bg-accent/15 px-1.5 text-[length:var(--app-text-10)] font-medium text-accent">
+                <Icon name="pencil" size={10} />
+                Editing
+              </span>
+            )
           ) : null}
           {status === 'success' && changeCount > 0 ? (
             <div className="flex items-center gap-1">

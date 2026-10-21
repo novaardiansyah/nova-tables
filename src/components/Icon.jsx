@@ -29,6 +29,12 @@ const ICONS = {
       <path d="M3.5 20.5v-5h5" />
     </>
   ),
+  search: (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3.5-3.5" />
+    </>
+  ),
   power: (
     <>
       <path d="M12 3v9" />
