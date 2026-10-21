@@ -3,8 +3,8 @@
 Hi Future Developer,
 
 Welcome to **Nova Tables**, a modern desktop SQL client for **Microsoft SQL Server**. It brings your
-connections, databases, tables, queries and results together in one calm, dark workspace, so you can
-focus on the work instead of the tooling.
+connections, databases, tables, queries and results together in one calm workspace, so you can focus
+on the work instead of the tooling.
 
 Nova Tables is made for people who work with Microsoft SQL Server every day and simply want a tidy
 place to look something up, write a query and read the answer. It stays deliberately small and
@@ -12,6 +12,36 @@ focused on doing that well.
 
 > **Note:** Nova Tables works with Microsoft SQL Server only. It is a local desktop application —
 > nothing is uploaded anywhere, and neither your data nor your credentials ever leave your computer.
+
+## Screenshots
+
+### Your connections, in one place
+
+![Connections](./public/demo/connections.png)
+
+### A new connection, tested before it is saved
+
+![New connection](./public/demo/new-connection.png)
+
+### Edit a whole block of cells at once
+
+![Editing cells](./public/demo/cell-editing.png)
+
+### Ready-to-run UPDATE statements from your edits
+
+![Generated UPDATE statements](./public/demo/changes.png)
+
+### Read a row as a JSON record
+
+![JSON viewer](./public/demo/json-viewer.png)
+
+### Right-click a cell for edit, copy and delete actions
+
+![Cell context menu](./public/demo/cell-menu.png)
+
+### Right-click a table for object actions
+
+![Table context menu](./public/demo/table-menu.png)
 
 ## Dazzling Tech Stack
 
@@ -29,13 +59,18 @@ focused on doing that well.
 - Browse the databases and tables your server shares with you.
 - Write and run queries in a proper editor.
 - Read the results in a clean grid, and understand problems through clear messages.
+- Edit result cells in place and get ready-to-run `UPDATE` statements, without the app ever writing to
+  the server.
+- Switch between dark and light themes, and set the fonts and sizes you like.
 
 ## Good to Know
 
 - Your saved connections live on your computer only, and passwords are protected by your operating
   system's own secure storage.
-- One connection is open at a time.
+- Several connections can stay open at once, and the one on screen owns the tree and tabs.
 - Very large results are trimmed so the app stays quick and comfortable to use.
+- Editing is offered only for tables with a primary key, because the generated `UPDATE` is matched by
+  the key columns alone.
 - Some advanced database tools are intentionally not part of this app.
 
 ## Let's Connect

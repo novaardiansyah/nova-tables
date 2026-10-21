@@ -12,6 +12,7 @@ dist
 dist-electron
 dist-ssr
 release
+build
 *.local
 
 # Local agent notes
