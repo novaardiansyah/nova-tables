@@ -8,6 +8,7 @@ import {
   readSettings,
   saveConnection,
   saveFolder,
+  updateTreeOrder,
   writeSettings,
 } from './connectionStore.js'
 import {
@@ -54,6 +55,8 @@ export function registerIpcHandlers() {
   handle('folders:save', (input) => ({ folder: saveFolder(input) }))
 
   handle('folders:delete', (id) => ({ deleted: deleteFolder(id), folderId: id }))
+
+  handle('tree:reorder', (input) => updateTreeOrder(input))
 
   handle('connections:test', (input) => testConnection(input))
 
