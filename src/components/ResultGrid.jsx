@@ -4,6 +4,12 @@ import Icon from './Icon.jsx'
 const RENDER_LIMIT = 2000
 const DATE_RE = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/
 
+const SPECIAL_VALUES = [
+  { label: 'NULL', hint: 'null', value: null },
+  { label: 'DEFAULT', hint: 'column default', value: { special: 'DEFAULT' } },
+  { label: 'GETDATE()', hint: 'now', value: { special: 'GETDATE()' } },
+]
+
 function compareValues(left, right) {
   if (typeof left === 'number' && typeof right === 'number') return left - right
   return String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: 'base' })
@@ -190,7 +196,7 @@ export default function ResultGrid({
                     key={column.name}
                     onClick={() => handleCellClick(origIndex, colIndex)}
                     title={dirty ? 'Pending update' : undefined}
-                    className={`whitespace-nowrap border-b border-line/70 px-3 py-[5px] group-hover:bg-row-hover ${
+                    className={`relative whitespace-nowrap border-b border-line/70 px-3 py-[5px] group-hover:bg-row-hover ${
                       numericColumns[colIndex] ? 'text-right tabular-nums' : ''
                     } ${dirty ? 'bg-warning/[0.08]' : ''} ${
                       editable && !columnRelations[colIndex] ? 'cursor-text' : ''
@@ -234,6 +240,10 @@ export default function ResultGrid({
 }
 
 function Cell({ value }) {
+  if (value && value.special) {
+    return <span className="font-mono text-[length:calc(var(--grid-font-size)-1px)] text-warning">{value.special}</span>
+  }
+
   if (value === null || value === undefined) {
     return <span className="font-mono text-[length:calc(var(--grid-font-size)-1px)] italic text-text-faint">NULL</span>
   }
@@ -259,26 +269,36 @@ function Cell({ value }) {
 }
 
 function CellEditor({ value, onCommit, onCancel }) {
-  const isNull = value === null || value === undefined
-  const initial = isNull ? '' : String(value)
+  const isSpecial = Boolean(value && value.special)
+  const isNull = !isSpecial && (value === null || value === undefined)
+  const initial = isSpecial ? value.special : isNull ? '' : String(value)
   const [draft, setDraft] = useState(initial)
+  const [highlight, setHighlight] = useState(-1)
+
+  const query = draft.trim().toLowerCase()
+  const matches = SPECIAL_VALUES.filter((option) => option.label.toLowerCase().includes(query))
 
   const finish = (next) => {
-    if (next === null) {
-      onCommit(null)
+    const text = next.trim()
+    const exact = SPECIAL_VALUES.find((option) => option.label.toLowerCase() === text.toLowerCase())
+    if (exact) {
+      onCommit(exact.value)
+      return
+    }
+    if (isSpecial) {
+      onCommit(text === '' ? null : next)
       return
     }
     if (isNull) {
-      onCommit(next === '' ? null : next)
+      onCommit(text === '' ? null : next)
       return
     }
     if (typeof value === 'number') {
-      const trimmed = next.trim()
-      if (trimmed === '') {
+      if (text === '') {
         onCommit(null)
         return
       }
-      const parsed = Number(trimmed)
+      const parsed = Number(text)
       if (Number.isFinite(parsed)) {
         onCommit(parsed)
         return
@@ -288,14 +308,32 @@ function CellEditor({ value, onCommit, onCancel }) {
   }
 
   return (
-    <span className="flex items-center gap-1">
+    <span
+      className="absolute inset-0 z-[15] flex items-center bg-base px-0.5"
+      onClick={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
+    >
       <input
         type="text"
-        defaultValue={initial}
-        onChange={(event) => setDraft(event.target.value)}
+        value={draft}
+        onChange={(event) => {
+          setDraft(event.target.value)
+          setHighlight(-1)
+        }}
         onKeyDown={(event) => {
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            if (!matches.length) return
+            event.preventDefault()
+            const step = event.key === 'ArrowDown' ? 1 : -1
+            setHighlight((prev) => (prev + step + matches.length) % matches.length)
+            return
+          }
           if (event.key === 'Enter') {
             event.preventDefault()
+            if (highlight >= 0) {
+              onCommit(matches[highlight].value)
+              return
+            }
             finish(draft)
           }
           if (event.key === 'Escape') {
@@ -305,19 +343,28 @@ function CellEditor({ value, onCommit, onCancel }) {
         }}
         onBlur={() => finish(draft)}
         autoFocus
-        className="min-w-0 flex-1 rounded border border-accent/60 bg-base px-1 py-0 text-[length:inherit] text-text outline-none"
+        className="h-full w-full min-w-0 rounded border border-accent/60 bg-base px-1 text-[length:inherit] text-text outline-none"
         style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
       />
-      {isNull ? (
-        <button
-          type="button"
-          title="Set NULL"
-          className="text-[length:var(--app-text-10)] text-text-faint hover:text-text"
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => onCommit(null)}
-        >
-          NULL
-        </button>
+
+      {matches.length ? (
+        <span className="absolute left-0 top-[calc(100%+2px)] z-40 flex w-52 flex-col rounded-md border border-line-strong bg-elevated p-1 shadow-2xl shadow-black/60">
+          {matches.map((option, index) => (
+            <button
+              key={option.label}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onMouseEnter={() => setHighlight(index)}
+              onClick={() => onCommit(option.value)}
+              className={`flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left text-[length:var(--app-text-11)] transition-colors hover:bg-tint/[0.05] ${
+                index === highlight ? 'bg-tint/[0.05] text-accent' : 'text-text'
+              }`}
+            >
+              <span className="font-mono">{option.label}</span>
+              <span className="text-[length:var(--app-text-10)] text-text-faint">{option.hint}</span>
+            </button>
+          ))}
+        </span>
       ) : null}
     </span>
   )

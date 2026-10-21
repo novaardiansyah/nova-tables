@@ -107,6 +107,7 @@ function sqlLiteral(value) {
   if (value === null || value === undefined) return 'NULL'
   if (typeof value === 'number') return String(value)
   if (typeof value === 'boolean') return value ? '1' : '0'
+  if (typeof value === 'object') return value.special
   return `N'${String(value).replace(/'/g, "''")}'`
 }
 
@@ -239,6 +240,12 @@ export default function App() {
   const showBanner = useCallback((type, message) => {
     setBanner({ type, message })
   }, [])
+
+  useEffect(() => {
+    if (!banner) return undefined
+    const timer = setTimeout(() => setBanner(null), 4000)
+    return () => clearTimeout(timer)
+  }, [banner])
 
   const activeSession = useCallback(() => {
     const id = activeIdRef.current
@@ -646,6 +653,7 @@ export default function App() {
     async (table) => {
       try {
         await api.copyText(table.name)
+        showBanner('success', `Copied object name of ${table.schema}.${table.name}.`)
       } catch (error) {
         showBanner('error', error.message)
       }
@@ -712,7 +720,8 @@ export default function App() {
       if (!target) return
       const { connectionId, tab } = target
       if (!tab.editSource || !tab.editSource.primaryKey.length) return
-      if (value === original) {
+      const sameValue = value?.special ? value.special === original?.special : value === original
+      if (sameValue) {
         updateTab(connectionId, tab.id, (current) => {
           const edits = { ...(current.edits || {}) }
           delete edits[`${rowIndex}:${column}`]

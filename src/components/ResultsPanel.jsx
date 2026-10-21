@@ -52,9 +52,13 @@ export default function ResultsPanel({
   const editable = hasKey && Boolean(activeResultSet) && resultSets.length === 1
   const changeCount = Object.keys(edits).length
 
-  const handleSelectRow = useCallback((index) => {
-    setSelectedRow((prev) => (prev === index ? null : index))
-  }, [])
+  const handleSelectRow = useCallback(
+    (index) => {
+      if (editMode) return
+      setSelectedRow((prev) => (prev === index ? null : index))
+    },
+    [editMode],
+  )
 
   useEffect(() => {
     setSelectedRow(null)
@@ -280,7 +284,7 @@ export default function ResultsPanel({
                   />
                 </div>
 
-                {selectedRow !== null && selectedValues ? (
+                {!editMode && selectedRow !== null && selectedValues ? (
                   <>
                     <div
                       onPointerDown={handlePanelPointerDown}
