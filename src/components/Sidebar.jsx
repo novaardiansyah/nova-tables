@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import ContextMenu from './ContextMenu.jsx'
 import Icon, { BrandMark, Spinner } from './Icon.jsx'
 
@@ -32,6 +32,16 @@ export default function Sidebar({
   const [expanded, setExpanded] = useState(true)
   const [collapsed, setCollapsed] = useState({})
   const [menu, setMenu] = useState(null)
+  const [filter, setFilter] = useState('')
+
+  useEffect(() => {
+    setFilter('')
+  }, [activeConnectionId])
+
+  const filterText = filter.trim().toLowerCase()
+
+  const matchesFilter = (schema, name) =>
+    filterText === '' || `${schema}.${name}`.toLowerCase().includes(filterText)
 
   const handleTableContextMenu = (event, table) => {
     event.preventDefault()
@@ -126,10 +136,11 @@ export default function Sidebar({
 
   const renderGroup = (item, group) => {
     const key = `${item.connectionId}:${group}`
-    const isOpen = !collapsed[key]
+    const isOpen = !collapsed[key] || filterText !== ''
     const state = group === 'tables' ? item.tables : item.modules
     const items = group === 'tables' ? state.tables : state.modules
-    const count = state.status === 'ready' ? items.length : null
+    const visible = items.filter((entry) => matchesFilter(entry.schema, entry.name))
+    const count = state.status === 'ready' ? (filterText === '' ? items.length : visible.length) : null
 
     return (
       <div key={group}>
@@ -170,17 +181,19 @@ export default function Sidebar({
               </p>
             ) : null}
 
-            {state.status === 'ready' && items.length === 0 ? (
+            {state.status === 'ready' && visible.length === 0 ? (
               <p className="px-2 py-1 text-[length:var(--app-text-11)] text-text-faint">
-                No {group === 'tables' ? 'tables' : 'routines'}
+                {filterText === ''
+                  ? `No ${group === 'tables' ? 'tables' : 'routines'}`
+                  : 'No matches'}
               </p>
             ) : null}
 
             {state.status === 'ready' ? (
               group === 'tables' ? (
-                orderedTablesFor(items).map(renderTable)
+                orderedTablesFor(visible).map(renderTable)
               ) : (
-                items.map(renderModule)
+                visible.map(renderModule)
               )
             ) : null}
           </div>
@@ -248,6 +261,28 @@ export default function Sidebar({
         {isActive ? (
           expanded ? (
             <div className="mt-0.5 space-y-px pl-3">
+              <div className="mb-1 flex items-center gap-1.5 rounded-md border border-line bg-base px-2 py-[5px] focus-within:border-accent/70 focus-within:ring-2 focus-within:ring-accent/20">
+                <Icon name="search" size={12} className="shrink-0 text-text-faint" />
+                <input
+                  type="text"
+                  value={filter}
+                  onChange={(event) => setFilter(event.target.value)}
+                  placeholder="Search here.."
+                  aria-label="Search here.."
+                  className="w-full min-w-0 bg-transparent text-[length:var(--app-text-12)] text-text placeholder:text-text-muted"
+                />
+                {filter ? (
+                  <button
+                    type="button"
+                    className="icon-btn h-4 w-4 text-text-faint hover:text-text"
+                    title="Clear filter"
+                    aria-label="Clear filter"
+                    onClick={() => setFilter('')}
+                  >
+                    <Icon name="x" size={11} />
+                  </button>
+                ) : null}
+              </div>
               {renderGroup(item, 'tables')}
               {renderGroup(item, 'modules')}
             </div>
