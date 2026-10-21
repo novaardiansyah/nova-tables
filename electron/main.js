@@ -53,19 +53,11 @@ function createApplicationMenu() {
         { role: 'copy' },
         { role: 'paste' },
         { role: 'selectAll' },
-        { type: 'separator' },
-        {
-          label: 'Preferences',
-          accelerator: 'CmdOrCtrl+,',
-          click: () => win?.webContents.send('menu:preferences'),
-        },
       ],
     },
     {
       label: 'View',
       submenu: [
-        { role: 'toggleDevTools' },
-        { type: 'separator' },
         { role: 'resetZoom' },
         { role: 'zoomIn' },
         { role: 'zoomOut' },
@@ -75,7 +67,14 @@ function createApplicationMenu() {
     },
     {
       label: 'Window',
-      submenu: [{ role: 'minimize' }],
+      submenu: [
+        {
+          label: 'Preferences',
+          accelerator: 'CmdOrCtrl+,',
+          click: () => win?.webContents.send('menu:preferences'),
+        },
+        { role: 'minimize' },
+      ],
     },
   ]
 

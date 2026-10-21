@@ -190,7 +190,10 @@ export default function ResultsPanel({
     [activeResultSet],
   )
 
-  const table = editSource ? { schema: editSource.schema, name: editSource.table } : null
+  const table = useMemo(
+    () => (editSource ? { schema: editSource.schema, name: editSource.table } : null),
+    [editSource],
+  )
 
   const menuItems = useMemo(() => {
     if (!menu) return []

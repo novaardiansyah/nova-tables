@@ -21,12 +21,12 @@ const QUERY_SIZE_OPTIONS = QUERY_SIZES.map((size) => ({ value: String(size), lab
 
 function Row({ label, hint, children }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-2">
-      <div>
-        <p className="text-[length:var(--app-text-12)] text-text">{label}</p>
+    <div className="grid grid-cols-[170px_minmax(0,1fr)] items-center gap-4 py-2">
+      <div className="min-w-0">
+        <p className="truncate text-[length:var(--app-text-12)] text-text">{label}</p>
         {hint ? <p className="text-[length:var(--app-text-11)] text-text-muted">{hint}</p> : null}
       </div>
-      {children}
+      <div className="flex items-center justify-end gap-2">{children}</div>
     </div>
   )
 }
@@ -117,105 +117,105 @@ export default function SettingsDialog({ open, settings, onClose, onSave }) {
 
           <section className="border-t border-line pt-4">
             <p className="field-label">App</p>
-            <Row label="Font family" hint="Sidebar, tabs, headers and dialogs">
-              <Select
-                value={draft.appFontFamily}
-                options={FONT_OPTIONS}
-                onChange={update('appFontFamily')}
-                icon="settings"
-                placeholder="Select font"
-                emptyLabel="No fonts"
-                className="w-56"
-              />
-            </Row>
-            <Row label="Font size" hint="Scales the whole workspace">
-              <Select
-                value={String(draft.appFontSize)}
-                options={SIZE_OPTIONS}
-                onChange={(value) => update('appFontSize')(Number(value))}
-                icon="settings"
-                placeholder="Select size"
-                emptyLabel="No sizes"
-                className="w-56"
-              />
+            <Row label="Font" hint="Sidebar, tabs, headers and dialogs">
+              <div className="flex items-center gap-2">
+                <Select
+                  value={draft.appFontFamily}
+                  options={FONT_OPTIONS}
+                  onChange={update('appFontFamily')}
+                  icon="settings"
+                  placeholder="Select font"
+                  emptyLabel="No fonts"
+                  className="w-44"
+                />
+                <Select
+                  value={String(draft.appFontSize)}
+                  options={SIZE_OPTIONS}
+                  onChange={(value) => update('appFontSize')(Number(value))}
+                  icon="settings"
+                  placeholder="Select size"
+                  emptyLabel="No sizes"
+                  className="w-24"
+                />
+              </div>
             </Row>
           </section>
 
           <section className="border-t border-line pt-4">
             <p className="field-label">Result grid</p>
-            <Row label="Font family">
-              <Select
-                value={draft.gridFontFamily}
-                options={FONT_OPTIONS}
-                onChange={update('gridFontFamily')}
-                icon="grid"
-                placeholder="Select font"
-                emptyLabel="No fonts"
-                className="w-56"
-              />
-            </Row>
-            <Row label="Font size">
-              <Select
-                value={String(draft.gridFontSize)}
-                options={SIZE_OPTIONS}
-                onChange={(value) => update('gridFontSize')(Number(value))}
-                icon="grid"
-                placeholder="Select size"
-                emptyLabel="No sizes"
-                className="w-56"
-              />
+            <Row label="Font">
+              <div className="flex items-center gap-2">
+                <Select
+                  value={draft.gridFontFamily}
+                  options={FONT_OPTIONS}
+                  onChange={update('gridFontFamily')}
+                  icon="grid"
+                  placeholder="Select font"
+                  emptyLabel="No fonts"
+                  className="w-44"
+                />
+                <Select
+                  value={String(draft.gridFontSize)}
+                  options={SIZE_OPTIONS}
+                  onChange={(value) => update('gridFontSize')(Number(value))}
+                  icon="grid"
+                  placeholder="Select size"
+                  emptyLabel="No sizes"
+                  className="w-24"
+                />
+              </div>
             </Row>
           </section>
 
           <section className="border-t border-line pt-4">
             <p className="field-label">JSON viewer</p>
-            <Row label="Font family">
-              <Select
-                value={draft.jsonFontFamily}
-                options={FONT_OPTIONS}
-                onChange={update('jsonFontFamily')}
-                icon="folder"
-                placeholder="Select font"
-                emptyLabel="No fonts"
-                className="w-56"
-              />
-            </Row>
-            <Row label="Font size">
-              <Select
-                value={String(draft.jsonFontSize)}
-                options={SIZE_OPTIONS}
-                onChange={(value) => update('jsonFontSize')(Number(value))}
-                icon="folder"
-                placeholder="Select size"
-                emptyLabel="No sizes"
-                className="w-56"
-              />
+            <Row label="Font">
+              <div className="flex items-center gap-2">
+                <Select
+                  value={draft.jsonFontFamily}
+                  options={FONT_OPTIONS}
+                  onChange={update('jsonFontFamily')}
+                  icon="folder"
+                  placeholder="Select font"
+                  emptyLabel="No fonts"
+                  className="w-44"
+                />
+                <Select
+                  value={String(draft.jsonFontSize)}
+                  options={SIZE_OPTIONS}
+                  onChange={(value) => update('jsonFontSize')(Number(value))}
+                  icon="folder"
+                  placeholder="Select size"
+                  emptyLabel="No sizes"
+                  className="w-24"
+                />
+              </div>
             </Row>
           </section>
 
           <section className="border-t border-line pt-4">
             <p className="field-label">Query editor</p>
-            <Row label="Font family" hint="SQL editor and its line numbers">
-              <Select
-                value={draft.queryFontFamily}
-                options={FONT_OPTIONS}
-                onChange={update('queryFontFamily')}
-                icon="code"
-                placeholder="Select font"
-                emptyLabel="No fonts"
-                className="w-56"
-              />
-            </Row>
-            <Row label="Font size">
-              <Select
-                value={String(draft.queryFontSize)}
-                options={QUERY_SIZE_OPTIONS}
-                onChange={(value) => update('queryFontSize')(Number(value))}
-                icon="code"
-                placeholder="Select size"
-                emptyLabel="No sizes"
-                className="w-56"
-              />
+            <Row label="Font" hint="SQL editor and its line numbers">
+              <div className="flex items-center gap-2">
+                <Select
+                  value={draft.queryFontFamily}
+                  options={FONT_OPTIONS}
+                  onChange={update('queryFontFamily')}
+                  icon="code"
+                  placeholder="Select font"
+                  emptyLabel="No fonts"
+                  className="w-44"
+                />
+                <Select
+                  value={String(draft.queryFontSize)}
+                  options={QUERY_SIZE_OPTIONS}
+                  onChange={(value) => update('queryFontSize')(Number(value))}
+                  icon="code"
+                  placeholder="Select size"
+                  emptyLabel="No sizes"
+                  className="w-24"
+                />
+              </div>
             </Row>
           </section>
 
