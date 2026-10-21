@@ -46,6 +46,8 @@ export const api = {
 
   deleteFolder: async (id) => call(() => bridge().folders.remove(id)),
 
+  reorderTree: async (input) => call(() => bridge().tree.reorder(input)),
+
   testConnection: async (input) => call(() => bridge().connections.test(input)),
 
   connect: async (input) => call(() => bridge().connections.connect(input)),

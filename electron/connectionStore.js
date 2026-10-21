@@ -6,6 +6,8 @@ import sqlite from 'node-sqlite3-wasm'
 
 const SCHEMA_VERSION = 1
 const SYSTEM_DATABASES = ['master', 'model', 'msdb', 'tempdb']
+const ORDER_META_KEY = 'tree_order'
+const MAX_FOLDER_DEPTH = 8
 const { Database } = sqlite
 
 let dbFile = null
@@ -86,6 +88,45 @@ function writeMeta(handle, key, value) {
     key,
     String(value),
   ])
+}
+
+function byName(left, right) {
+  return String(left.name).localeCompare(String(right.name))
+}
+
+function readOrder(handle) {
+  const raw = readMeta(handle, ORDER_META_KEY)
+  if (!raw) return { connections: [], folders: [] }
+  try {
+    const parsed = JSON.parse(raw)
+    return {
+      connections: Array.isArray(parsed.connections) ? parsed.connections.map(String) : [],
+      folders: Array.isArray(parsed.folders) ? parsed.folders.map(String) : [],
+    }
+  } catch {
+    return { connections: [], folders: [] }
+  }
+}
+
+function orderRank(handle, key) {
+  const order = readOrder(handle)[key]
+  return new Map(order.map((id, index) => [id, index]))
+}
+
+function normalizeOrder(handle, table, ids) {
+  const rows = handle.all(`SELECT id, name FROM ${table}`)
+  const known = new Set(rows.map((row) => row.id))
+  const ordered = []
+  for (const id of Array.isArray(ids) ? ids : []) {
+    const key = String(id)
+    if (!known.has(key) || ordered.includes(key)) continue
+    ordered.push(key)
+  }
+  const rest = rows
+    .filter((row) => !ordered.includes(row.id))
+    .sort((left, right) => String(left.name).localeCompare(String(right.name)))
+    .map((row) => row.id)
+  return [...ordered, ...rest]
 }
 
 function migrateLegacyJson(handle) {
@@ -240,10 +281,13 @@ export function validateConnectionInput(input = {}) {
 }
 
 export function listConnections() {
-  return getDb()
+  const handle = getDb()
+  const rank = orderRank(handle, 'connections')
+  return handle
     .all('SELECT * FROM connections')
     .map((row) => toPublic(toConnection(row)))
-    .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+    .map((item) => ({ ...item, position: rank.get(item.id) ?? Number.MAX_SAFE_INTEGER }))
+    .sort((left, right) => left.position - right.position || byName(left, right))
 }
 
 export function getConnection(id) {
@@ -370,10 +414,13 @@ function toPublicFolder(row) {
 }
 
 export function listFolders() {
-  return getDb()
+  const handle = getDb()
+  const rank = orderRank(handle, 'folders')
+  return handle
     .all('SELECT * FROM folders')
     .map(toPublicFolder)
-    .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+    .map((item) => ({ ...item, position: rank.get(item.id) ?? Number.MAX_SAFE_INTEGER }))
+    .sort((left, right) => left.position - right.position || byName(left, right))
 }
 
 export function saveFolder(input = {}) {
@@ -391,7 +438,7 @@ export function saveFolder(input = {}) {
     return toPublicFolder({ ...existing, name })
   }
 
-  if (parentId && folderDepth(handle, parentId) >= 8) {
+  if (parentId && folderDepth(handle, parentId) >= MAX_FOLDER_DEPTH) {
     const error = new Error('Folders can be nested up to 9 levels')
     error.code = 'INVALID_FOLDER'
     throw error
@@ -445,6 +492,76 @@ export function moveConnection(id, folderId) {
     id,
   ])
   return true
+}
+
+function isDescendant(handle, ancestorId, candidateId) {
+  let current = handle.get('SELECT id, parent_id FROM folders WHERE id = ?', candidateId)
+  let depth = 0
+  while (current?.parent_id && depth < 64) {
+    if (current.parent_id === ancestorId) return true
+    current = handle.get('SELECT id, parent_id FROM folders WHERE id = ?', current.parent_id)
+    depth += 1
+  }
+  return false
+}
+
+function subtreeHeight(handle, id) {
+  const children = handle.all('SELECT id FROM folders WHERE parent_id = ?', [id])
+  let height = 1
+  for (const child of children) {
+    height = Math.max(height, 1 + subtreeHeight(handle, child.id))
+  }
+  return height
+}
+
+function invalidFolderMoveError() {
+  const error = new Error('Folder cannot be moved into itself')
+  error.code = 'INVALID_FOLDER'
+  return error
+}
+
+export function updateTreeOrder(input = {}) {
+  const handle = getDb()
+  const connectionOrder = normalizeOrder(handle, 'connections', input.connections)
+  const folderOrder = normalizeOrder(handle, 'folders', input.folders)
+  const connectionFolders = input.connectionFolders && typeof input.connectionFolders === 'object' ? input.connectionFolders : {}
+  const folderParents = input.folderParents && typeof input.folderParents === 'object' ? input.folderParents : {}
+
+  handle.exec('BEGIN')
+  try {
+    for (const [id, folderId] of Object.entries(connectionFolders)) {
+      const connection = readConnection(id)
+      if (!connection) continue
+      const nextFolderId = folderId ? String(folderId) : null
+      if (nextFolderId && !folderExists(handle, nextFolderId)) throw missingFolderError()
+      handle.run('UPDATE connections SET folder_id = ?, updated_at = ? WHERE id = ?', [
+        nextFolderId,
+        new Date().toISOString(),
+        id,
+      ])
+    }
+
+    for (const [id, parentId] of Object.entries(folderParents)) {
+      const folder = handle.get('SELECT id, parent_id FROM folders WHERE id = ?', id)
+      if (!folder) continue
+      const nextParentId = parentId ? String(parentId) : null
+      if (nextParentId && !folderExists(handle, nextParentId)) throw missingFolderError()
+      if (nextParentId && nextParentId === folder.id) throw invalidFolderMoveError()
+      if (nextParentId && isDescendant(handle, folder.id, nextParentId)) throw invalidFolderMoveError()
+      if (nextParentId && folderDepth(handle, nextParentId) + subtreeHeight(handle, folder.id) > MAX_FOLDER_DEPTH) {
+        throw invalidFolderMoveError()
+      }
+      handle.run('UPDATE folders SET parent_id = ? WHERE id = ?', [nextParentId, folder.id])
+    }
+
+    writeMeta(handle, ORDER_META_KEY, JSON.stringify({ connections: connectionOrder, folders: folderOrder }))
+    handle.exec('COMMIT')
+  } catch (error) {
+    handle.exec('ROLLBACK')
+    throw error
+  }
+
+  return { connections: listConnections(), folders: listFolders() }
 }
 
 export function closeStore() {

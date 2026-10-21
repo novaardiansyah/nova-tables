@@ -1434,6 +1434,19 @@ export default function App() {
     [showBanner],
   )
 
+  const handleReorderTree = useCallback(
+    async (payload) => {
+      try {
+        const result = await api.reorderTree(payload)
+        setConnections(result.connections)
+        setFolders(result.folders)
+      } catch (error) {
+        showBanner('error', error.message)
+      }
+    },
+    [showBanner],
+  )
+
   const handleSplitPointerDown = useCallback((event) => {
     if (event.button !== 0) return
     const container = splitRef.current
@@ -1739,6 +1752,7 @@ export default function App() {
           onRenameFolder={handleRenameFolder}
           onDeleteFolder={handleDeleteFolder}
           onMoveConnection={handleMoveConnection}
+          onReorderTree={handleReorderTree}
         />
       )}
 

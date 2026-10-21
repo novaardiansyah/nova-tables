@@ -1,7 +1,7 @@
 {
   "name": "nova-tables",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "A modern desktop SQL client for Microsoft SQL Server.",
   "author": "Nova Tables",
   "license": "MIT",
