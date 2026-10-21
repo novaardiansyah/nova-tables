@@ -192,6 +192,7 @@ export default function ConnectionDialog({
                 icon="server"
                 placeholder="Select environment"
                 emptyLabel="No environments"
+                panelClassName="w-full"
               />
             </div>
           </div>
