@@ -3,6 +3,7 @@ NPM ?= npm
 ENTRY := dist-electron/main.js
 VERSION := $(shell node -p "require('./package.json').version" 2>/dev/null)
 UNPACKED := release/$(VERSION)/linux-unpacked
+ARTIFACTS := build/$(VERSION)
 APP_DIR := $(HOME)/.local/opt/nova-tables
 BIN_LINK := $(HOME)/.local/bin/nova-tables
 APPLICATIONS := $(HOME)/.local/share/applications
@@ -14,18 +15,21 @@ IMAGE_MAGICK := $(shell command -v magick || command -v convert)
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev run compile build package deploy uninstall lint verify clean distclean
+.PHONY: help install dev run compile build build-linux build-win artifacts package deploy uninstall lint verify clean distclean
 
 help:
 	@echo
 	@echo "Nova Tables — available targets:"
 	@echo
-	@printf '  %-10s %s\n' \
+	@printf '  %-11s %s\n' \
 		install 'Install dependencies' \
 		dev 'Run Vite with Electron and HMR (needs a display)' \
 		run 'Run the built app (build it first)' \
 		compile 'Build renderer, main and preload only (fast)' \
-		build 'Build and package the app with installers' \
+		build 'Build and package the app for Linux and Windows' \
+		build-linux 'Build and package the Linux AppImage' \
+		build-win 'Build and package the Windows installer' \
+		artifacts 'Copy the installers into build/<version>/' \
 		package 'Build and package into release/<version>/linux-unpacked' \
 		deploy 'Build, remove any previous install, then install for the current user' \
 		uninstall 'Remove the installed app, its desktop entry and icons' \
@@ -49,6 +53,17 @@ compile:
 
 build:
 	$(NPM) run build
+
+build-linux: compile
+	npx electron-builder --linux
+
+build-win: compile
+	npx electron-builder --win
+
+artifacts:
+	@mkdir -p "$(ARTIFACTS)"
+	@find release/$(VERSION) -maxdepth 1 -type f \( -name '*.AppImage' -o -name '*.exe' \) -exec cp -f {} "$(ARTIFACTS)/" \;
+	@ls -1 "$(ARTIFACTS)" 2>/dev/null || echo "No installers found in release/$(VERSION) — run 'make build' first."
 
 package:
 	$(NPM) run build:dir
@@ -103,7 +118,7 @@ lint:
 verify: lint compile
 
 clean:
-	rm -rf dist dist-electron release
+	rm -rf dist dist-electron release build
 
 distclean: clean
 	rm -rf node_modules
