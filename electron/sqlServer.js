@@ -705,14 +705,25 @@ export async function runQuery({ connectionId, database, sql: text }) {
   const started = Date.now()
 
   try {
-    const result = await pool.request().batch(statement)
+    const request = pool.request()
+    const messages = []
+    request.on('info', (info) => {
+      const message = String(info?.message || '').trim()
+      if (!message) return
+      if (/^Changed database context/i.test(message)) return
+      messages.push({ type: 'print', text: message })
+    })
+
+    const result = await request.batch(statement)
     const { resultSets, truncated } = serializeResultSets(result.recordsets)
     const rowsAffected = (result.rowsAffected || []).map((count) => Number(count) || 0)
+    for (const count of rowsAffected) messages.push({ type: 'rows', count })
 
     return {
       elapsedMs: Date.now() - started,
       resultSets,
       rowsAffected,
+      messages,
       rowCount: resultSets.reduce((total, set) => total + set.rowCount, 0),
       truncated,
       maxRows: MAX_ROWS,

@@ -8,6 +8,7 @@ import {
   readSettings,
   saveConnection,
   saveFolder,
+  verifyPassword,
   writeSettings,
 } from './connectionStore.js'
 import {
@@ -60,6 +61,10 @@ export function registerIpcHandlers() {
   handle('connections:connect', (input) => connect(input))
 
   handle('connections:disconnect', (connectionId) => disconnectConnection(connectionId))
+
+  handle('connections:verify-password', (input) =>
+    verifyPassword(input.connectionId, input.password),
+  )
 
   handle('db:databases', (input) => listDatabases(input))
 

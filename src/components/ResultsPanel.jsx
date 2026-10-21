@@ -41,11 +41,13 @@ export default function ResultsPanel({
 }) {
   const { status, result, error } = state
   const resultSets = result?.resultSets ?? []
+  const messages = result?.messages ?? []
   const activeIndex = Math.min(activeSet ?? 0, Math.max(resultSets.length - 1, 0))
   const activeResultSet = resultSets[activeIndex]
   const rowsAffected = (result?.rowsAffected ?? []).reduce((total, count) => total + count, 0)
   const [selection, setSelection] = useState(null)
   const [editMode, setEditMode] = useState(false)
+  const [view, setView] = useState('results')
   const [menu, setMenu] = useState(null)
   const [panelWidth, setPanelWidth] = useState(ROW_PANEL_DEFAULT_WIDTH)
   const [panelOpen, setPanelOpen] = useState(false)
@@ -57,6 +59,12 @@ export default function ResultsPanel({
 
   useEffect(() => {
     setSelection(null)
+  }, [result])
+
+  useEffect(() => {
+    const sets = result?.resultSets ?? []
+    const lines = result?.messages ?? []
+    setView(sets.length === 0 && lines.length > 0 ? 'messages' : 'results')
   }, [result])
 
   useEffect(() => {
@@ -155,7 +163,7 @@ export default function ResultsPanel({
     () => (panelOpen && selectionRows.length ? jsonRecords(columnNames, selectionRows) : ''),
     [columnNames, panelOpen, selectionRows],
   )
-  const showPanel = panelOpen && !editMode && resultSets.length > 0
+  const showPanel = panelOpen && !editMode && resultSets.length > 0 && view === 'results'
 
   const [copied, setCopied] = useState(false)
   const copyTimer = useRef(null)
@@ -333,7 +341,7 @@ export default function ResultsPanel({
           </span>
         ) : null}
 
-        {status !== 'error' && status !== 'running' && resultSets.length === 0 ? (
+        {status !== 'error' && status !== 'running' && resultSets.length === 0 && view !== 'messages' ? (
           <span className="px-2 text-[length:var(--app-text-11)] font-medium text-text-soft">Results</span>
         ) : null}
 
@@ -345,6 +353,7 @@ export default function ResultsPanel({
                 onClick={() => {
                   onSelectSet(index)
                   setSelection(null)
+                  setView('results')
                 }}
                 className={`flex h-6 shrink-0 items-center gap-1.5 rounded px-2 text-[length:var(--app-text-11)] transition-colors ${
                   index === activeIndex
@@ -359,6 +368,23 @@ export default function ResultsPanel({
               </button>
             ))
           : null}
+
+        {status !== 'error' && status !== 'running' ? (
+          <button
+            type="button"
+            onClick={() => setView(view === 'messages' ? 'results' : 'messages')}
+            className={`flex h-6 shrink-0 items-center gap-1.5 rounded px-2 text-[length:var(--app-text-11)] transition-colors ${
+              view === 'messages'
+                ? 'bg-tint/[0.06] text-text-strong'
+                : 'text-text-muted hover:bg-tint/[0.03] hover:text-text'
+            }`}
+          >
+            Messages
+            <span className="rounded bg-tint/[0.06] px-1 text-[length:var(--app-text-10)] tabular-nums text-text-muted">
+              {formatNumber(messages.length)}
+            </span>
+          </button>
+        ) : null}
 
         <div className="ml-auto flex shrink-0 items-center gap-3 pl-3 text-[length:var(--app-text-11)] text-text-muted">
           {resultSets.length > 0 && !editMode ? (
@@ -451,7 +477,9 @@ export default function ResultsPanel({
         ) : null}
         {status === 'error' ? <ErrorState error={error} /> : null}
         {status === 'success' && result ? (
-          resultSets.length === 0 ? (
+          view === 'messages' ? (
+            <MessageList messages={messages} />
+          ) : resultSets.length === 0 ? (
             <CompletedState rowsAffected={rowsAffected} elapsedMs={result.elapsedMs} />
           ) : (
             <div className="flex h-full flex-col">
@@ -533,6 +561,30 @@ export default function ResultsPanel({
         <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />
       ) : null}
     </section>
+  )
+}
+
+function MessageList({ messages }) {
+  if (!messages.length) {
+    return (
+      <div className="flex h-full items-center justify-center text-[length:var(--app-text-12)] text-text-faint">
+        No messages.
+      </div>
+    )
+  }
+
+  return (
+    <div className="h-full overflow-auto p-3">
+      <ul className="space-y-1 font-mono text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] text-text-soft">
+        {messages.map((message, index) => (
+          <li key={index} className="whitespace-pre-wrap break-words">
+            {message.type === 'rows'
+              ? `(${formatNumber(message.count)} row${message.count === 1 ? '' : 's'} affected)`
+              : message.text}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 

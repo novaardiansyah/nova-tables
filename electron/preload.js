@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('nova', {
     test: (input) => ipcRenderer.invoke('connections:test', input),
     connect: (input) => ipcRenderer.invoke('connections:connect', input),
     disconnect: (connectionId) => ipcRenderer.invoke('connections:disconnect', connectionId),
+    verifyPassword: (input) => ipcRenderer.invoke('connections:verify-password', input),
   },
   folders: {
     list: () => ipcRenderer.invoke('folders:list'),

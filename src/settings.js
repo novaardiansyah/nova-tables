@@ -1,3 +1,5 @@
+import { EXECUTION_MODES } from './queryModes.js'
+
 export const THEMES = [
   { id: 'nova', label: 'Nova Blue' },
   { id: 'midnight', label: 'Midnight Violet' },
@@ -43,6 +45,7 @@ export const DEFAULT_SETTINGS = {
   jsonFontFamily: 'mono',
   queryFontSize: 13,
   queryFontFamily: 'hack',
+  queryExecutionMode: 'silent',
 }
 
 function normalizeFontSize(value, fallback) {
@@ -72,6 +75,9 @@ export function normalizeSettings(input) {
     jsonFontFamily: normalizeFontFamily(source.jsonFontFamily, DEFAULT_SETTINGS.jsonFontFamily),
     queryFontSize: normalizeQueryFontSize(source.queryFontSize, DEFAULT_SETTINGS.queryFontSize),
     queryFontFamily: normalizeFontFamily(source.queryFontFamily, DEFAULT_SETTINGS.queryFontFamily),
+    queryExecutionMode: EXECUTION_MODES.some((mode) => mode.id === source.queryExecutionMode)
+      ? source.queryExecutionMode
+      : DEFAULT_SETTINGS.queryExecutionMode,
   }
 }
 

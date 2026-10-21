@@ -1,12 +1,17 @@
 import Icon, { Spinner } from './Icon.jsx'
+import QueryModeMenu from './QueryModeMenu.jsx'
 import Select from './Select.jsx'
 
 export default function WorkspaceHeader({
   session,
   activeDatabase,
   running,
+  queryExecutionMode,
+  hasSelection,
   onSelectDatabase,
+  onChangeExecutionMode,
   onRun,
+  onRunSelection,
   onDisconnect,
   onShowShortcuts,
 }) {
@@ -53,6 +58,21 @@ export default function WorkspaceHeader({
         >
           <Icon name="question" size={15} />
         </button>
+
+        <QueryModeMenu value={queryExecutionMode} onChange={onChangeExecutionMode} />
+
+        {hasSelection ? (
+          <button
+            type="button"
+            className="btn-soft"
+            onClick={onRunSelection}
+            disabled={!session || running}
+            title="Run the selected SQL (Ctrl+Shift+Enter)"
+          >
+            <Icon name="play" size={12} />
+            Run selection
+          </button>
+        ) : null}
 
         <button
           type="button"
