@@ -4,10 +4,11 @@ import fs from 'node:fs'
 import path from 'node:path'
 import sqlite from 'node-sqlite3-wasm'
 
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 2
 const SYSTEM_DATABASES = ['master', 'model', 'msdb', 'tempdb']
 const ORDER_META_KEY = 'tree_order'
 const MAX_FOLDER_DEPTH = 8
+const ENVIRONMENTS = ['local', 'staging', 'production']
 const { Database } = sqlite
 
 let dbFile = null
@@ -69,6 +70,7 @@ function createSchema(handle) {
       username TEXT NOT NULL,
       database_name TEXT NOT NULL DEFAULT '',
       folder_id TEXT REFERENCES folders(id),
+      environment TEXT NOT NULL DEFAULT '',
       encrypt INTEGER NOT NULL DEFAULT 1,
       trust_server_certificate INTEGER NOT NULL DEFAULT 1,
       password_cipher TEXT,
@@ -76,6 +78,14 @@ function createSchema(handle) {
       updated_at TEXT NOT NULL
     );
   `)
+}
+
+function ensureSchema(handle) {
+  try {
+    handle.get('SELECT environment FROM connections LIMIT 1')
+  } catch {
+    handle.run("ALTER TABLE connections ADD COLUMN environment TEXT NOT NULL DEFAULT ''")
+  }
 }
 
 function readMeta(handle, key) {
@@ -195,6 +205,7 @@ function getDb() {
   fs.mkdirSync(path.dirname(file), { recursive: true })
   db = new Database(file)
   createSchema(db)
+  ensureSchema(db)
   restrictPermissions(file)
   migrateLegacyJson(db)
   writeMeta(db, 'schema_version', SCHEMA_VERSION)
@@ -214,6 +225,7 @@ function toConnection(row) {
     username: row.username,
     database: row.database_name || '',
     folderId: row.folder_id ?? null,
+    environment: row.environment ?? '',
     encrypt: row.encrypt !== 0,
     trustServerCertificate: row.trust_server_certificate !== 0,
     passwordCipher: row.password_cipher ?? null,
@@ -231,6 +243,7 @@ function toPublic(row) {
     username: row.username,
     database: row.database || '',
     folderId: row.folderId ?? null,
+    environment: row.environment ?? '',
     encrypt: row.encrypt !== false,
     trustServerCertificate: row.trustServerCertificate !== false,
     hasPassword: Boolean(row.passwordCipher) || sessionPasswords.has(row.id),
@@ -247,6 +260,11 @@ function readConnection(id) {
 function cleanText(value, fallback = '') {
   if (value === undefined || value === null) return fallback
   return String(value).trim()
+}
+
+function cleanEnvironment(value) {
+  const id = cleanText(value).toLowerCase()
+  return ENVIRONMENTS.includes(id) ? id : ''
 }
 
 export function validateConnectionInput(input = {}) {
@@ -275,6 +293,7 @@ export function validateConnectionInput(input = {}) {
     username,
     port,
     database: cleanText(input.database),
+    environment: cleanEnvironment(input.environment),
     encrypt: input.encrypt !== false,
     trustServerCertificate: input.trustServerCertificate !== false,
   }
@@ -329,7 +348,7 @@ export function saveConnection(input = {}) {
   if (existing) {
     handle.run(
       `UPDATE connections SET
-        name = ?, host = ?, port = ?, username = ?, database_name = ?,
+        name = ?, host = ?, port = ?, username = ?, database_name = ?, environment = ?,
         encrypt = ?, trust_server_certificate = ?, updated_at = ?
       WHERE id = ?`,
       [
@@ -338,6 +357,7 @@ export function saveConnection(input = {}) {
         fields.port,
         fields.username,
         fields.database,
+        fields.environment,
         fields.encrypt ? 1 : 0,
         fields.trustServerCertificate ? 1 : 0,
         now,
@@ -351,9 +371,9 @@ export function saveConnection(input = {}) {
   const id = crypto.randomUUID()
   handle.run(
     `INSERT INTO connections (
-      id, name, host, port, username, database_name, folder_id,
+      id, name, host, port, username, database_name, folder_id, environment,
       encrypt, trust_server_certificate, password_cipher, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       fields.name,
@@ -362,6 +382,7 @@ export function saveConnection(input = {}) {
       fields.username,
       fields.database,
       input.folderId ?? null,
+      fields.environment,
       fields.encrypt ? 1 : 0,
       fields.trustServerCertificate ? 1 : 0,
       null,

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Icon, { Spinner } from './Icon.jsx'
+import Select from './Select.jsx'
+import { ENVIRONMENT_OPTIONS } from '../environments.js'
 
 const DEFAULTS = {
   name: '',
@@ -8,6 +10,7 @@ const DEFAULTS = {
   username: 'sa',
   password: '',
   database: '',
+  environment: '',
   encrypt: true,
   trustServerCertificate: true,
 }
@@ -21,6 +24,7 @@ function buildInitial(connection) {
     username: connection.username || '',
     password: '',
     database: connection.database || '',
+    environment: connection.environment || '',
     encrypt: connection.encrypt !== false,
     trustServerCertificate: connection.trustServerCertificate !== false,
   }
@@ -76,6 +80,7 @@ export default function ConnectionDialog({
       port: Number(form.port),
       username: form.username.trim(),
       database: form.database.trim(),
+      environment: form.environment,
       encrypt: form.encrypt,
       trustServerCertificate: form.trustServerCertificate,
     }
@@ -160,19 +165,35 @@ export default function ConnectionDialog({
             </div>
           ) : null}
 
-          <div>
-            <label className="field-label" htmlFor="conn-name">
-              Connection name
-            </label>
-            <input
-              id="conn-name"
-              className="field"
-              value={form.name}
-              onChange={update('name')}
-              placeholder="Production database"
-              autoFocus
-            />
-            <FieldError message={fieldErrors.name} />
+          <div className="grid grid-cols-[1fr_200px] gap-3">
+            <div>
+              <label className="field-label" htmlFor="conn-name">
+                Connection name
+              </label>
+              <input
+                id="conn-name"
+                className="field"
+                value={form.name}
+                onChange={update('name')}
+                placeholder="Production database"
+                autoFocus
+              />
+              <FieldError message={fieldErrors.name} />
+            </div>
+            <div>
+              <span className="field-label">Environment</span>
+              <Select
+                value={form.environment}
+                options={ENVIRONMENT_OPTIONS}
+                onChange={(value) => {
+                  setForm((prev) => ({ ...prev, environment: value }))
+                  setTestResult(null)
+                }}
+                icon="server"
+                placeholder="Select environment"
+                emptyLabel="No environments"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-[1fr_100px] gap-3">
