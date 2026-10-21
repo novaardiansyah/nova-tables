@@ -6,22 +6,38 @@ export const EXECUTION_MODES = [
     tone: 'success',
   },
   {
-    id: 'alert',
+    id: 'alert-readonly',
     label: 'Alert Mode',
-    description: 'Warn before sending queries to the server.',
-    tone: 'warning',
+    description: 'Warn before sending queries to the server except SELECT queries.',
+    tone: 'warning-outline',
   },
   {
-    id: 'safe',
-    label: 'Safe Mode',
-    description: 'Prompt for the connection password before sending queries to the server.',
+    id: 'alert',
+    label: 'Full Alert Mode',
+    description: 'Warn before sending queries to the server.',
     tone: 'danger',
   },
 ]
 
-export function executionGuard(modeId) {
+const WRITE_KEYWORDS =
+  /\b(insert|update|delete|merge|drop|create|alter|truncate|exec|execute|grant|revoke|backup|restore)\b/i
+
+const BLOCK_COMMENT = /\/\*[\s\S]*?\*\//g
+const LINE_COMMENT = /--[^\n]*/g
+
+export function isReadOnlyQuery(sql) {
+  const stripped = String(sql || '')
+    .replace(BLOCK_COMMENT, ' ')
+    .replace(LINE_COMMENT, ' ')
+  if (!stripped.trim()) return true
+  return !WRITE_KEYWORDS.test(stripped)
+}
+
+export function executionGuard(modeId, sql) {
   if (modeId === 'alert') return { kind: 'confirm' }
-  if (modeId === 'safe') return { kind: 'password' }
+  if (modeId === 'alert-readonly') {
+    return isReadOnlyQuery(sql) ? null : { kind: 'confirm' }
+  }
   return null
 }
 

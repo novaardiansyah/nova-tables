@@ -4,7 +4,7 @@ import { EXECUTION_MODES, getModeById } from '../queryModes.js'
 
 const TONE_CLASS = {
   success: 'bg-success',
-  warning: 'bg-warning',
+  'warning-outline': 'border border-warning',
   danger: 'bg-danger',
 }
 
@@ -35,7 +35,7 @@ export default function QueryModeMenu({ value, onChange }) {
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         title="Query execution mode"
-        className="flex h-8 w-[190px] items-center gap-2 rounded-md border border-line bg-panel px-2.5 text-[length:var(--app-text-11)] text-text-soft transition-colors hover:border-line-strong hover:text-text"
+        className="flex h-8 w-[200px] items-center gap-2 rounded-md border border-line bg-panel px-2.5 text-[length:var(--app-text-11)] text-text-soft transition-colors hover:border-line-strong hover:text-text"
       >
         <Icon name="lock" size={14} />
         <span className="truncate">{current.label}</span>
@@ -55,18 +55,24 @@ export default function QueryModeMenu({ value, onChange }) {
                   onChange(mode.id)
                   setOpen(false)
                 }}
-                className={`flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors ${
+                className={`flex w-full items-start gap-2.5 rounded-md px-2 py-2 text-left transition-colors ${
                   selected ? 'bg-tint/[0.06]' : 'hover:bg-tint/[0.03]'
                 }`}
               >
                 {selected ? (
-                  <Icon name="check-circle" size={14} className="shrink-0 text-success" />
+                  <Icon name="check-circle" size={14} className="mt-0.5 shrink-0 text-success" />
                 ) : (
-                  <span className="w-[14px] shrink-0" />
+                  <span className="mt-0.5 w-[14px] shrink-0" />
                 )}
-                <span className={`h-2 w-2 shrink-0 rounded-full ${TONE_CLASS[mode.tone]}`} />
-                <span className="text-[length:var(--app-text-11)] font-medium text-text">{mode.label}</span>
-                <span className="text-[length:var(--app-text-11)] text-text-muted">{mode.description}</span>
+                <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${TONE_CLASS[mode.tone]}`} />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[length:var(--app-text-11)] font-medium text-text">
+                    {mode.label}
+                  </span>
+                  <span className="block text-[length:var(--app-text-10)] leading-snug text-text-muted">
+                    {mode.description}
+                  </span>
+                </span>
               </button>
             )
           })}

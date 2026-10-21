@@ -276,21 +276,6 @@ export function hasStoredPassword(id) {
   return Boolean(connection.passwordCipher) || sessionPasswords.has(id)
 }
 
-export function verifyPassword(id, plain) {
-  const stored = getPassword(id)
-  if (!stored) {
-    const error = new Error('No password is stored for this connection.')
-    error.code = 'PASSWORD_MISSING'
-    throw error
-  }
-  if (stored !== String(plain ?? '')) {
-    const error = new Error('Password does not match the stored connection password.')
-    error.code = 'PASSWORD_MISMATCH'
-    throw error
-  }
-  return true
-}
-
 export function saveConnection(input = {}) {
   const fields = validateConnectionInput(input)
   const handle = getDb()

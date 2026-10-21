@@ -65,9 +65,6 @@ export const api = {
   tableRelations: async (connectionId, database, schema, table) =>
     (await call(() => bridge().tables.relations({ connectionId, database, schema, table }))).relations,
 
-  verifyPassword: async (connectionId, password) =>
-    call(() => bridge().connections.verifyPassword({ connectionId, password })),
-
   listModules: async (connectionId, database) =>
     (await call(() => bridge().modules.list({ connectionId, database }))).modules,
 

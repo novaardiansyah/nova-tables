@@ -612,7 +612,7 @@ export default function App() {
 
   const runWithGuard = useCallback(
     (sql, tabId) => {
-      const guard = executionGuard(settings.queryExecutionMode)
+      const guard = executionGuard(settings.queryExecutionMode, sql)
       if (guard) {
         setRunGuard({ kind: guard.kind, sql, tabId })
         return
@@ -1786,9 +1786,7 @@ export default function App() {
 
       <QueryGuardDialog
         open={Boolean(runGuard)}
-        kind={runGuard?.kind}
         sql={runGuard?.sql}
-        connectionId={session?.connectionId}
         onCancel={() => setRunGuard(null)}
         onConfirm={handleGuardConfirm}
       />
