@@ -269,6 +269,76 @@ export async function listTables({ connectionId, database }) {
   return { database: database || null, tables: Array.from(tables.values()) }
 }
 
+export async function listModules({ connectionId, database }) {
+  await getRuntime(connectionId)
+  const pool = await getDatabasePool(connectionId, database)
+
+  const result = await pool.request().query(
+    `SELECT s.name AS schemaName,
+            o.name AS moduleName,
+            o.type_desc AS typeDesc
+       FROM sys.objects o
+       JOIN sys.schemas s ON s.schema_id = o.schema_id
+      WHERE o.type IN ('P', 'FN', 'IF', 'TF') AND o.is_ms_shipped = 0
+      ORDER BY s.name, o.name`,
+  )
+
+  const modules = (result.recordset || []).map((row) => ({
+    schema: String(row.schemaName),
+    name: String(row.moduleName),
+    type: moduleKind(row.typeDesc),
+  }))
+
+  return { database: database || null, modules }
+}
+
+function moduleKind(typeDesc) {
+  return String(typeDesc).toLowerCase().includes('function') ? 'function' : 'procedure'
+}
+
+function toAlterStatement(definition) {
+  const text = String(definition).trim()
+  if (/^CREATE\s+OR\s+ALTER\b/i.test(text)) {
+    return text.replace(/^CREATE\s+OR\s+ALTER\b/i, 'ALTER')
+  }
+  if (/^CREATE\b/i.test(text)) return text.replace(/^CREATE\b/i, 'ALTER')
+  return text
+}
+
+export async function moduleDefinition({ connectionId, database, schema, name }) {
+  await getRuntime(connectionId)
+  const pool = await getDatabasePool(connectionId, database)
+
+  const result = await pool
+    .request()
+    .input('schema', sql.NVarChar(128), schema)
+    .input('name', sql.NVarChar(128), name)
+    .query(
+      `SELECT m.definition AS definition,
+              o.type_desc AS typeDesc
+         FROM sys.sql_modules m
+         JOIN sys.objects o ON o.object_id = m.object_id
+         JOIN sys.schemas s ON s.schema_id = o.schema_id
+        WHERE s.name = @schema AND o.name = @name`,
+    )
+
+  const row = (result.recordset || [])[0]
+  if (!row || !row.definition) {
+    throw codedError('NOT_FOUND', `No source found for ${schema}.${name}.`)
+  }
+
+  const definition = String(row.definition)
+
+  return {
+    database: database || null,
+    schema,
+    name,
+    type: moduleKind(row.typeDesc),
+    definition,
+    statement: toAlterStatement(definition),
+  }
+}
+
 export async function tableRelations({ connectionId, database, schema, table }) {
   await getRuntime(connectionId)
   const pool = await getDatabasePool(connectionId, database)

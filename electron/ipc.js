@@ -14,7 +14,9 @@ import {
   connect,
   disconnectConnection,
   listDatabases,
+  listModules,
   listTables,
+  moduleDefinition,
   runQuery,
   tableRelations,
   tableStructure,
@@ -62,6 +64,10 @@ export function registerIpcHandlers() {
   handle('db:databases', (input) => listDatabases(input))
 
   handle('db:tables', (input) => listTables(input))
+
+  handle('db:modules', (input) => listModules(input))
+
+  handle('db:module-definition', (input) => moduleDefinition(input))
 
   handle('db:table-structure', async (input) => tableStructure(input))
 

@@ -29,6 +29,10 @@ contextBridge.exposeInMainWorld('nova', {
     structure: (input) => ipcRenderer.invoke('db:table-structure', input),
     relations: (input) => ipcRenderer.invoke('db:table-relations', input),
   },
+  modules: {
+    list: (input) => ipcRenderer.invoke('db:modules', input),
+    definition: (input) => ipcRenderer.invoke('db:module-definition', input),
+  },
   query: {
     run: (input) => ipcRenderer.invoke('query:run', input),
   },

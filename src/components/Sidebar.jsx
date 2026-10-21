@@ -1,22 +1,22 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import ContextMenu from './ContextMenu.jsx'
 import Icon, { BrandMark, Spinner } from './Icon.jsx'
 
 export default function Sidebar({
   sessions,
   activeConnectionId,
-  activeDatabase,
-  tablesState,
   appVersion,
   pinnedTables,
   onActivateSession,
   onCloseSession,
-  onSelectDatabase,
   onBrowseTable,
   onCopyObjectName,
   onCopyStructure,
   onRefreshDatabases,
   onOpenStructure,
+  onOpenModule,
+  onCopyModuleDefinition,
+  onNewFunction,
   onNewTable,
   onRenameTable,
   onCloneTable,
@@ -26,36 +26,26 @@ export default function Sidebar({
   onOpenConnections,
   selectedTable,
   onSelectTable,
+  selectedModule,
+  onSelectModule,
 }) {
   const [expanded, setExpanded] = useState(true)
-  const [expandedDatabase, setExpandedDatabase] = useState(null)
+  const [collapsed, setCollapsed] = useState({})
   const [menu, setMenu] = useState(null)
-
-  useEffect(() => {
-    if (activeDatabase) setExpandedDatabase(activeDatabase)
-  }, [activeDatabase])
-
-  const handleDatabaseClick = (name) => {
-    const isOpen = expandedDatabase === name
-    setExpandedDatabase(isOpen ? null : name)
-    if (name !== activeDatabase) onSelectDatabase(name)
-  }
 
   const handleTableContextMenu = (event, table) => {
     event.preventDefault()
     onSelectTable(`${table.schema}.${table.name}`)
-    setMenu({ x: event.clientX, y: event.clientY, table })
+    setMenu({ x: event.clientX, y: event.clientY, kind: 'table', table })
+  }
+
+  const handleModuleContextMenu = (event, module) => {
+    event.preventDefault()
+    onSelectModule(`${module.schema}.${module.name}`)
+    setMenu({ x: event.clientX, y: event.clientY, kind: 'module', module })
   }
 
   const pinned = new Set(pinnedTables)
-  const orderedTables = tablesState.tables
-    .map((table, index) => ({ table, index }))
-    .sort((left, right) => {
-      const leftRank = pinned.has(`${left.table.schema}.${left.table.name}`) ? 0 : 1
-      const rightRank = pinned.has(`${right.table.schema}.${right.table.name}`) ? 0 : 1
-      return leftRank - rightRank || left.index - right.index
-    })
-    .map((entry) => entry.table)
 
   const renderTable = (table) => {
     const key = `${table.schema}.${table.name}`
@@ -92,51 +82,107 @@ export default function Sidebar({
     )
   }
 
-  const renderDatabase = (database) => {
-    const isOpen = expandedDatabase === database.name
-    const isActive = activeDatabase === database.name
-    const showTables = isOpen && tablesState.database === database.name
-
+  const renderModule = (module) => {
+    const key = `${module.schema}.${module.name}`
     return (
-      <div key={database.name}>
+      <div
+        key={key}
+        onDoubleClick={() => onOpenModule(module)}
+        onContextMenu={(event) => handleModuleContextMenu(event, module)}
+        className="group/module flex items-center gap-1.5 rounded px-2 py-[3px] text-[length:var(--app-text-12)] text-text hover:bg-tint/[0.04]"
+      >
+        <Icon
+          name={module.type === 'function' ? 'function' : 'procedure'}
+          size={11}
+          className="shrink-0 text-text-faint"
+        />
         <button
           type="button"
-          onClick={() => handleDatabaseClick(database.name)}
-          className={`tree-row ${isActive ? 'tree-row-active' : ''}`}
-          title={database.isOnline ? database.name : `${database.name} (offline)`}
+          onClick={() => onSelectModule(key)}
+          className={`flex min-w-0 flex-1 items-center truncate text-left ${
+            selectedModule === key ? 'text-accent' : ''
+          }`}
+          title={`${module.schema}.${module.name}`}
+        >
+          {module.schema !== 'dbo' ? <span className="text-text-faint">{module.schema}.</span> : null}
+          <span className="truncate">{module.name}</span>
+        </button>
+        <span className="shrink-0 text-[length:var(--app-text-9)] uppercase tracking-wider text-text-faint">
+          {module.type === 'function' ? 'fn' : 'sp'}
+        </span>
+      </div>
+    )
+  }
+
+  const orderedTablesFor = (tables) =>
+    tables
+      .map((table, index) => ({ table, index }))
+      .sort((left, right) => {
+        const leftRank = pinned.has(`${left.table.schema}.${left.table.name}`) ? 0 : 1
+        const rightRank = pinned.has(`${right.table.schema}.${right.table.name}`) ? 0 : 1
+        return leftRank - rightRank || left.index - right.index
+      })
+      .map((entry) => entry.table)
+
+  const renderGroup = (item, group) => {
+    const key = `${item.connectionId}:${group}`
+    const isOpen = !collapsed[key]
+    const state = group === 'tables' ? item.tables : item.modules
+    const items = group === 'tables' ? state.tables : state.modules
+    const count = state.status === 'ready' ? items.length : null
+
+    return (
+      <div key={group}>
+        <button
+          type="button"
+          onClick={() => setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }))}
+          className="tree-row"
+          title={isOpen ? 'Collapse' : 'Expand'}
         >
           <Icon
             name="chevron-right"
             size={11}
             className={`shrink-0 text-text-faint transition-transform ${isOpen ? 'rotate-90' : ''}`}
           />
-          <Icon name="database" size={12} className="shrink-0 text-text-muted" />
-          <span className="truncate">{database.name}</span>
-          {!database.isOnline ? (
-            <span className="ml-auto rounded bg-warning/15 px-1 text-[length:var(--app-text-9)] font-medium uppercase text-warning">
-              offline
-            </span>
+          <Icon
+            name={group === 'tables' ? 'table' : 'code'}
+            size={12}
+            className="shrink-0 text-text-muted"
+          />
+          <span className="truncate">{group === 'tables' ? 'Tables' : 'Procedures & functions'}</span>
+          {count !== null ? (
+            <span className="ml-auto tabular-nums text-[length:var(--app-text-10)] text-text-faint">{count}</span>
           ) : null}
         </button>
 
-        {showTables ? (
+        {isOpen ? (
           <div className="ml-3 space-y-px border-l border-line pl-1.5">
-            {tablesState.status === 'loading' ? (
+            {state.status === 'loading' ? (
               <div className="flex items-center gap-2 px-2 py-1 text-[length:var(--app-text-11)] text-text-muted">
                 <Spinner size={11} />
-                Loading tables…
+                {group === 'tables' ? 'Loading tables…' : 'Loading routines…'}
               </div>
             ) : null}
 
-            {tablesState.status === 'error' ? (
-              <div className="px-2 py-1 text-[length:var(--app-text-11)] leading-[calc(var(--app-text-12)+4px)] text-text-danger">{tablesState.error}</div>
+            {state.status === 'error' ? (
+              <p className="px-2 py-1 text-[length:var(--app-text-11)] leading-[calc(var(--app-text-12)+4px)] text-text-danger">
+                {state.error}
+              </p>
             ) : null}
 
-            {tablesState.status === 'ready' && tablesState.tables.length === 0 ? (
-              <p className="px-2 py-1 text-[length:var(--app-text-11)] text-text-faint">No tables</p>
+            {state.status === 'ready' && items.length === 0 ? (
+              <p className="px-2 py-1 text-[length:var(--app-text-11)] text-text-faint">
+                No {group === 'tables' ? 'tables' : 'routines'}
+              </p>
             ) : null}
 
-            {tablesState.status === 'ready' ? orderedTables.map(renderTable) : null}
+            {state.status === 'ready' ? (
+              group === 'tables' ? (
+                orderedTablesFor(items).map(renderTable)
+              ) : (
+                items.map(renderModule)
+              )
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -145,8 +191,6 @@ export default function Sidebar({
 
   const renderSession = (item) => {
     const isActive = item.connectionId === activeConnectionId
-    const activeDatabaseInfo =
-      item.databases.find((database) => database.name === activeDatabase) || null
 
     return (
       <div key={item.connectionId} className="mb-1">
@@ -176,7 +220,7 @@ export default function Sidebar({
               </span>
               <span className="block truncate text-[length:var(--app-text-10)] leading-[calc(var(--app-text-12)+4px)] text-text-muted">
                 {item.connection.host}:{item.connection.port}
-                {item.connection.database ? ` · ${item.connection.database}` : ''}
+                {item.activeDatabase ? ` · ${item.activeDatabase}` : ''}
               </span>
             </span>
           </button>
@@ -204,15 +248,12 @@ export default function Sidebar({
         {isActive ? (
           expanded ? (
             <div className="mt-0.5 space-y-px pl-3">
-              {item.databases.length === 0 ? (
-                <p className="px-2 py-1 text-[length:var(--app-text-11)] text-text-faint">No databases visible</p>
-              ) : activeDatabaseInfo ? (
-                renderDatabase(activeDatabaseInfo)
-              ) : null}
+              {renderGroup(item, 'tables')}
+              {renderGroup(item, 'modules')}
             </div>
           ) : null
         ) : (
-          <p className="mt-0.5 truncate px-2 py-1 pl-4 text-[length:var(--app-text-10)] text-text-faint">
+          <p className="mt-0.5 truncate px-2 py-1 pl-4 text-[length:var(--app-text-10)] font-semibold uppercase tracking-wider text-text-faint">
             {item.databases.length} {item.databases.length === 1 ? 'database' : 'databases'}
           </p>
         )}
@@ -237,12 +278,6 @@ export default function Sidebar({
         </button>
       </div>
 
-      <div className="flex items-center justify-between px-4 pb-1.5">
-        <span className="text-[length:var(--app-text-10)] font-semibold uppercase tracking-wider text-text-faint">
-          Open connections
-        </span>
-      </div>
-
       <div className="flex-1 overflow-y-auto px-2 pb-3">
         {sessions.length === 0 ? (
           <div className="mx-1 mt-2 rounded-lg border border-dashed border-line-strong px-3 py-6 text-center">
@@ -264,60 +299,85 @@ export default function Sidebar({
         <ContextMenu
           x={menu.x}
           y={menu.y}
-          items={[
-            {
-              id: 'open-new-tab',
-              label: 'Open new tab',
-              onSelect: () => onBrowseTable(menu.table),
-            },
-            {
-              id: 'copy-object-name',
-              label: 'Copy object name',
-              onSelect: () => onCopyObjectName(menu.table),
-            },
-            {
-              id: 'copy-structure',
-              label: 'Copy structure',
-              onSelect: () => onCopyStructure(menu.table),
-            },
-            {
-              id: 'open-structure',
-              label: 'Open structure',
-              onSelect: () => onOpenStructure(menu.table),
-            },
-            {
-              id: 'new-table',
-              label: 'New table',
-              onSelect: () => onNewTable(menu.table),
-            },
-            {
-              id: 'rename',
-              label: 'Rename',
-              onSelect: () => onRenameTable(menu.table),
-            },
-            {
-              id: 'clone',
-              label: 'Clone',
-              onSelect: () => onCloneTable(menu.table),
-            },
-            {
-              id: 'pin-to-top',
-              label: pinnedTables.includes(`${menu.table.schema}.${menu.table.name}`)
-                ? 'Unpin from top'
-                : 'Pin to top',
-              onSelect: () => onTogglePin(menu.table),
-            },
-            {
-              id: 'truncate',
-              label: 'Truncate',
-              onSelect: () => onTruncateTable(menu.table),
-            },
-            {
-              id: 'drop-table',
-              label: 'Drop Table',
-              onSelect: () => onDropTable(menu.table),
-            },
-          ]}
+          items={
+            menu.kind === 'module'
+              ? [
+                  {
+                    id: 'open-new-tab',
+                    label: 'Open new tab',
+                    onSelect: () => onOpenModule(menu.module),
+                  },
+                  {
+                    id: 'copy-object-name',
+                    label: 'Copy object name',
+                    onSelect: () => onCopyObjectName(menu.module),
+                  },
+                  {
+                    id: 'copy-module-definition',
+                    label: 'Copy definition',
+                    onSelect: () => onCopyModuleDefinition(menu.module),
+                  },
+                  {
+                    id: 'new-function',
+                    label: 'New function',
+                    onSelect: () => onNewFunction(),
+                  },
+                ]
+              : [
+                  {
+                    id: 'open-new-tab',
+                    label: 'Open new tab',
+                    onSelect: () => onBrowseTable(menu.table),
+                  },
+                  {
+                    id: 'copy-object-name',
+                    label: 'Copy object name',
+                    onSelect: () => onCopyObjectName(menu.table),
+                  },
+                  {
+                    id: 'copy-structure',
+                    label: 'Copy structure',
+                    onSelect: () => onCopyStructure(menu.table),
+                  },
+                  {
+                    id: 'open-structure',
+                    label: 'Open structure',
+                    onSelect: () => onOpenStructure(menu.table),
+                  },
+                  {
+                    id: 'new-table',
+                    label: 'New table',
+                    onSelect: () => onNewTable(menu.table),
+                  },
+                  {
+                    id: 'rename',
+                    label: 'Rename',
+                    onSelect: () => onRenameTable(menu.table),
+                  },
+                  {
+                    id: 'clone',
+                    label: 'Clone',
+                    onSelect: () => onCloneTable(menu.table),
+                  },
+                  {
+                    id: 'pin-to-top',
+                    label: pinnedTables.includes(`${menu.table.schema}.${menu.table.name}`)
+                      ? 'Unpin from top'
+                      : 'Pin to top',
+                    onSelect: () => onTogglePin(menu.table),
+                  },
+                  {
+                    id: 'truncate',
+                    label: 'Truncate',
+                    onSelect: () => onTruncateTable(menu.table),
+                  },
+                  {
+                    id: 'drop-table',
+                    label: 'Drop Table',
+                    onSelect: () => onDropTable(menu.table),
+                  },
+                ]
+          }
           onClose={() => setMenu(null)}
         />
       ) : null}
