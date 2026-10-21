@@ -25,7 +25,7 @@ export default function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-6 backdrop-blur-[2px]">
-      <div className="w-full max-w-sm animate-fade-in rounded-xl border border-line-strong bg-surface shadow-2xl shadow-black/70">
+      <div className={`w-full ${detail ? 'max-w-2xl' : 'max-w-sm'} animate-fade-in rounded-xl border border-line-strong bg-surface shadow-2xl shadow-black/70`}>
         <div className="flex items-start gap-3 p-5">
           <span
             className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
@@ -34,7 +34,7 @@ export default function ConfirmDialog({
           >
             <Icon name={danger ? 'alert-triangle' : 'info'} size={15} />
           </span>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h2 className="text-[length:var(--app-text-14)] font-semibold text-text-strong">{title}</h2>
             {message ? (
               <p className="mt-1 whitespace-pre-wrap break-words text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] text-text-soft">
@@ -42,7 +42,7 @@ export default function ConfirmDialog({
               </p>
             ) : null}
             {detail ? (
-              <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-panel px-2.5 py-2 font-mono text-[length:var(--app-text-11)] leading-[calc(var(--app-text-11)+6px)] text-text-soft">
+              <pre className="mt-3 max-h-[50vh] w-full overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-panel px-3 py-2.5 font-mono text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+6px)] text-text-soft">
                 {detail}
               </pre>
             ) : null}

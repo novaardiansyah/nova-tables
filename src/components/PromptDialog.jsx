@@ -48,7 +48,7 @@ export default function PromptDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-6 backdrop-blur-[2px]">
       <form
         onSubmit={submit}
-        className="animate-fade-in w-full max-w-sm overflow-hidden rounded-xl border border-line-strong bg-surface shadow-2xl shadow-black/70"
+        className={`animate-fade-in w-full ${detail ? 'max-w-2xl' : 'max-w-sm'} overflow-hidden rounded-xl border border-line-strong bg-surface shadow-2xl shadow-black/70`}
       >
         <div className="flex items-start gap-3 p-5">
           <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
@@ -58,6 +58,11 @@ export default function PromptDialog({
             <h2 className="text-[length:var(--app-text-14)] font-semibold text-text-strong">{title}</h2>
             {description ? (
               <p className="mt-1 whitespace-pre-wrap break-words text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] text-text-soft">{description}</p>
+            ) : null}
+            {detail ? (
+              <pre className="mt-3 max-h-[40vh] w-full overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-panel px-3 py-2.5 font-mono text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+6px)] text-text-soft">
+                {detail}
+              </pre>
             ) : null}
           </div>
           <button type="button" className="icon-btn h-6 w-6" onClick={onCancel} disabled={busy}>
@@ -85,11 +90,6 @@ export default function PromptDialog({
             <p className="mt-2 text-[length:var(--app-text-11)] leading-[calc(var(--app-text-12)+4px)] text-text-muted">
               {hint}
             </p>
-          ) : null}
-          {detail ? (
-            <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-panel px-2.5 py-2 font-mono text-[length:var(--app-text-11)] leading-[calc(var(--app-text-11)+6px)] text-text-soft">
-              {detail}
-            </pre>
           ) : null}
         </div>
 

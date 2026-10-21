@@ -15,9 +15,8 @@ const GROUPS = [
   {
     title: 'Query',
     items: [
-      { keys: ['Ctrl', '↵'], label: 'Run the active tab' },
-      { keys: ['F5'], label: 'Run the active tab' },
-      { keys: ['Ctrl', 'Shift', '↵'], label: 'Run the selected SQL' },
+      { keys: ['Ctrl', '↵'], label: 'Run the selected SQL, or the whole tab' },
+      { keys: ['F5'], label: 'Run the selected SQL, or the whole tab' },
     ],
   },
   {

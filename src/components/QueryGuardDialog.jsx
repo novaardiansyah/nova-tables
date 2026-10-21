@@ -3,12 +3,10 @@ import { api } from '../api.js'
 import ConfirmDialog from './ConfirmDialog.jsx'
 import PromptDialog from './PromptDialog.jsx'
 
-const PREVIEW_LIMIT = 400
-
-export default function QueryGuardDialog({ open, kind, sql, mode, connectionId, onCancel, onConfirm }) {
+export default function QueryGuardDialog({ open, kind, sql, connectionId, onCancel, onConfirm }) {
   const [error, setError] = useState('')
 
-  const preview = String(sql || '').trim().slice(0, PREVIEW_LIMIT)
+  const query = String(sql || '').trim()
 
   const handlePassword = async (password) => {
     setError('')
@@ -26,14 +24,13 @@ export default function QueryGuardDialog({ open, kind, sql, mode, connectionId, 
     return (
       <PromptDialog
         open={open}
-        title="Connection password"
-        description={mode?.description}
-        detail={preview}
+        title="Send query to the server?"
+        detail={query}
         label="Password"
         type="password"
         placeholder="••••••••"
         error={error}
-        confirmLabel="Unlock & send"
+        confirmLabel="Send"
         onCancel={onCancel}
         onConfirm={handlePassword}
       />
@@ -44,8 +41,7 @@ export default function QueryGuardDialog({ open, kind, sql, mode, connectionId, 
     <ConfirmDialog
       open={open}
       title="Send query to the server?"
-      message={mode?.description}
-      detail={preview}
+      detail={query}
       confirmLabel="Send"
       onCancel={onCancel}
       onConfirm={onConfirm}
