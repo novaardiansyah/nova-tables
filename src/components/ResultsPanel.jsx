@@ -216,20 +216,46 @@ export default function ResultsPanel({
     return source ? { schema: source.schema, name: source.table } : null
   }, [editSource])
 
+  const wholeRowSelection = Boolean(
+    selectionBounds &&
+      activeResultSet &&
+      selectionBounds.colStart === 0 &&
+      selectionBounds.colEnd === activeResultSet.columns.length - 1,
+  )
+  const selectionMatrix = wholeRowSelection ? selectionRows : selectionCells
+  const selectionColumnNames = wholeRowSelection ? columnNames : selectedColumns
+  const selectionLabel = wholeRowSelection ? 'rows' : 'cells'
+
   const menuItems = useMemo(() => {
     if (!menu) return []
-    const items = []
-
-    if (editable) {
-      items.push({
-        id: 'edit-result',
-        label: editMode ? 'Stop editing' : 'Edit Result',
+    const items = [
+      {
+        id: 'copy-text',
+        label: 'Copy Text',
+        onSelect: () =>
+          copy(cleanText(selectionMatrix), `Copied selected ${selectionLabel} as clean text.`),
+      },
+      {
+        id: 'copy-json',
+        label: 'Copy JSON',
+        onSelect: () =>
+          copy(
+            jsonRecords(selectionColumnNames, selectionMatrix),
+            `Copied selected ${selectionLabel} as JSON.`,
+          ),
+      },
+      {
+        id: 'copy-sql-insert',
+        label: 'Copy SQL Insert',
         onSelect: () => {
-          setSelection(null)
-          setEditMode(!editMode)
+          if (!table) return
+          copy(
+            sqlInsertRows(table, selectionColumnNames, selectionMatrix),
+            `Copied selected ${selectionLabel} as INSERT statements.`,
+          )
         },
-      })
-    }
+      },
+    ]
 
     if (editable && menu.column && (!editableColumns || editableColumns.has(menu.column.name))) {
       items.push({
@@ -249,74 +275,27 @@ export default function ResultsPanel({
       })
     }
 
-    items.push({
-      id: 'copy-cells-as',
-      label: 'Copy Cells As',
-      children: [
-        {
-          id: 'cells-clean-text',
-          label: 'Clean Text',
-          onSelect: () => copy(cleanText(selectionCells), 'Copied selected cells as clean text.'),
+    if (editable) {
+      items.push({
+        id: 'edit-result',
+        label: editMode ? 'Stop Editing' : 'Edit Result',
+        onSelect: () => {
+          setSelection(null)
+          setEditMode(!editMode)
         },
-        {
-          id: 'cells-sql-insert',
-          label: 'SQL Insert',
-          onSelect: () => {
-            if (!table) return
-            copy(
-              sqlInsertRows(table, selectedColumns, selectionCells),
-              'Copied selected cells as INSERT statements.',
-            )
-          },
-        },
-        {
-          id: 'cells-json',
-          label: 'JSON',
-          onSelect: () =>
-            copy(
-              jsonRecords(selectedColumns, selectionCells),
-              'Copied selected cells as JSON.',
-            ),
-        },
-      ],
-    })
-
-    items.push({
-      id: 'copy-rows-as',
-      label: 'Copy Rows As',
-      children: [
-        {
-          id: 'rows-clean-text',
-          label: 'Clean Text',
-          onSelect: () => copy(cleanText(selectionRows), 'Copied selected rows as clean text.'),
-        },
-        {
-          id: 'rows-sql-insert',
-          label: 'SQL Insert',
-          onSelect: () => {
-            if (!table) return
-            copy(sqlInsertRows(table, columnNames, selectionRows), 'Copied selected rows as INSERT statements.')
-          },
-        },
-        {
-          id: 'rows-json',
-          label: 'JSON',
-          onSelect: () => copy(jsonRecords(columnNames, selectionRows), 'Copied selected rows as JSON.'),
-        },
-      ],
-    })
+      })
+    }
 
     if (deletable && onDeleteRows && selectionBounds) {
       items.push({
         id: 'delete-rows',
-        label: 'Delete Rows',
+        label: 'Delete',
         onSelect: () => onDeleteRows(selectionBounds.rowStart, selectionBounds.rowEnd),
       })
     }
 
     return items
   }, [
-    columnNames,
     copy,
     deletable,
     editMode,
@@ -325,10 +304,10 @@ export default function ResultsPanel({
     menu,
     onDeleteRows,
     onSetCellValue,
-    selectedColumns,
     selectionBounds,
-    selectionCells,
-    selectionRows,
+    selectionColumnNames,
+    selectionLabel,
+    selectionMatrix,
     table,
   ])
 
