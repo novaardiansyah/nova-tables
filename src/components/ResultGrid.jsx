@@ -105,10 +105,22 @@ export default function ResultGrid({
   const preClickBoundsRef = useRef(null)
   const frameDragRef = useRef(null)
   const tableRef = useRef(null)
+  const editorRef = useRef(null)
 
   useEffect(() => {
     setSort(null)
   }, [rows])
+
+  useEffect(() => {
+    if (!active) return undefined
+    const commitOutside = (event) => {
+      const editor = editorRef.current
+      if (!editor || editor.contains(event.target)) return
+      editor.commit()
+    }
+    window.addEventListener('mousedown', commitOutside, true)
+    return () => window.removeEventListener('mousedown', commitOutside, true)
+  }, [active])
 
   useEffect(() => {
     setActive(null)
@@ -479,6 +491,7 @@ export default function ResultGrid({
                           value={display}
                           onCommit={commitEdit}
                           onCancel={cancelEdit}
+                          controllerRef={editorRef}
                         />
                       ) : columnRelations[colIndex] && display !== null && display !== undefined ? (
                         <button
@@ -558,47 +571,75 @@ function Cell({ value }) {
   )
 }
 
-function CellEditor({ value, onCommit, onCancel }) {
+function CellEditor({ value, onCommit, onCancel, controllerRef }) {
   const isSpecial = Boolean(value && value.special)
   const isNull = !isSpecial && (value === null || value === undefined)
   const initial = isSpecial ? value.special : isNull ? '' : String(value)
   const [draft, setDraft] = useState(initial)
   const [highlight, setHighlight] = useState(-1)
+  const draftRef = useRef(initial)
+  const rootRef = useRef(null)
+  const settledRef = useRef(false)
 
   const query = draft.trim().toLowerCase()
   const matches = SPECIAL_VALUES.filter((option) => option.label.toLowerCase().includes(query))
 
+  const commitValue = (next) => {
+    if (settledRef.current) return
+    settledRef.current = true
+    onCommit(next)
+  }
+
   const finish = (next) => {
+    if (settledRef.current) return
     const text = next.trim()
     const exact = SPECIAL_VALUES.find((option) => option.label.toLowerCase() === text.toLowerCase())
     if (exact) {
-      onCommit(exact.value)
+      commitValue(exact.value)
       return
     }
     if (isSpecial) {
-      onCommit(text === '' ? null : next)
+      commitValue(text === '' ? null : next)
       return
     }
     if (isNull) {
-      onCommit(text === '' ? null : next)
+      commitValue(text === '' ? null : next)
       return
     }
     if (typeof value === 'number') {
       if (text === '') {
-        onCommit(null)
+        commitValue(null)
         return
       }
       const parsed = Number(text)
       if (Number.isFinite(parsed)) {
-        onCommit(parsed)
+        commitValue(parsed)
         return
       }
     }
-    onCommit(next)
+    commitValue(next)
   }
+
+  const cancel = () => {
+    if (settledRef.current) return
+    settledRef.current = true
+    onCancel()
+  }
+
+  useEffect(() => {
+    if (!controllerRef) return undefined
+    controllerRef.current = {
+      commit: () => finish(draftRef.current),
+      contains: (node) => Boolean(rootRef.current && rootRef.current.contains(node)),
+    }
+    return () => {
+      controllerRef.current = null
+    }
+  })
 
   return (
     <span
+      ref={rootRef}
       className="absolute inset-0 z-[15] flex items-center bg-base px-0.5"
       onClick={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
@@ -607,6 +648,7 @@ function CellEditor({ value, onCommit, onCancel }) {
         type="text"
         value={draft}
         onChange={(event) => {
+          draftRef.current = event.target.value
           setDraft(event.target.value)
           setHighlight(-1)
         }}
@@ -621,14 +663,14 @@ function CellEditor({ value, onCommit, onCancel }) {
           if (event.key === 'Enter') {
             event.preventDefault()
             if (highlight >= 0) {
-              onCommit(matches[highlight].value)
+              commitValue(matches[highlight].value)
               return
             }
             finish(draft)
           }
           if (event.key === 'Escape') {
             event.preventDefault()
-            onCancel()
+            cancel()
           }
         }}
         onBlur={() => finish(draft)}
@@ -645,7 +687,7 @@ function CellEditor({ value, onCommit, onCancel }) {
               type="button"
               onMouseDown={(event) => event.preventDefault()}
               onMouseEnter={() => setHighlight(index)}
-              onClick={() => onCommit(option.value)}
+              onClick={() => commitValue(option.value)}
               className={`flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left text-[length:var(--app-text-11)] transition-colors hover:bg-tint/[0.05] ${
                 index === highlight ? 'bg-tint/[0.05] text-accent' : 'text-text'
               }`}
