@@ -143,6 +143,13 @@ const ICONS = {
       <path d="M17.8 8h.01M17.8 12h.01M17.8 16h.01" />
     </>
   ),
+  'panel-left': (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9.5 4v16" />
+      <path d="M6.2 8h.01M6.2 12h.01M6.2 16h.01" />
+    </>
+  ),
   key: (
     <>
       <circle cx="7.5" cy="15.5" r="3.5" />

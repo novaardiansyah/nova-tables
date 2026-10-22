@@ -13,7 +13,7 @@ import PromptDialog from './components/PromptDialog.jsx'
 import QueryEditor from './components/QueryEditor.jsx'
 import QueryGuardDialog from './components/QueryGuardDialog.jsx'
 import ResultsPanel from './components/ResultsPanel.jsx'
-import Sidebar from './components/Sidebar.jsx'
+import Sidebar, { SIDEBAR_DEFAULT_WIDTH } from './components/Sidebar.jsx'
 import ShortcutPanel from './components/ShortcutPanel.jsx'
 import SettingsDialog from './components/SettingsDialog.jsx'
 import StatusBar from './components/StatusBar.jsx'
@@ -228,6 +228,8 @@ export default function App() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [editorHeight, setEditorHeight] = useState(EDITOR_DEFAULT_HEIGHT)
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [appVersion, setAppVersion] = useState('')
   const [tablePrompt, setTablePrompt] = useState(null)
   const [dropTarget, setDropTarget] = useState(null)
@@ -1645,7 +1647,7 @@ export default function App() {
       ) : null}
 
       {session && screen === 'workspace' ? (
-        <div className="flex min-h-0 flex-1">
+        <div className="relative flex min-h-0 flex-1">
           <Sidebar
             sessions={Object.values(sessions)}
             activeConnectionId={activeConnectionId}
@@ -1673,6 +1675,10 @@ export default function App() {
             selectedModule={session.selectedModule}
             onSelectModule={handleSelectModule}
             onRefreshDatabases={handleRefreshDatabases}
+            width={sidebarWidth}
+            onWidthChange={setSidebarWidth}
+            collapsed={sidebarCollapsed}
+            onToggleCollapsed={setSidebarCollapsed}
           />
 
           <main className="flex min-w-0 flex-1 flex-col bg-base">
