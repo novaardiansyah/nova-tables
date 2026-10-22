@@ -78,6 +78,17 @@ export const api = {
 
   runQuery: async (input) => call(() => bridge().query.run(input)),
 
+  listSavedQueries: async (connectionId, database) =>
+    (await call(() => bridge().savedQueries.list({ connectionId, database }))).queries,
+
+  saveSavedQuery: async (input) =>
+    (await call(() => bridge().savedQueries.save(input))).query,
+
+  renameSavedQuery: async (input) =>
+    (await call(() => bridge().savedQueries.rename(input))).query,
+
+  deleteSavedQuery: async (id) => call(() => bridge().savedQueries.remove(id)),
+
   copyText: async (text) => call(() => bridge().clipboard.writeText(text)),
 
   loadSettings: async () => (await call(() => bridge().settings.get())).settings,

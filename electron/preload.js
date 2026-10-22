@@ -42,6 +42,12 @@ contextBridge.exposeInMainWorld('nova', {
   query: {
     run: (input) => ipcRenderer.invoke('query:run', input),
   },
+  savedQueries: {
+    list: (input) => ipcRenderer.invoke('saved-queries:list', input),
+    save: (input) => ipcRenderer.invoke('saved-queries:save', input),
+    rename: (input) => ipcRenderer.invoke('saved-queries:rename', input),
+    remove: (id) => ipcRenderer.invoke('saved-queries:delete', id),
+  },
   app: {
     info: () => ipcRenderer.invoke('app:info'),
   },

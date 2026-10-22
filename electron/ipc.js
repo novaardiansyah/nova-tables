@@ -2,12 +2,16 @@ import { app, clipboard, ipcMain } from 'electron'
 import {
   deleteConnection,
   deleteFolder,
+  deleteSavedQuery,
   listConnections,
   listFolders,
+  listSavedQueries,
   moveConnection,
   readSettings,
+  renameSavedQuery,
   saveConnection,
   saveFolder,
+  saveSavedQuery,
   updateTreeOrder,
   writeSettings,
 } from './connectionStore.js'
@@ -80,6 +84,16 @@ export function registerIpcHandlers() {
   handle('db:result-columns', (input) => describeResult(input))
 
   handle('query:run', (input) => runQuery(input))
+
+  handle('saved-queries:list', (input) => ({
+    queries: listSavedQueries(input.connectionId, input.database),
+  }))
+
+  handle('saved-queries:save', (input) => ({ query: saveSavedQuery(input) }))
+
+  handle('saved-queries:rename', (input) => ({ query: renameSavedQuery(input) }))
+
+  handle('saved-queries:delete', (id) => ({ deleted: deleteSavedQuery(id), queryId: id }))
 
   handle('app:info', () => ({
     version: app.getVersion(),

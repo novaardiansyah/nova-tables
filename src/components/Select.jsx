@@ -10,6 +10,7 @@ export default function Select({
   icon = 'database',
   placeholder = 'Select database',
   emptyLabel = 'No databases',
+  panelAlign = 'left',
   panelClassName = 'w-64',
 }) {
   const [open, setOpen] = useState(false)
@@ -54,7 +55,7 @@ export default function Select({
 
       {open ? (
         <div
-          className={`absolute left-0 top-[calc(100%+6px)] z-40 max-h-80 origin-top-left animate-fade-in overflow-auto rounded-lg border border-line-strong bg-elevated p-1 shadow-2xl shadow-black/60 ${panelClassName}`}
+          className={`absolute top-[calc(100%+6px)] z-40 max-h-80 animate-fade-in overflow-auto rounded-lg border border-line-strong bg-elevated p-1 shadow-2xl shadow-black/60 ${panelAlign === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left'} ${panelClassName}`}
         >
           {options.length === 0 ? (
             <p className="px-2 py-3 text-center text-[length:var(--app-text-12)] text-text-muted">{emptyLabel}</p>

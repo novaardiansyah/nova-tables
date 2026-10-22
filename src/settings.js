@@ -27,9 +27,9 @@ export const FONT_FAMILIES = [
   { id: 'mono', label: 'Monospace', value: MONO_FALLBACK },
 ]
 
-export const FONT_SIZES = [11, 12, 13, 14, 15, 16]
-
-export const QUERY_SIZES = [11, 12, 13, 14, 15, 16, 17, 18]
+export const FONT_SIZE_MIN = 9
+export const FONT_SIZE_MAX = 32
+export const APP_FONT_SIZE_MAX = 20
 
 const APP_BASE_SIZE = 13
 const APP_LADDER = [9, 10, 11, 12, 13, 14, 15]
@@ -37,25 +37,22 @@ const listeners = new Set()
 
 export const DEFAULT_SETTINGS = {
   theme: 'nova',
-  appFontSize: 13,
+  appFontSize: 12,
   appFontFamily: 'system',
   gridFontSize: 12,
   gridFontFamily: 'system',
   jsonFontSize: 12,
   jsonFontFamily: 'mono',
-  queryFontSize: 13,
+  queryFontSize: 12,
   queryFontFamily: 'hack',
+  queryWordWrap: false,
   queryExecutionMode: 'silent',
 }
 
-function normalizeFontSize(value, fallback) {
-  const size = Number(value)
-  return FONT_SIZES.includes(size) ? size : fallback
-}
-
-function normalizeQueryFontSize(value, fallback) {
-  const size = Number(value)
-  return QUERY_SIZES.includes(size) ? size : fallback
+function normalizeFontSize(value, fallback, max = FONT_SIZE_MAX) {
+  const size = Math.round(Number(value))
+  if (!Number.isFinite(size)) return fallback
+  return Math.min(Math.max(size, FONT_SIZE_MIN), max)
 }
 
 function normalizeFontFamily(value, fallback) {
@@ -67,14 +64,15 @@ export function normalizeSettings(input) {
 
   return {
     theme: THEMES.some((theme) => theme.id === source.theme) ? source.theme : DEFAULT_SETTINGS.theme,
-    appFontSize: normalizeFontSize(source.appFontSize, DEFAULT_SETTINGS.appFontSize),
+    appFontSize: normalizeFontSize(source.appFontSize, DEFAULT_SETTINGS.appFontSize, APP_FONT_SIZE_MAX),
     appFontFamily: normalizeFontFamily(source.appFontFamily, DEFAULT_SETTINGS.appFontFamily),
     gridFontSize: normalizeFontSize(source.gridFontSize, DEFAULT_SETTINGS.gridFontSize),
     gridFontFamily: normalizeFontFamily(source.gridFontFamily, DEFAULT_SETTINGS.gridFontFamily),
     jsonFontSize: normalizeFontSize(source.jsonFontSize, DEFAULT_SETTINGS.jsonFontSize),
     jsonFontFamily: normalizeFontFamily(source.jsonFontFamily, DEFAULT_SETTINGS.jsonFontFamily),
-    queryFontSize: normalizeQueryFontSize(source.queryFontSize, DEFAULT_SETTINGS.queryFontSize),
+    queryFontSize: normalizeFontSize(source.queryFontSize, DEFAULT_SETTINGS.queryFontSize),
     queryFontFamily: normalizeFontFamily(source.queryFontFamily, DEFAULT_SETTINGS.queryFontFamily),
+    queryWordWrap: source.queryWordWrap === true,
     queryExecutionMode: EXECUTION_MODES.some((mode) => mode.id === source.queryExecutionMode)
       ? source.queryExecutionMode
       : DEFAULT_SETTINGS.queryExecutionMode,
@@ -119,5 +117,6 @@ export function queryFontOptions(settings) {
     fontFamily: fontFamilyValue(normalized.queryFontFamily),
     fontSize: normalized.queryFontSize,
     lineHeight: Math.round(normalized.queryFontSize * 1.6),
+    wordWrap: normalized.queryWordWrap ? 'on' : 'off',
   }
 }

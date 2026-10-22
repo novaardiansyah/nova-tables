@@ -1,9 +1,18 @@
 import Icon, { Spinner } from './Icon.jsx'
 
-export default function TabBar({ tabs, activeTabId, onSelect, onClose, onNewTab }) {
+export default function TabBar({
+  tabs,
+  activeTabId,
+  canSave,
+  onSelect,
+  onClose,
+  onNewTab,
+  onSaveQuery,
+  onOpenSavedQueries,
+}) {
   return (
     <div className="flex h-9 shrink-0 items-stretch border-b border-line bg-panel">
-      <div className="flex min-w-0 flex-1 items-stretch overflow-x-auto">
+      <div className="tab-strip flex min-w-0 flex-1 items-stretch overflow-x-auto overflow-y-hidden">
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId
           const status = tab.state.status
@@ -19,7 +28,7 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose, onNewTab 
                 type="button"
                 onClick={() => onSelect(tab.id)}
                 title={tab.title}
-                className={`flex min-w-0 flex-1 items-center gap-1.5 py-2 pl-3 pr-1 text-left text-[length:var(--app-text-12)] ${
+                className={`flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pl-3 pr-1 text-left text-[length:var(--app-text-12)] ${
                   isActive ? 'text-text-strong' : 'text-text-muted hover:text-text'
                 }`}
               >
@@ -37,6 +46,9 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose, onNewTab 
                   />
                 )}
                 <span className="min-w-0 flex-1 truncate">{tab.title}</span>
+                {tab.savedQueryId ? (
+                  <Icon name="bookmark" size={9} className="shrink-0 text-accent/70" />
+                ) : null}
               </button>
               <button
                 type="button"
@@ -56,9 +68,30 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose, onNewTab 
           type="button"
           onClick={onNewTab}
           title="New tab (Ctrl+T)"
-          className="icon-btn ml-1 my-1.5 h-6 w-6 shrink-0"
+          className="icon-btn ml-1 h-6 w-6 shrink-0 self-center"
         >
           <Icon name="plus" size={13} />
+        </button>
+      </div>
+
+      <div className="flex shrink-0 items-center border-l border-line">
+        <button
+          type="button"
+          onClick={onSaveQuery}
+          disabled={!canSave}
+          title="Save query (Ctrl+S)"
+          className="icon-btn h-6 w-6 disabled:pointer-events-none disabled:opacity-30"
+        >
+          <Icon name="save" size={13} />
+        </button>
+        <button
+          type="button"
+          onClick={onOpenSavedQueries}
+          disabled={!canSave}
+          title="Saved queries"
+          className="icon-btn mx-1 h-6 w-6 disabled:pointer-events-none disabled:opacity-30"
+        >
+          <Icon name="bookmark" size={13} />
         </button>
       </div>
     </div>

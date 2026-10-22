@@ -22,6 +22,8 @@ import PromptDialog from './components/PromptDialog.jsx'
 import QueryEditor from './components/QueryEditor.jsx'
 import QueryGuardDialog from './components/QueryGuardDialog.jsx'
 import ResultsPanel from './components/ResultsPanel.jsx'
+import SaveQueryDialog from './components/SaveQueryDialog.jsx'
+import SavedQueriesDialog from './components/SavedQueriesDialog.jsx'
 import Sidebar, { SIDEBAR_DEFAULT_WIDTH } from './components/Sidebar.jsx'
 import ShortcutPanel from './components/ShortcutPanel.jsx'
 import SettingsDialog from './components/SettingsDialog.jsx'
@@ -51,12 +53,14 @@ const IDLE_QUERY = { status: 'idle', result: null, error: null }
 const EDITOR_DEFAULT_HEIGHT = 320
 const BROWSE_ROWS = 300
 
-function createTab(id, title, sql, editSource = null) {
+function createTab(id, title, sql, editSource = null, savedQuery = null) {
   return {
     id,
     kind: 'query',
     title,
     sql,
+    savedQueryId: savedQuery?.id ?? null,
+    savedQueryName: savedQuery?.name ?? null,
     state: IDLE_QUERY,
     activeSet: 0,
     relations: [],
@@ -193,6 +197,18 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
   const [runGuard, setRunGuard] = useState(null)
+  const [savedQueriesOpen, setSavedQueriesOpen] = useState(false)
+  const [savedQueries, setSavedQueries] = useState([])
+  const [savedQueriesLoading, setSavedQueriesLoading] = useState(false)
+  const [savedQueriesError, setSavedQueriesError] = useState(null)
+  const [saveQueryDialog, setSaveQueryDialog] = useState(null)
+  const [queryRenameTarget, setQueryRenameTarget] = useState(null)
+  const [queryDeleteTarget, setQueryDeleteTarget] = useState(null)
+  const [queryBusy, setQueryBusy] = useState(false)
+
+  const scopeDatabase = activeConnectionId
+    ? sessions[activeConnectionId]?.activeDatabase ?? null
+    : null
 
   const sqlRef = useRef(STARTER_SQL)
   const selectionRef = useRef('')
@@ -435,6 +451,10 @@ export default function App() {
   const openConnectionScreen = useCallback(() => {
     setScreen('connections')
     setBanner(null)
+    setSavedQueriesOpen(false)
+    setSaveQueryDialog(null)
+    setQueryRenameTarget(null)
+    setQueryDeleteTarget(null)
   }, [])
 
   const saveSettings = useCallback(
@@ -651,7 +671,7 @@ export default function App() {
   )
 
   const openTab = useCallback(
-    (connectionId, title, sql, editSource = null) => {
+    (connectionId, title, sql, editSource = null, savedQuery = null) => {
       tabIdRef.current += 1
       const id = `tab-${tabIdRef.current}`
       const liveSql = sqlRef.current
@@ -664,7 +684,7 @@ export default function App() {
             ...current,
             tabs: [
               ...current.tabs.map((tab) => (tab.id === current.activeTabId ? { ...tab, sql: liveSql } : tab)),
-              createTab(id, title, sql, editSource),
+              createTab(id, title, sql, editSource, savedQuery),
             ],
             activeTabId: id,
           },
@@ -675,6 +695,204 @@ export default function App() {
     },
     [seedEditor],
   )
+
+  const refreshSavedQueries = useCallback(async () => {
+    const current = activeSession()
+    if (!current?.activeDatabase) return
+    try {
+      const items = await api.listSavedQueries(current.connectionId, current.activeDatabase)
+      setSavedQueries(items)
+      setSavedQueriesError(null)
+    } catch (error) {
+      setSavedQueriesError(error.message)
+    }
+  }, [activeSession])
+
+  useEffect(() => {
+    if (screen !== 'workspace' || !activeConnectionId || !scopeDatabase) {
+      setSavedQueries([])
+      setSavedQueriesError(null)
+      setSavedQueriesLoading(false)
+      return undefined
+    }
+
+    let cancelled = false
+    setSavedQueriesLoading(true)
+    setSavedQueriesError(null)
+    api
+      .listSavedQueries(activeConnectionId, scopeDatabase)
+      .then((items) => {
+        if (!cancelled) setSavedQueries(items)
+      })
+      .catch((error) => {
+        if (!cancelled) setSavedQueriesError(error.message)
+      })
+      .finally(() => {
+        if (!cancelled) setSavedQueriesLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeConnectionId, scopeDatabase, screen])
+
+  const handleSaveQuery = useCallback(async () => {
+    const current = activeSession()
+    if (!current || !current.activeDatabase) {
+      showBanner('warn', 'Open a connection and pick a database before saving a query.')
+      return
+    }
+
+    const tab = current.tabs.find((item) => item.id === current.activeTabId)
+    if (!tab || tab.kind !== 'query') return
+
+    const sql = sqlRef.current
+    if (!sql.trim()) {
+      showBanner('warn', 'Write a query before saving it.')
+      return
+    }
+
+    if (tab.savedQueryId) {
+      setQueryBusy(true)
+      try {
+        const saved = await api.saveSavedQuery({
+          id: tab.savedQueryId,
+          connectionId: current.connectionId,
+          database: current.activeDatabase,
+          name: tab.savedQueryName,
+          sql,
+        })
+        updateTab(current.connectionId, tab.id, {
+          savedQueryId: saved.id,
+          savedQueryName: saved.name,
+          title: saved.name,
+        })
+        await refreshSavedQueries()
+        showBanner('success', `Saved “${saved.name}”.`)
+      } catch (error) {
+        if (error.code === 'SAVED_QUERY_MISSING') {
+          updateTab(current.connectionId, tab.id, { savedQueryId: null, savedQueryName: null })
+        }
+        showBanner('error', error.message)
+      } finally {
+        setQueryBusy(false)
+      }
+      return
+    }
+
+    setSaveQueryDialog({
+      tabId: tab.id,
+      sql,
+      initialName: /^Query \d+$/.test(tab.title) ? '' : tab.title,
+      existingNames: savedQueries.map((item) => item.name),
+    })
+  }, [activeSession, refreshSavedQueries, savedQueries, showBanner, updateTab])
+
+  const handleSaveQuerySubmit = useCallback(
+    async (name) => {
+      const pending = saveQueryDialog
+      const current = activeSession()
+      if (!pending || !current || !current.activeDatabase) return
+
+      setQueryBusy(true)
+      try {
+        const saved = await api.saveSavedQuery({
+          connectionId: current.connectionId,
+          database: current.activeDatabase,
+          name,
+          sql: pending.sql,
+        })
+        updateTab(current.connectionId, pending.tabId, {
+          savedQueryId: saved.id,
+          savedQueryName: saved.name,
+          title: saved.name,
+        })
+        setSaveQueryDialog(null)
+        await refreshSavedQueries()
+        showBanner('success', `Saved “${saved.name}” to ${current.activeDatabase}.`)
+      } catch (error) {
+        setSaveQueryDialog((prev) => (prev ? { ...prev, error: error.message } : prev))
+      } finally {
+        setQueryBusy(false)
+      }
+    },
+    [activeSession, refreshSavedQueries, saveQueryDialog, showBanner, updateTab],
+  )
+
+  const handleOpenSavedQueries = useCallback(() => {
+    const current = activeSession()
+    if (!current || !current.activeDatabase) {
+      showBanner('warn', 'Open a connection and pick a database to see its saved queries.')
+      return
+    }
+    setSavedQueriesOpen(true)
+    refreshSavedQueries()
+  }, [activeSession, refreshSavedQueries, showBanner])
+
+  const handleOpenSavedQuery = useCallback(
+    (item) => {
+      const current = activeSession()
+      if (!current || !current.activeDatabase) return
+      if (
+        item.connectionId !== current.connectionId ||
+        item.database.toLowerCase() !== current.activeDatabase.toLowerCase()
+      ) {
+        showBanner('warn', 'This saved query belongs to another connection or database.')
+        return
+      }
+      setSavedQueriesOpen(false)
+      openTab(current.connectionId, item.name, item.sql, null, { id: item.id, name: item.name })
+      showBanner('success', `Opened “${item.name}”.`)
+    },
+    [activeSession, openTab, showBanner],
+  )
+
+  const handleRenameSavedQuery = useCallback(
+    async (name) => {
+      const target = queryRenameTarget
+      if (!target) return
+
+      setQueryBusy(true)
+      try {
+        const saved = await api.renameSavedQuery({ id: target.id, name })
+        const current = sessionsRef.current[target.connectionId]
+        for (const tab of current?.tabs ?? []) {
+          if (tab.savedQueryId !== saved.id) continue
+          updateTab(target.connectionId, tab.id, { savedQueryName: saved.name, title: saved.name })
+        }
+        setQueryRenameTarget(null)
+        await refreshSavedQueries()
+        showBanner('success', `Renamed saved query to “${saved.name}”.`)
+      } catch (error) {
+        setQueryRenameTarget((prev) => (prev ? { ...prev, error: error.message } : prev))
+      } finally {
+        setQueryBusy(false)
+      }
+    },
+    [queryRenameTarget, refreshSavedQueries, showBanner, updateTab],
+  )
+
+  const handleDeleteSavedQuery = useCallback(async () => {
+    const target = queryDeleteTarget
+    if (!target) return
+
+    setQueryBusy(true)
+    try {
+      await api.deleteSavedQuery(target.id)
+      const current = sessionsRef.current[target.connectionId]
+      for (const tab of current?.tabs ?? []) {
+        if (tab.savedQueryId !== target.id) continue
+        updateTab(target.connectionId, tab.id, { savedQueryId: null, savedQueryName: null })
+      }
+      setQueryDeleteTarget(null)
+      await refreshSavedQueries()
+      showBanner('success', `Deleted “${target.name}”.`)
+    } catch (error) {
+      showBanner('error', error.message)
+    } finally {
+      setQueryBusy(false)
+    }
+  }, [queryDeleteTarget, refreshSavedQueries, showBanner, updateTab])
 
   const loadRelations = useCallback(
     async (tabId, table) => {
@@ -1556,6 +1774,10 @@ export default function App() {
         Boolean(dropTarget) ||
         Boolean(deleteTarget) ||
         Boolean(runGuard) ||
+        Boolean(saveQueryDialog) ||
+        Boolean(queryRenameTarget) ||
+        Boolean(queryDeleteTarget) ||
+        savedQueriesOpen ||
         shortcutsOpen ||
         settingsOpen
 
@@ -1577,6 +1799,12 @@ export default function App() {
       }
 
       if (isFormField || hasDialog) return
+
+      if (event.key.toLowerCase() === 's' && !event.shiftKey) {
+        event.preventDefault()
+        handleSaveQuery()
+        return
+      }
 
       if (event.key.toLowerCase() === 'n' && !event.shiftKey) {
         event.preventDefault()
@@ -1634,9 +1862,14 @@ export default function App() {
     handleCycleTab,
     handleNewTab,
     handleRun,
+    handleSaveQuery,
     handleSelectTabIndex,
     openConnectionScreen,
+    queryDeleteTarget,
+    queryRenameTarget,
     runGuard,
+    saveQueryDialog,
+    savedQueriesOpen,
     screen,
     settingsOpen,
     shortcutsOpen,
@@ -1706,9 +1939,12 @@ export default function App() {
             <TabBar
               tabs={session.tabs}
               activeTabId={session.activeTabId}
+              canSave={Boolean(session.activeDatabase && activeTab?.kind === 'query')}
               onSelect={handleSelectTab}
               onClose={handleCloseTab}
               onNewTab={handleNewTab}
+              onSaveQuery={handleSaveQuery}
+              onOpenSavedQueries={handleOpenSavedQueries}
             />
 
             {activeTab?.kind === 'design' ? (
@@ -1805,6 +2041,32 @@ export default function App() {
         onSave={saveSettings}
       />
 
+      <SavedQueriesDialog
+        open={savedQueriesOpen}
+        connectionName={session?.name ?? ''}
+        database={session?.activeDatabase ?? ''}
+        queries={savedQueries}
+        loading={savedQueriesLoading}
+        error={savedQueriesError}
+        blocked={Boolean(queryRenameTarget || queryDeleteTarget)}
+        onOpen={handleOpenSavedQuery}
+        onRename={(item) => setQueryRenameTarget({ ...item, error: null })}
+        onDelete={(item) => setQueryDeleteTarget(item)}
+        onClose={() => setSavedQueriesOpen(false)}
+      />
+
+      <SaveQueryDialog
+        open={Boolean(saveQueryDialog)}
+        initialName={saveQueryDialog?.initialName}
+        connectionName={session?.name ?? ''}
+        database={session?.activeDatabase ?? ''}
+        existingNames={saveQueryDialog?.existingNames ?? []}
+        error={saveQueryDialog?.error ?? null}
+        busy={queryBusy}
+        onCancel={() => setSaveQueryDialog(null)}
+        onSave={handleSaveQuerySubmit}
+      />
+
       {dialog ? (
         <ConnectionDialog
           mode={dialog.mode}
@@ -1873,6 +2135,39 @@ export default function App() {
         busy={deleting}
         onCancel={() => setDeleteTarget(null)}
         onConfirm={handleDeleteConfirm}
+      />
+
+      <PromptDialog
+        open={Boolean(queryRenameTarget)}
+        title="Rename saved query"
+        description={
+          queryRenameTarget
+            ? `Rename “${queryRenameTarget.name}” in ${session?.name ?? ''} / ${queryRenameTarget.database}.`
+            : ''
+        }
+        label="Query name"
+        hint="Names are unique within this connection and database."
+        confirmLabel={queryBusy ? 'Renaming…' : 'Rename'}
+        initialValue={queryRenameTarget?.name ?? ''}
+        error={queryRenameTarget?.error ?? null}
+        busy={queryBusy}
+        onCancel={() => setQueryRenameTarget(null)}
+        onConfirm={handleRenameSavedQuery}
+      />
+
+      <ConfirmDialog
+        open={Boolean(queryDeleteTarget)}
+        title="Delete saved query"
+        message={
+          queryDeleteTarget
+            ? `“${queryDeleteTarget.name}” will be removed from ${session?.name ?? ''} / ${queryDeleteTarget.database}. Open tabs keep their SQL.`
+            : ''
+        }
+        confirmLabel={queryBusy ? 'Deleting…' : 'Delete'}
+        danger
+        busy={queryBusy}
+        onCancel={() => setQueryDeleteTarget(null)}
+        onConfirm={handleDeleteSavedQuery}
       />
     </div>
   )

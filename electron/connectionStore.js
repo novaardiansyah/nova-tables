@@ -12,18 +12,12 @@ const ENVIRONMENTS = ['local', 'staging', 'production']
 const { Database } = sqlite
 
 let dbFile = null
-let legacyFile = null
 let db = null
 const sessionPasswords = new Map()
 
 function getDbFile() {
   if (!dbFile) dbFile = path.join(app.getPath('userData'), 'nova-tables.db')
   return dbFile
-}
-
-function getLegacyFile() {
-  if (!legacyFile) legacyFile = path.join(app.getPath('userData'), 'connections.json')
-  return legacyFile
 }
 
 function encryptPassword(plain) {
@@ -77,6 +71,20 @@ function createSchema(handle) {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS saved_queries (
+      id TEXT PRIMARY KEY,
+      connection_id TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
+      database_name TEXT NOT NULL COLLATE NOCASE,
+      name TEXT NOT NULL COLLATE NOCASE,
+      sql TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (connection_id, database_name, name)
+    );
+
+    CREATE INDEX IF NOT EXISTS saved_queries_scope
+      ON saved_queries (connection_id, database_name, updated_at DESC);
   `)
 }
 
@@ -139,58 +147,6 @@ function normalizeOrder(handle, table, ids) {
   return [...ordered, ...rest]
 }
 
-function migrateLegacyJson(handle) {
-  if (readMeta(handle, 'legacy_import') === 'done') return
-  try {
-    const parsed = JSON.parse(fs.readFileSync(getLegacyFile(), 'utf8'))
-    const folders = Array.isArray(parsed?.folders) ? parsed.folders : []
-    const connections = Array.isArray(parsed?.connections) ? parsed.connections : []
-
-    if (folders.length > 0 || connections.length > 0) {
-      handle.exec('BEGIN')
-      try {
-        for (const folder of folders) {
-          handle.run('INSERT OR IGNORE INTO folders (id, name, parent_id, created_at) VALUES (?, ?, ?, ?)', [
-            folder.id,
-            folder.name,
-            folder.parentId ?? null,
-            folder.createdAt ?? new Date().toISOString(),
-          ])
-        }
-        for (const connection of connections) {
-          handle.run(
-            `INSERT OR IGNORE INTO connections (
-              id, name, host, port, username, database_name, folder_id,
-              encrypt, trust_server_certificate, password_cipher, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              connection.id,
-              connection.name,
-              connection.host,
-              connection.port,
-              connection.username,
-              connection.database ?? '',
-              connection.folderId ?? null,
-              connection.encrypt === false ? 0 : 1,
-              connection.trustServerCertificate === false ? 0 : 1,
-              connection.passwordCipher ?? null,
-              connection.createdAt ?? new Date().toISOString(),
-              connection.updatedAt ?? new Date().toISOString(),
-            ],
-          )
-        }
-        handle.exec('COMMIT')
-      } catch (error) {
-        handle.exec('ROLLBACK')
-        throw error
-      }
-    }
-
-    fs.renameSync(getLegacyFile(), `${getLegacyFile()}.migrated`)
-  } catch {}
-  writeMeta(handle, 'legacy_import', 'done')
-}
-
 function restrictPermissions(file) {
   for (const suffix of ['', '-wal', '-shm']) {
     try {
@@ -207,7 +163,6 @@ function getDb() {
   createSchema(db)
   ensureSchema(db)
   restrictPermissions(file)
-  migrateLegacyJson(db)
   writeMeta(db, 'schema_version', SCHEMA_VERSION)
   return db
 }
@@ -606,6 +561,127 @@ export function readSettings() {
 export function writeSettings(settings) {
   writeMeta(getDb(), 'settings', JSON.stringify(settings ?? {}))
   return readSettings()
+}
+
+function invalidSavedQueryError(message, code = 'INVALID_SAVED_QUERY') {
+  const error = new Error(message)
+  error.code = code
+  return error
+}
+
+function toSavedQuery(row) {
+  return {
+    id: row.id,
+    connectionId: row.connection_id,
+    database: row.database_name,
+    name: row.name,
+    sql: row.sql,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+function readSavedQuery(handle, id) {
+  const row = handle.get('SELECT * FROM saved_queries WHERE id = ?', [id])
+  if (!row) throw invalidSavedQueryError('Saved query not found', 'SAVED_QUERY_MISSING')
+  return row
+}
+
+function savedQueryScope(handle, connectionId, database, name, excludeId = null) {
+  const params = [connectionId, database, name]
+  let sql = 'SELECT id FROM saved_queries WHERE connection_id = ? AND database_name = ? AND name = ?'
+  if (excludeId) {
+    sql += ' AND id <> ?'
+    params.push(excludeId)
+  }
+  return handle.get(sql, params)
+}
+
+export function listSavedQueries(connectionId, database) {
+  const id = cleanText(connectionId)
+  const scope = cleanText(database)
+  if (!id || !scope) return []
+  return getDb()
+    .all(
+      'SELECT * FROM saved_queries WHERE connection_id = ? AND database_name = ? ORDER BY updated_at DESC, name ASC',
+      [id, scope],
+    )
+    .map(toSavedQuery)
+}
+
+export function saveSavedQuery(input = {}) {
+  const connectionId = cleanText(input.connectionId)
+  const database = cleanText(input.database)
+  const name = cleanText(input.name)
+  const sql = String(input.sql ?? '')
+  if (!connectionId) throw invalidSavedQueryError('Connection is required')
+  if (!database) throw invalidSavedQueryError('Database is required')
+  if (!name) throw invalidSavedQueryError('Query name is required')
+
+  const handle = getDb()
+  if (!handle.get('SELECT 1 AS found FROM connections WHERE id = ?', [connectionId])) {
+    throw invalidSavedQueryError('Connection not found', 'CONNECTION_MISSING')
+  }
+
+  const now = new Date().toISOString()
+
+  if (input.id) {
+    const existing = readSavedQuery(handle, String(input.id))
+    if (existing.connection_id !== connectionId) {
+      throw invalidSavedQueryError('Saved query belongs to another connection', 'SAVED_QUERY_MISSING')
+    }
+    if (savedQueryScope(handle, connectionId, existing.database_name, name, existing.id)) {
+      throw invalidSavedQueryError('A saved query with this name already exists', 'QUERY_EXISTS')
+    }
+    handle.run('UPDATE saved_queries SET name = ?, sql = ?, updated_at = ? WHERE id = ?', [
+      name,
+      sql,
+      now,
+      existing.id,
+    ])
+    return toSavedQuery(readSavedQuery(handle, existing.id))
+  }
+
+  const existing = savedQueryScope(handle, connectionId, database, name)
+  if (existing) {
+    handle.run('UPDATE saved_queries SET sql = ?, updated_at = ? WHERE id = ?', [sql, now, existing.id])
+    return toSavedQuery(readSavedQuery(handle, existing.id))
+  }
+
+  const id = crypto.randomUUID()
+  handle.run(
+    'INSERT INTO saved_queries (id, connection_id, database_name, name, sql, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [id, connectionId, database, name, sql, now, now],
+  )
+  return toSavedQuery(readSavedQuery(handle, id))
+}
+
+export function renameSavedQuery(input = {}) {
+  const id = cleanText(input.id)
+  const name = cleanText(input.name)
+  if (!id) throw invalidSavedQueryError('Saved query is required', 'SAVED_QUERY_MISSING')
+  if (!name) throw invalidSavedQueryError('Query name is required')
+
+  const handle = getDb()
+  const existing = readSavedQuery(handle, id)
+  if (savedQueryScope(handle, existing.connection_id, existing.database_name, name, existing.id)) {
+    throw invalidSavedQueryError('A saved query with this name already exists', 'QUERY_EXISTS')
+  }
+  handle.run('UPDATE saved_queries SET name = ?, updated_at = ? WHERE id = ?', [
+    name,
+    new Date().toISOString(),
+    id,
+  ])
+  return toSavedQuery(readSavedQuery(handle, id))
+}
+
+export function deleteSavedQuery(id) {
+  const key = cleanText(id)
+  if (!key) return false
+  const handle = getDb()
+  if (!handle.get('SELECT 1 AS found FROM saved_queries WHERE id = ?', [key])) return false
+  handle.run('DELETE FROM saved_queries WHERE id = ?', [key])
+  return true
 }
 
 export function isSystemDatabase(name) {

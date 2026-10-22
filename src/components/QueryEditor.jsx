@@ -41,15 +41,15 @@ export default function QueryEditor({
   const handlersRef = useRef({ onChange, onRun, onSelectionChange })
   const lastSeedRef = useRef(null)
   const seedingRef = useRef(false)
-  const { fontFamily, fontSize, lineHeight } = queryFontOptions(settings)
+  const { fontFamily, fontSize, lineHeight, wordWrap } = queryFontOptions(settings)
 
   useEffect(() => {
     handlersRef.current = { onChange, onRun, onSelectionChange }
   }, [onChange, onRun, onSelectionChange])
 
   useEffect(() => {
-    editorRef.current?.updateOptions({ fontFamily, fontSize, lineHeight })
-  }, [fontFamily, fontSize, lineHeight])
+    editorRef.current?.updateOptions({ fontFamily, fontSize, lineHeight, wordWrap })
+  }, [fontFamily, fontSize, lineHeight, wordWrap])
 
   useEffect(
     () =>
@@ -103,7 +103,7 @@ export default function QueryEditor({
           if (seedingRef.current) return
           handlersRef.current.onChange?.(value ?? '')
         }}
-        options={{ ...EDITOR_OPTIONS, fontFamily, fontSize, lineHeight }}
+        options={{ ...EDITOR_OPTIONS, fontFamily, fontSize, lineHeight, wordWrap }}
         loading={
           <div className="flex items-center gap-2 p-4 text-[length:var(--app-text-12)] text-text-muted">
             <Spinner size={13} />

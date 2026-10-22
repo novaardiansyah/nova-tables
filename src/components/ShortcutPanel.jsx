@@ -17,6 +17,7 @@ const GROUPS = [
     items: [
       { keys: ['Ctrl', '↵'], label: 'Run the selected SQL, or the whole tab' },
       { keys: ['F5'], label: 'Run the selected SQL, or the whole tab' },
+      { keys: ['Ctrl', 'S'], label: 'Save the active tab, or update it when already saved' },
     ],
   },
   {
