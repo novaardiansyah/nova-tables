@@ -1,6 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import ContextMenu from './ContextMenu.jsx'
 import Icon, { BrandMark, Spinner } from './Icon.jsx'
+
+export const SIDEBAR_DEFAULT_WIDTH = 272
+const SIDEBAR_MIN_WIDTH = 200
+const SIDEBAR_MAX_WIDTH = 560
 
 export default function Sidebar({
   sessions,
@@ -28,11 +32,91 @@ export default function Sidebar({
   onSelectTable,
   selectedModule,
   onSelectModule,
+  width = SIDEBAR_DEFAULT_WIDTH,
+  onWidthChange,
+  collapsed = false,
+  onToggleCollapsed,
 }) {
   const [expanded, setExpanded] = useState(true)
-  const [collapsed, setCollapsed] = useState({})
+  const [collapsedGroups, setCollapsedGroups] = useState({})
   const [menu, setMenu] = useState(null)
   const [filter, setFilter] = useState('')
+  const [hoverOpen, setHoverOpen] = useState(false)
+  const hoverOpenRef = useRef(false)
+  const closeTimer = useRef(null)
+  const railRef = useRef(null)
+
+  const showOverlay = useCallback(() => {
+    if (hoverOpenRef.current) return
+    hoverOpenRef.current = true
+    setHoverOpen(true)
+  }, [])
+
+  const hideOverlay = useCallback(() => {
+    if (!hoverOpenRef.current) return
+    hoverOpenRef.current = false
+    setHoverOpen(false)
+    setMenu(null)
+  }, [])
+
+  useEffect(() => {
+    if (!collapsed) return undefined
+
+    const handlePointerMove = (event) => {
+      const rect = railRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const withinRow = event.clientY >= rect.top && event.clientY <= rect.bottom
+      const overRail = withinRow && event.clientX >= rect.left && event.clientX <= rect.right
+      const overPanel = withinRow && event.clientX >= rect.left && event.clientX <= rect.left + width
+
+      window.clearTimeout(closeTimer.current)
+      if (hoverOpenRef.current) {
+        if (overPanel) return
+        closeTimer.current = window.setTimeout(hideOverlay, 120)
+        return
+      }
+      if (overRail) showOverlay()
+    }
+
+    window.addEventListener('mousemove', handlePointerMove)
+    return () => {
+      window.removeEventListener('mousemove', handlePointerMove)
+      window.clearTimeout(closeTimer.current)
+    }
+  }, [collapsed, hideOverlay, showOverlay, width])
+
+  useEffect(() => {
+    if (!collapsed) hideOverlay()
+  }, [collapsed, hideOverlay])
+
+  const handleResizePointerDown = useCallback(
+    (event) => {
+      if (event.button !== 0) return
+      event.preventDefault()
+
+      const startX = event.clientX
+      const startWidth = width
+      const move = (moveEvent) => {
+        const next = Math.min(
+          Math.max(startWidth + (moveEvent.clientX - startX), SIDEBAR_MIN_WIDTH),
+          SIDEBAR_MAX_WIDTH,
+        )
+        onWidthChange(next)
+      }
+      const stop = () => {
+        window.removeEventListener('pointermove', move)
+        window.removeEventListener('pointerup', stop)
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+      window.addEventListener('pointermove', move)
+      window.addEventListener('pointerup', stop)
+    },
+    [onWidthChange, width],
+  )
 
   useEffect(() => {
     setFilter('')
@@ -136,7 +220,7 @@ export default function Sidebar({
 
   const renderGroup = (item, group) => {
     const key = `${item.connectionId}:${group}`
-    const isOpen = !collapsed[key] || filterText !== ''
+    const isOpen = !collapsedGroups[key] || filterText !== ''
     const state = group === 'tables' ? item.tables : item.modules
     const items = group === 'tables' ? state.tables : state.modules
     const visible = items.filter((entry) => matchesFilter(entry.schema, entry.name))
@@ -146,7 +230,7 @@ export default function Sidebar({
       <div key={group}>
         <button
           type="button"
-          onClick={() => setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }))}
+          onClick={() => setCollapsedGroups((prev) => ({ ...prev, [key]: !prev[key] }))}
           className="tree-row"
           title={isOpen ? 'Collapse' : 'Expand'}
         >
@@ -296,14 +380,23 @@ export default function Sidebar({
     )
   }
 
-  return (
-    <aside className="flex w-[272px] shrink-0 flex-col border-r border-line bg-panel">
+  const renderPanel = (toggleAction) => (
+    <>
       <div className="flex h-12 shrink-0 items-center gap-2.5 border-b border-line px-4">
         <BrandMark size={20} />
-        <span className="text-[length:var(--app-text-13)] font-semibold tracking-tight text-text-strong">Nova Tables</span>
-        <span className="ml-auto rounded border border-line-strong bg-tint/[0.03] px-1.5 py-0.5 text-[length:var(--app-text-9)] font-semibold uppercase tracking-wider text-text-muted">
+        <span className="min-w-0 truncate text-[length:var(--app-text-13)] font-semibold tracking-tight text-text-strong">Nova Tables</span>
+        <span className="ml-auto shrink-0 rounded border border-line-strong bg-tint/[0.03] px-1.5 py-0.5 text-[length:var(--app-text-9)] font-semibold uppercase tracking-wider text-text-muted">
           MSSQL
         </span>
+        <button
+          type="button"
+          className="icon-btn h-6 w-6 shrink-0"
+          title={toggleAction.title}
+          aria-label={toggleAction.title}
+          onClick={toggleAction.onClick}
+        >
+          <Icon name={toggleAction.icon} size={13} />
+        </button>
       </div>
 
       <div className="space-y-1.5 p-3">
@@ -329,93 +422,151 @@ export default function Sidebar({
         <span>Microsoft SQL Server</span>
         <span>{appVersion ? `v${appVersion}` : ''}</span>
       </div>
+    </>
+  )
 
-      {menu ? (
-        <ContextMenu
-          x={menu.x}
-          y={menu.y}
-          items={
-            menu.kind === 'module'
-              ? [
-                  {
-                    id: 'open-new-tab',
-                    label: 'Open new tab',
-                    onSelect: () => onOpenModule(menu.module),
-                  },
-                  {
-                    id: 'copy-object-name',
-                    label: 'Copy object name',
-                    onSelect: () => onCopyObjectName(menu.module),
-                  },
-                  {
-                    id: 'copy-module-definition',
-                    label: 'Copy definition',
-                    onSelect: () => onCopyModuleDefinition(menu.module),
-                  },
-                  {
-                    id: 'new-function',
-                    label: 'New function',
-                    onSelect: () => onNewFunction(),
-                  },
-                ]
-              : [
-                  {
-                    id: 'open-new-tab',
-                    label: 'Open new tab',
-                    onSelect: () => onBrowseTable(menu.table),
-                  },
-                  {
-                    id: 'copy-object-name',
-                    label: 'Copy object name',
-                    onSelect: () => onCopyObjectName(menu.table),
-                  },
-                  {
-                    id: 'copy-structure',
-                    label: 'Copy structure',
-                    onSelect: () => onCopyStructure(menu.table),
-                  },
-                  {
-                    id: 'open-structure',
-                    label: 'Open structure',
-                    onSelect: () => onOpenStructure(menu.table),
-                  },
-                  {
-                    id: 'new-table',
-                    label: 'New table',
-                    onSelect: () => onNewTable(menu.table),
-                  },
-                  {
-                    id: 'rename',
-                    label: 'Rename',
-                    onSelect: () => onRenameTable(menu.table),
-                  },
-                  {
-                    id: 'clone',
-                    label: 'Clone',
-                    onSelect: () => onCloneTable(menu.table),
-                  },
-                  {
-                    id: 'pin-to-top',
-                    label: pinnedTables.includes(`${menu.table.schema}.${menu.table.name}`)
-                      ? 'Unpin from top'
-                      : 'Pin to top',
-                    onSelect: () => onTogglePin(menu.table),
-                  },
-                  {
-                    id: 'truncate',
-                    label: 'Truncate',
-                    onSelect: () => onTruncateTable(menu.table),
-                  },
-                  {
-                    id: 'drop-table',
-                    label: 'Drop Table',
-                    onSelect: () => onDropTable(menu.table),
-                  },
-                ]
-          }
-          onClose={() => setMenu(null)}
-        />
-      ) : null}
+  const menuNode = menu ? (
+    <ContextMenu
+      x={menu.x}
+      y={menu.y}
+      items={
+        menu.kind === 'module'
+          ? [
+              {
+                id: 'open-new-tab',
+                label: 'Open new tab',
+                onSelect: () => onOpenModule(menu.module),
+              },
+              {
+                id: 'copy-object-name',
+                label: 'Copy object name',
+                onSelect: () => onCopyObjectName(menu.module),
+              },
+              {
+                id: 'copy-module-definition',
+                label: 'Copy definition',
+                onSelect: () => onCopyModuleDefinition(menu.module),
+              },
+              {
+                id: 'new-function',
+                label: 'New function',
+                onSelect: () => onNewFunction(),
+              },
+            ]
+          : [
+              {
+                id: 'open-new-tab',
+                label: 'Open new tab',
+                onSelect: () => onBrowseTable(menu.table),
+              },
+              {
+                id: 'copy-object-name',
+                label: 'Copy object name',
+                onSelect: () => onCopyObjectName(menu.table),
+              },
+              {
+                id: 'copy-structure',
+                label: 'Copy structure',
+                onSelect: () => onCopyStructure(menu.table),
+              },
+              {
+                id: 'open-structure',
+                label: 'Open structure',
+                onSelect: () => onOpenStructure(menu.table),
+              },
+              {
+                id: 'new-table',
+                label: 'New table',
+                onSelect: () => onNewTable(menu.table),
+              },
+              {
+                id: 'rename',
+                label: 'Rename',
+                onSelect: () => onRenameTable(menu.table),
+              },
+              {
+                id: 'clone',
+                label: 'Clone',
+                onSelect: () => onCloneTable(menu.table),
+              },
+              {
+                id: 'pin-to-top',
+                label: pinnedTables.includes(`${menu.table.schema}.${menu.table.name}`)
+                  ? 'Unpin from top'
+                  : 'Pin to top',
+                onSelect: () => onTogglePin(menu.table),
+              },
+              {
+                id: 'truncate',
+                label: 'Truncate',
+                onSelect: () => onTruncateTable(menu.table),
+              },
+              {
+                id: 'drop-table',
+                label: 'Drop Table',
+                onSelect: () => onDropTable(menu.table),
+              },
+            ]
+      }
+      onClose={() => setMenu(null)}
+    />
+  ) : null
+
+  if (collapsed) {
+    return (
+      <>
+        <aside
+          ref={railRef}
+          className="flex w-11 shrink-0 flex-col items-center gap-2 border-r border-line bg-panel py-3"
+        >
+          <button
+            type="button"
+            className="icon-btn h-7 w-7"
+            title="Show sidebar"
+            aria-label="Show sidebar"
+            onClick={() => onToggleCollapsed(false)}
+          >
+            <Icon name="chevron-right" size={13} />
+          </button>
+          <BrandMark size={18} className="mt-1 opacity-70" />
+        </aside>
+
+        <aside
+          style={{ width }}
+          className={`absolute inset-y-0 left-0 z-30 flex flex-col border-r border-line bg-panel shadow-2xl shadow-black/60 ${
+            hoverOpen
+              ? 'translate-x-0 opacity-100 transition-[opacity,transform] duration-200 ease-out'
+              : '-translate-x-3 opacity-0 pointer-events-none transition-[opacity,transform] duration-150 ease-in'
+          }`}
+        >
+          {renderPanel({
+            icon: 'chevron-right',
+            title: 'Expand sidebar',
+            onClick: () => onToggleCollapsed(false),
+          })}
+        </aside>
+
+        {menuNode}
+      </>
+    )
+  }
+
+  return (
+    <aside style={{ width }} className="relative flex shrink-0 flex-col border-r border-line bg-panel">
+      {renderPanel({
+        icon: 'panel-left',
+        title: 'Collapse sidebar',
+        onClick: () => onToggleCollapsed(true),
+      })}
+
+      <div
+        onPointerDown={handleResizePointerDown}
+        onDoubleClick={() => onWidthChange(SIDEBAR_DEFAULT_WIDTH)}
+        className="absolute inset-y-0 right-0 z-10 w-1.5 cursor-col-resize transition-colors hover:bg-accent/40"
+        title="Drag to resize"
+      />
+
+      {menuNode}
     </aside>
   )
 }
