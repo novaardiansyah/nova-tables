@@ -28,6 +28,12 @@ contextBridge.exposeInMainWorld('nova', {
     list: (input) => ipcRenderer.invoke('db:databases', input),
     drop: (input) => ipcRenderer.invoke('db:drop-database', input),
   },
+  security: {
+    list: (input) => ipcRenderer.invoke('security:users', input),
+    create: (input) => ipcRenderer.invoke('security:create-user', input),
+    updateRoles: (input) => ipcRenderer.invoke('security:update-user-roles', input),
+    drop: (input) => ipcRenderer.invoke('security:drop-user', input),
+  },
   tables: {
     list: (input) => ipcRenderer.invoke('db:tables', input),
     structure: (input) => ipcRenderer.invoke('db:table-structure', input),

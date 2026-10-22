@@ -17,9 +17,12 @@ import {
 } from './connectionStore.js'
 import {
   connect,
+  createDatabaseUser,
   describeResult,
   disconnectConnection,
   dropDatabase,
+  dropDatabaseUser,
+  listDatabaseUsers,
   listDatabases,
   listModules,
   listTables,
@@ -28,6 +31,7 @@ import {
   tableRelations,
   tableStructure,
   testConnection,
+  updateDatabaseUserRoles,
 } from './sqlServer.js'
 import { toErrorPayload } from './serialize.js'
 
@@ -73,6 +77,14 @@ export function registerIpcHandlers() {
   handle('db:databases', (input) => listDatabases(input))
 
   handle('db:drop-database', (input) => dropDatabase(input))
+
+  handle('security:users', (input) => listDatabaseUsers(input))
+
+  handle('security:create-user', (input) => createDatabaseUser(input))
+
+  handle('security:update-user-roles', (input) => updateDatabaseUserRoles(input))
+
+  handle('security:drop-user', (input) => dropDatabaseUser(input))
 
   handle('db:tables', (input) => listTables(input))
 
