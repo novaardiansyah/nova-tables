@@ -105,6 +105,12 @@ async function getDatabasePool(connectionId, database) {
 async function dropDatabasePool(connectionId, database) {
   const name = database || 'master'
   const key = `${connectionId}::${String(name).toLowerCase()}`
+  const pending = pendingPools.get(key)
+  if (pending) {
+    try {
+      await closePool(await pending)
+    } catch {}
+  }
   const pool = databasePools.get(key)
   if (!pool) return
   databasePools.delete(key)
@@ -231,6 +237,49 @@ export async function closeAllConnections() {
 export async function listDatabases({ connectionId }) {
   const runtime = await getRuntime(connectionId)
   return { databases: await readDatabases(runtime.pool) }
+}
+
+export async function dropDatabase({ connectionId, database, confirmName, acknowledged }) {
+  const runtime = await getRuntime(connectionId)
+  const name = String(database || '').trim()
+  const baseName = String(runtime.connection.database || 'master')
+
+  if (!name) throw codedError('INVALID_DATABASE', 'Choose a database to drop.')
+  if (acknowledged !== true || confirmName !== name) {
+    throw codedError(
+      'CONFIRM_REQUIRED',
+      'Type the database name and acknowledge the warning before dropping it.',
+    )
+  }
+  if (isSystemDatabase(name)) {
+    throw codedError('SYSTEM_DATABASE', 'System databases cannot be dropped.')
+  }
+  if (name.toLowerCase() === baseName.toLowerCase()) {
+    throw codedError(
+      'DEFAULT_DATABASE',
+      'The default database of this connection cannot be dropped. Edit the connection first.',
+    )
+  }
+
+  await dropDatabasePool(connectionId, name)
+
+  const admin = await createPool(runtime.connection, runtime.password, 'master')
+  try {
+    const lookup = await admin
+      .request()
+      .input('name', sql.NVarChar(128), name)
+      .query('SELECT database_id AS databaseId FROM sys.databases WHERE name = @name')
+    const row = (lookup.recordset || [])[0]
+    if (!row) throw codedError('NOT_FOUND', `Database “${name}” does not exist.`)
+    if (Number(row.databaseId) <= 4) {
+      throw codedError('SYSTEM_DATABASE', 'System databases cannot be dropped.')
+    }
+
+    await admin.request().query(`DROP DATABASE ${quoteName(name)}`)
+    return { database: name }
+  } finally {
+    await closePool(admin)
+  }
 }
 
 export async function listTables({ connectionId, database }) {

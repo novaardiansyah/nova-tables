@@ -7,8 +7,11 @@ export default function WorkspaceHeader({
   activeDatabase,
   running,
   queryExecutionMode,
+  canDropDatabase,
+  dropDatabaseHint,
   onSelectDatabase,
   onChangeExecutionMode,
+  onDropDatabase,
   onRun,
   onDisconnect,
   onShowShortcuts,
@@ -33,6 +36,18 @@ export default function WorkspaceHeader({
             onChange={onSelectDatabase}
             disabled={options.length === 0}
           />
+          <span className="inline-flex" title={dropDatabaseHint}>
+            <button
+              type="button"
+              className="icon-btn hover:bg-danger/10 hover:text-danger disabled:pointer-events-none disabled:opacity-40"
+              onClick={onDropDatabase}
+              disabled={!canDropDatabase}
+              title={dropDatabaseHint}
+              aria-label="Drop database"
+            >
+              <Icon name="trash" size={14} />
+            </button>
+          </span>
           <span className="hidden truncate text-[length:var(--app-text-11)] text-text-faint lg:block">
             {session.host}:{session.port}
           </span>

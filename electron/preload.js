@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('nova', {
   },
   databases: {
     list: (input) => ipcRenderer.invoke('db:databases', input),
+    drop: (input) => ipcRenderer.invoke('db:drop-database', input),
   },
   tables: {
     list: (input) => ipcRenderer.invoke('db:tables', input),
