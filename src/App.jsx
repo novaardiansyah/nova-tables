@@ -98,6 +98,37 @@ function buildEditSource(table, sql) {
   }
 }
 
+const UNSUPPORTED_EDIT_SOURCE = /\b(join|union|into|group\s+by|having)\b/i
+const TABLE_REFERENCE =
+  /\bfrom\s+(\[[^\]]+\]|[A-Za-z_][\w$#@]*)(?:\s*\.\s*(\[[^\]]+\]|[A-Za-z_][\w$#@]*))?/i
+
+function unquoteIdentifier(value) {
+  const bracketed = /^\[([^\]]+)\]$/.exec(value)
+  return bracketed ? bracketed[1] : value
+}
+
+function editTableFromSql(sql, tables) {
+  const text = String(sql || '')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/--[^\n]*/g, ' ')
+    .replace(/'(?:[^']|'')*'/g, "''")
+    .trim()
+  if (!/^select\b/i.test(text) || UNSUPPORTED_EDIT_SOURCE.test(text)) return null
+
+  const match = TABLE_REFERENCE.exec(text)
+  if (!match) return null
+  const schema = match[2] ? unquoteIdentifier(match[1]) : null
+  const name = unquoteIdentifier(match[2] || match[1])
+
+  return (
+    tables.find(
+      (table) =>
+        table.name.toLowerCase() === name.toLowerCase() &&
+        (schema === null || table.schema.toLowerCase() === schema.toLowerCase()),
+    ) ?? null
+  )
+}
+
 function sessionTableFor(session, schema, name) {
   const tables = session.tables?.tables ?? []
   return tables.find((table) => table.schema === schema && table.name === name) ?? null
@@ -579,7 +610,13 @@ export default function App() {
         activeSet: 0,
         edits: {},
       }
-      if (tab?.editSource && tab.editSource.sql !== sql) patch.editSource = null
+      if (tab) {
+        const keptSource = tab.editSource && tab.editSource.sql === sql ? tab.editSource : null
+        if (!keptSource) {
+          const table = editTableFromSql(sql, current.tables?.tables ?? [])
+          patch.editSource = table ? buildEditSource(table, sql) : null
+        }
+      }
 
       updateTab(current.connectionId, tabId, patch)
       try {
@@ -986,12 +1023,20 @@ export default function App() {
       }
       const where = buildFilterWhere(conditions)
       if (!where) return
+      const tab = activeQueryTab()?.tab ?? null
+      const inherited = tab?.editSource && tab.editSource.sql === source ? tab.editSource : null
       const sql = buildFilteredSql(source, where)
+      const editSource = inherited ? { ...inherited, sql } : null
       const column = conditions[0]?.column ?? null
-      const tabId = openTab(current.connectionId, column ? `Filter ${column}` : 'Filtered', sql)
+      const tabId = openTab(
+        current.connectionId,
+        column ? `Filter ${column}` : 'Filtered',
+        sql,
+        editSource,
+      )
       execute(sql, tabId)
     },
-    [activeSession, execute, openTab, showBanner],
+    [activeQueryTab, activeSession, execute, openTab, showBanner],
   )
 
   const openDesignTab = useCallback(

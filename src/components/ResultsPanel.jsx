@@ -57,8 +57,18 @@ export default function ResultsPanel({
   const [panelOpen, setPanelOpen] = useState(false)
   const splitRef = useRef(null)
 
+  const columnNames = useMemo(
+    () => (activeResultSet?.columns ?? []).map((column) => column.name),
+    [activeResultSet],
+  )
+
   const hasKey = Boolean(editSource && editSource.primaryKey.length)
-  const editable = hasKey && Boolean(activeResultSet) && resultSets.length === 1
+  const keyInResult =
+    hasKey &&
+    editSource.primaryKey.every((name) =>
+      columnNames.some((column) => column.toLowerCase() === name.toLowerCase()),
+    )
+  const editable = keyInResult && Boolean(activeResultSet) && resultSets.length === 1
   const changeCount = Object.keys(edits).length
 
   useEffect(() => {
@@ -74,11 +84,6 @@ export default function ResultsPanel({
   useEffect(() => {
     setEditMode(false)
   }, [result, editSource])
-
-  const columnNames = useMemo(
-    () => (activeResultSet?.columns ?? []).map((column) => column.name),
-    [activeResultSet],
-  )
 
   const selectionBounds = useMemo(() => {
     if (!selection || !activeResultSet) return null
@@ -306,7 +311,7 @@ export default function ResultsPanel({
       ],
     })
 
-    if (hasKey && onDeleteRows && selectionBounds) {
+    if (keyInResult && onDeleteRows && selectionBounds) {
       items.push({
         id: 'delete-rows',
         label: 'Delete Rows',
@@ -321,6 +326,7 @@ export default function ResultsPanel({
     editMode,
     editable,
     hasKey,
+    keyInResult,
     menu,
     onDeleteRows,
     onSetCellValue,
