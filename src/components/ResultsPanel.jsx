@@ -5,6 +5,7 @@ import FilterDialog from './FilterDialog.jsx'
 import JsonView from './JsonView.jsx'
 import ResultGrid from './ResultGrid.jsx'
 import { cleanText, jsonRecords, sqlInsertRows } from '../resultFormats.js'
+import { editEditableColumns, editHasKeys } from '../edits.js'
 
 const ROW_PANEL_DEFAULT_WIDTH = 360
 
@@ -62,13 +63,17 @@ export default function ResultsPanel({
     [activeResultSet],
   )
 
-  const hasKey = Boolean(editSource && editSource.primaryKey.length)
+  const hasKey = editHasKeys(editSource)
+  const editableColumns = useMemo(() => editEditableColumns(editSource), [editSource])
   const keyInResult =
     hasKey &&
-    editSource.primaryKey.every((name) =>
-      columnNames.some((column) => column.toLowerCase() === name.toLowerCase()),
+    editSource.tables.some((source) =>
+      (source.keyColumns ?? source.primaryKey).every((name) =>
+        columnNames.some((column) => column.toLowerCase() === name.toLowerCase()),
+      ),
     )
   const editable = keyInResult && Boolean(activeResultSet) && resultSets.length === 1
+  const deletable = editable && editSource.tables.length === 1
   const changeCount = Object.keys(edits).length
 
   useEffect(() => {
@@ -216,10 +221,10 @@ export default function ResultsPanel({
     [activeResultSet],
   )
 
-  const table = useMemo(
-    () => (editSource ? { schema: editSource.schema, name: editSource.table } : null),
-    [editSource],
-  )
+  const table = useMemo(() => {
+    const source = editSource?.tables[0]
+    return source ? { schema: source.schema, name: source.table } : null
+  }, [editSource])
 
   const menuItems = useMemo(() => {
     if (!menu) return []
@@ -236,7 +241,7 @@ export default function ResultsPanel({
       })
     }
 
-    if (editable && menu.column) {
+    if (editable && menu.column && (!editableColumns || editableColumns.has(menu.column.name))) {
       items.push({
         id: 'set-value',
         label: 'Set Value',
@@ -311,7 +316,7 @@ export default function ResultsPanel({
       ],
     })
 
-    if (keyInResult && onDeleteRows && selectionBounds) {
+    if (deletable && onDeleteRows && selectionBounds) {
       items.push({
         id: 'delete-rows',
         label: 'Delete Rows',
@@ -323,10 +328,10 @@ export default function ResultsPanel({
   }, [
     columnNames,
     copy,
+    deletable,
     editMode,
     editable,
-    hasKey,
-    keyInResult,
+    editableColumns,
     menu,
     onDeleteRows,
     onSetCellValue,
@@ -424,6 +429,17 @@ export default function ResultsPanel({
             >
               <Icon name="lock" size={10} />
               Read-only · no primary key
+            </span>
+          ) : null}
+          {status === 'success' && editSource?.joined && hasKey ? (
+            <span
+              title={`Only columns traced to ${editSource.tables
+                .map((source) => `${source.schema}.${source.table}`)
+                .join(', ')} can be edited; every other column stays read-only.`}
+              className="flex max-w-[240px] items-center gap-1 truncate rounded bg-tint/[0.05] px-1.5 text-[length:var(--app-text-10)] text-text-faint"
+            >
+              <Icon name="pencil" size={10} />
+              Editing {editSource.tables.map((source) => source.table).join(', ')}
             </span>
           ) : null}
           {status === 'success' && editMode ? (
@@ -532,6 +548,7 @@ export default function ResultsPanel({
                   onCellContextMenu={handleCellContextMenu}
                   onHeaderContextMenu={handleHeaderContextMenu}
                   editable={editable}
+                  editableColumns={editableColumns}
                   editing={editMode}
                   edits={edits}
                   onCellChange={onCellChange}

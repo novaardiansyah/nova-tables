@@ -36,6 +36,9 @@ contextBridge.exposeInMainWorld('nova', {
     list: (input) => ipcRenderer.invoke('db:modules', input),
     definition: (input) => ipcRenderer.invoke('db:module-definition', input),
   },
+  results: {
+    columns: (input) => ipcRenderer.invoke('db:result-columns', input),
+  },
   query: {
     run: (input) => ipcRenderer.invoke('query:run', input),
   },

@@ -2,8 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from './api.js'
 import { DEFAULT_SETTINGS, applySettings } from './settings.js'
 import { generateCreateTable } from './designSql.js'
-import { quoteIdentifier, rowCondition, sqlLiteral } from './resultFormats.js'
+import { quoteIdentifier, sqlLiteral } from './resultFormats.js'
 import { buildFilteredSql, buildFilterWhere } from './filters.js'
+import {
+  buildDeleteStatements,
+  buildEditSource,
+  buildQueryEditSource,
+  buildUpdateStatements,
+  editAllows,
+  editSqlHeader,
+  editTableFromSql,
+} from './edits.js'
 import { executionGuard } from './queryModes.js'
 import Banner from './components/Banner.jsx'
 import ConfirmDialog from './components/ConfirmDialog.jsx'
@@ -89,46 +98,6 @@ function browseSql(table) {
   return `SELECT TOP (${BROWSE_ROWS}) *\nFROM ${qualifiedName(table)}${orderBy};`
 }
 
-function buildEditSource(table, sql) {
-  return {
-    schema: table.schema,
-    table: table.name,
-    primaryKey: table.primaryKey ?? [],
-    sql,
-  }
-}
-
-const UNSUPPORTED_EDIT_SOURCE = /\b(join|union|into|group\s+by|having)\b/i
-const TABLE_REFERENCE =
-  /\bfrom\s+(\[[^\]]+\]|[A-Za-z_][\w$#@]*)(?:\s*\.\s*(\[[^\]]+\]|[A-Za-z_][\w$#@]*))?/i
-
-function unquoteIdentifier(value) {
-  const bracketed = /^\[([^\]]+)\]$/.exec(value)
-  return bracketed ? bracketed[1] : value
-}
-
-function editTableFromSql(sql, tables) {
-  const text = String(sql || '')
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .replace(/--[^\n]*/g, ' ')
-    .replace(/'(?:[^']|'')*'/g, "''")
-    .trim()
-  if (!/^select\b/i.test(text) || UNSUPPORTED_EDIT_SOURCE.test(text)) return null
-
-  const match = TABLE_REFERENCE.exec(text)
-  if (!match) return null
-  const schema = match[2] ? unquoteIdentifier(match[1]) : null
-  const name = unquoteIdentifier(match[2] || match[1])
-
-  return (
-    tables.find(
-      (table) =>
-        table.name.toLowerCase() === name.toLowerCase() &&
-        (schema === null || table.schema.toLowerCase() === schema.toLowerCase()),
-    ) ?? null
-  )
-}
-
 function sessionTableFor(session, schema, name) {
   const tables = session.tables?.tables ?? []
   return tables.find((table) => table.schema === schema && table.name === name) ?? null
@@ -143,60 +112,14 @@ function relatedSql(relation, value) {
   return `SELECT TOP (${BROWSE_ROWS}) *\nFROM ${quoteIdentifier(relation.referencedSchema)}.${quoteIdentifier(relation.referencedTable)}\nWHERE ${filter};`
 }
 
-function buildUpdateStatements(editSource, resultSet, edits) {
-  if (!editSource || !resultSet) return []
-  const { schema, table, primaryKey } = editSource
-  if (!primaryKey.length) return []
-
-  const columnIndex = new Map(resultSet.columns.map((column, index) => [column.name.toLowerCase(), index]))
-  const keyIndexes = primaryKey.map((name) => columnIndex.get(name.toLowerCase()))
-  if (keyIndexes.some((index) => index === undefined)) return []
-
-  const byRow = new Map()
-  for (const [key, edit] of Object.entries(edits)) {
-    const [rowKey, colName] = key.split(':')
-    const rowIndex = Number(rowKey)
-    const list = byRow.get(rowIndex) || []
-    list.push({ column: colName, value: edit.value, original: edit.original })
-    byRow.set(rowIndex, list)
-  }
-
-  const statements = []
-  for (const [rowIndex, rowEdits] of byRow) {
-    const row = resultSet.rows[rowIndex]
-    if (!row) continue
-    const assignments = rowEdits
-      .map((edit) => `${quoteIdentifier(edit.column)} = ${sqlLiteral(edit.value)}`)
-      .join(',\n       ')
-    statements.push(
-      `UPDATE ${quoteIdentifier(schema)}.${quoteIdentifier(table)}\n   SET ${assignments}\n WHERE ${rowCondition(primaryKey, keyIndexes, row)};`
-    )
-  }
-  return statements
-}
-
-function buildDeleteStatements(editSource, resultSet, rowStart, rowEnd) {
-  if (!editSource || !resultSet) return []
-  const { schema, table, primaryKey } = editSource
-  if (!primaryKey.length) return []
-
-  const columnIndex = new Map(resultSet.columns.map((column, index) => [column.name.toLowerCase(), index]))
-  const keyIndexes = primaryKey.map((name) => columnIndex.get(name.toLowerCase()))
-  if (keyIndexes.some((index) => index === undefined)) return []
-
-  const statements = []
-  for (let rowIndex = rowStart; rowIndex <= rowEnd; rowIndex += 1) {
-    const row = resultSet.rows[rowIndex]
-    if (!row) continue
-    statements.push(
-      `DELETE FROM ${quoteIdentifier(schema)}.${quoteIdentifier(table)}\n WHERE ${rowCondition(primaryKey, keyIndexes, row)};`
-    )
-  }
-  return statements
-}
-
 function queryTitle(index) {
   return `Query ${index}`
+}
+
+function editTargetTitle(editSource, action) {
+  const names = editSource?.tables.map((table) => table.table) ?? []
+  if (names.length === 1) return `${action} ${names[0]}`
+  return names.length > 1 ? `${action} rows` : action
 }
 
 function nextQueryTitle(tabs) {
@@ -280,6 +203,7 @@ export default function App() {
   const splitRef = useRef(null)
   const tablesRequestRef = useRef({})
   const modulesRequestRef = useRef({})
+  const editSourceRequestsRef = useRef({})
 
   useEffect(() => {
     sessionsRef.current = sessions
@@ -592,6 +516,15 @@ export default function App() {
     [activeSession, patchSession],
   )
 
+  const describeEditSource = useCallback(async (connectionId, database, sql, tables) => {
+    try {
+      const columns = await api.describeResult(connectionId, database, sql)
+      return buildQueryEditSource({ sql, columns, tables })
+    } catch {
+      return null
+    }
+  }, [])
+
   const execute = useCallback(
     async (sql, tabId) => {
       const current = activeSession()
@@ -610,13 +543,13 @@ export default function App() {
         activeSet: 0,
         edits: {},
       }
-      if (tab) {
-        const keptSource = tab.editSource && tab.editSource.sql === sql ? tab.editSource : null
-        if (!keptSource) {
-          const table = editTableFromSql(sql, current.tables?.tables ?? [])
-          patch.editSource = table ? buildEditSource(table, sql) : null
-        }
+      const source = tab?.editSource && tab.editSource.sql === sql ? tab.editSource : null
+      if (tab && !source) {
+        const table = editTableFromSql(sql, current.tables?.tables ?? [])
+        patch.editSource = table ? buildEditSource(table, sql) : null
       }
+      const requestId = (editSourceRequestsRef.current[tabId] ?? 0) + 1
+      editSourceRequestsRef.current[tabId] = requestId
 
       updateTab(current.connectionId, tabId, patch)
       try {
@@ -630,6 +563,25 @@ export default function App() {
           state: { status: 'success', result, error: null },
           activeSet: firstFilled === -1 ? 0 : firstFilled,
         })
+        if (
+          tab &&
+          !source &&
+          !patch.editSource &&
+          result.resultSets.length === 1 &&
+          (result.resultSets[0]?.columns?.length ?? 0) > 0
+        ) {
+          const editSource = await describeEditSource(
+            current.connectionId,
+            current.activeDatabase,
+            sql,
+            current.tables?.tables ?? [],
+          )
+          if (editSource && editSourceRequestsRef.current[tabId] === requestId) {
+            updateTab(current.connectionId, tabId, (latest) =>
+              latest.editSource ? {} : { editSource },
+            )
+          }
+        }
       } catch (error) {
         updateTab(current.connectionId, tabId, {
           state: {
@@ -647,7 +599,7 @@ export default function App() {
         })
       }
     },
-    [activeSession, showBanner, updateTab],
+    [activeSession, describeEditSource, showBanner, updateTab],
   )
 
   const runWithGuard = useCallback(
@@ -931,7 +883,7 @@ export default function App() {
       const target = activeQueryTab()
       if (!target) return
       const { connectionId, tab } = target
-      if (!tab.editSource || !tab.editSource.primaryKey.length) return
+      if (!editAllows(tab.editSource, column)) return
       setCellEdit(connectionId, tab, rowIndex, column, value, original)
     },
     [activeQueryTab, setCellEdit],
@@ -943,7 +895,7 @@ export default function App() {
       if (!target) return
       const { connectionId, tab } = target
       const resultSet = tabResultSet(tab)
-      if (!tab.editSource || !resultSet) return
+      if (!resultSet || !editAllows(tab.editSource, column)) return
       const columnIndex = resultSet.columns.findIndex((item) => item.name === column)
       if (columnIndex === -1) return
       const row = resultSet.rows[rowIndex]
@@ -962,10 +914,11 @@ export default function App() {
       const statements = buildDeleteStatements(tab.editSource, resultSet, rowStart, rowEnd)
       if (!statements.length) return
       const count = statements.length
+      const table = tab.editSource?.tables[0]?.table ?? 'rows'
       openTab(
         connectionId,
-        `Delete ${tab.editSource.table}`,
-        `${statements.join('\n\n')}\n`,
+        `Delete ${table}`,
+        `${editSqlHeader(tab.editSource)}${statements.join('\n\n')}\n`,
       )
       showBanner(
         'warn',
@@ -988,7 +941,7 @@ export default function App() {
     const statements = buildUpdateStatements(tab.editSource, tabResultSet(tab), tab.edits || {})
     if (!statements.length) return
     try {
-      await api.copyText(statements.join('\n\n'))
+      await api.copyText(`${editSqlHeader(tab.editSource)}${statements.join('\n\n')}`)
       showBanner(
         'success',
         `Copied ${statements.length} UPDATE statement${statements.length === 1 ? '' : 's'}.`,
@@ -1004,13 +957,17 @@ export default function App() {
     const { connectionId, tab } = target
     const statements = buildUpdateStatements(tab.editSource, tabResultSet(tab), tab.edits || {})
     if (!statements.length) return
-    const title = `Update ${tab.editSource.table}`
-    openTab(connectionId, title, `${statements.join('\n\n')}\n`)
+    const title = editTargetTitle(tab.editSource, 'Update')
+    openTab(
+      connectionId,
+      title,
+      `${editSqlHeader(tab.editSource)}${statements.join('\n\n')}\n`,
+    )
     updateTab(connectionId, tab.id, { edits: {} })
   }, [activeQueryTab, openTab, updateTab])
 
   const handleApplyFilter = useCallback(
-    (conditions) => {
+    async (conditions) => {
       const current = activeSession()
       if (!current) {
         showBanner('warn', 'Open a connection before filtering a result.')
@@ -1026,7 +983,14 @@ export default function App() {
       const tab = activeQueryTab()?.tab ?? null
       const inherited = tab?.editSource && tab.editSource.sql === source ? tab.editSource : null
       const sql = buildFilteredSql(source, where)
-      const editSource = inherited ? { ...inherited, sql } : null
+      const editSource =
+        (inherited && { ...inherited, sql }) ||
+        (await describeEditSource(
+          current.connectionId,
+          current.activeDatabase,
+          sql,
+          current.tables?.tables ?? [],
+        ))
       const column = conditions[0]?.column ?? null
       const tabId = openTab(
         current.connectionId,
@@ -1036,7 +1000,7 @@ export default function App() {
       )
       execute(sql, tabId)
     },
-    [activeQueryTab, activeSession, execute, openTab, showBanner],
+    [activeQueryTab, activeSession, describeEditSource, execute, openTab, showBanner],
   )
 
   const openDesignTab = useCallback(
