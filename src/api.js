@@ -58,6 +58,8 @@ export const api = {
   listDatabases: async (connectionId) =>
     (await call(() => bridge().databases.list({ connectionId }))).databases,
 
+  dropDatabase: async (input) => call(() => bridge().databases.drop(input)),
+
   listTables: async (connectionId, database) =>
     (await call(() => bridge().tables.list({ connectionId, database }))).tables,
 

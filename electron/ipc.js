@@ -19,6 +19,7 @@ import {
   connect,
   describeResult,
   disconnectConnection,
+  dropDatabase,
   listDatabases,
   listModules,
   listTables,
@@ -70,6 +71,8 @@ export function registerIpcHandlers() {
   handle('connections:disconnect', (connectionId) => disconnectConnection(connectionId))
 
   handle('db:databases', (input) => listDatabases(input))
+
+  handle('db:drop-database', (input) => dropDatabase(input))
 
   handle('db:tables', (input) => listTables(input))
 

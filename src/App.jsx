@@ -18,6 +18,7 @@ import Banner from './components/Banner.jsx'
 import ConfirmDialog from './components/ConfirmDialog.jsx'
 import ConnectionDialog from './components/ConnectionDialog.jsx'
 import ConnectionsScreen from './components/ConnectionsScreen.jsx'
+import DropDatabaseDialog from './components/DropDatabaseDialog.jsx'
 import PromptDialog from './components/PromptDialog.jsx'
 import QueryEditor from './components/QueryEditor.jsx'
 import QueryGuardDialog from './components/QueryGuardDialog.jsx'
@@ -90,6 +91,18 @@ function pickDatabase(databases, configured) {
   if (configured && names.includes(configured)) return configured
   const online = databases.find((database) => !database.isSystem && database.isOnline)
   return online?.name || names[0] || configured || 'master'
+}
+
+function dropDatabaseState(session, database, running) {
+  if (!session) return { allowed: false, hint: 'Open a connection first.' }
+  if (!database) return { allowed: false, hint: 'Select a database first.' }
+  if (database.isSystem) return { allowed: false, hint: 'System databases cannot be dropped.' }
+  if (!database.isOnline) return { allowed: false, hint: 'The database must be online.' }
+  if (String(database.name).toLowerCase() === String(session.database || '').toLowerCase()) {
+    return { allowed: false, hint: 'The connection default database cannot be dropped.' }
+  }
+  if (running) return { allowed: false, hint: 'Wait for the running query to finish.' }
+  return { allowed: true, hint: 'Drop database' }
 }
 
 function qualifiedName(table) {
@@ -185,6 +198,8 @@ export default function App() {
   const [dialog, setDialog] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [databaseDrop, setDatabaseDrop] = useState(null)
+  const [databaseDropBusy, setDatabaseDropBusy] = useState(false)
   const [editorHeight, setEditorHeight] = useState(EDITOR_DEFAULT_HEIGHT)
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -516,6 +531,52 @@ export default function App() {
       }
     },
     [loadModules, loadTables, patchSession, showBanner],
+  )
+
+  const handleOpenDropDatabase = useCallback(() => {
+    const current = activeSession()
+    if (!current?.activeDatabase) return
+    setDatabaseDrop({ database: current.activeDatabase, error: null })
+  }, [activeSession])
+
+  const handleDropDatabaseConfirm = useCallback(
+    async (confirmName) => {
+      const target = databaseDrop?.database
+      if (!target || !activeConnectionId) return
+
+      setDatabaseDropBusy(true)
+      setDatabaseDrop((prev) => (prev ? { ...prev, error: null } : prev))
+
+      try {
+        await api.dropDatabase({
+          connectionId: activeConnectionId,
+          database: target,
+          confirmName,
+          acknowledged: true,
+        })
+      } catch (error) {
+        setDatabaseDrop((prev) => (prev ? { ...prev, error: error.message } : prev))
+        setDatabaseDropBusy(false)
+        return
+      }
+
+      setDatabaseDrop(null)
+      setDatabaseDropBusy(false)
+      showBanner('success', `Dropped database “${target}”.`)
+
+      try {
+        const databases = await api.listDatabases(activeConnectionId)
+        const current = sessionsRef.current[activeConnectionId]
+        if (!current) return
+        const database = pickDatabase(databases, current.database)
+        patchSession(activeConnectionId, { databases, activeDatabase: database })
+        await loadTables(activeConnectionId, database)
+        await loadModules(activeConnectionId, database)
+      } catch (error) {
+        showBanner('error', `Database dropped, but the list could not refresh. ${error.message}`)
+      }
+    },
+    [activeConnectionId, databaseDrop, loadModules, loadTables, patchSession, showBanner],
   )
 
   const handleSelectTable = useCallback(
@@ -1773,6 +1834,7 @@ export default function App() {
         Boolean(tablePrompt) ||
         Boolean(dropTarget) ||
         Boolean(deleteTarget) ||
+        Boolean(databaseDrop) ||
         Boolean(runGuard) ||
         Boolean(saveQueryDialog) ||
         Boolean(queryRenameTarget) ||
@@ -1858,6 +1920,7 @@ export default function App() {
     deleteTarget,
     dialog,
     dropTarget,
+    databaseDrop,
     handleCloseActiveTab,
     handleCycleTab,
     handleNewTab,
@@ -1881,6 +1944,10 @@ export default function App() {
     ? session.tabs.find((tab) => tab.id === session.activeTabId) || null
     : null
   const running = activeTab?.state.status === 'running'
+  const activeDatabaseInfo = session
+    ? (session.databases ?? []).find((database) => database.name === session.activeDatabase) ?? null
+    : null
+  const dropState = dropDatabaseState(session, activeDatabaseInfo, running)
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -1929,8 +1996,11 @@ export default function App() {
               activeDatabase={session.activeDatabase}
               running={running}
               queryExecutionMode={settings.queryExecutionMode}
+              canDropDatabase={dropState.allowed}
+              dropDatabaseHint={dropState.hint}
               onSelectDatabase={handleSelectDatabase}
               onChangeExecutionMode={handleChangeExecutionMode}
+              onDropDatabase={handleOpenDropDatabase}
               onRun={handleRun}
               onDisconnect={() => closeSession(session.connectionId)}
               onShowShortcuts={() => setShortcutsOpen(true)}
@@ -2120,6 +2190,19 @@ export default function App() {
         busy={tableBusy}
         onCancel={() => setDropTarget(null)}
         onConfirm={handleDropConfirm}
+      />
+
+      <DropDatabaseDialog
+        open={Boolean(databaseDrop)}
+        database={databaseDrop?.database ?? ''}
+        connectionName={session?.name ?? ''}
+        server={session ? `${session.host}:${session.port}` : ''}
+        error={databaseDrop?.error ?? null}
+        busy={databaseDropBusy}
+        onCancel={() => {
+          if (!databaseDropBusy) setDatabaseDrop(null)
+        }}
+        onConfirm={handleDropDatabaseConfirm}
       />
 
       <ConfirmDialog
