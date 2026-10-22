@@ -215,6 +215,18 @@ const ICONS = {
       <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
     </>
   ),
+  save: (
+    <>
+      <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
+      <path d="M17 21v-8H7v8" />
+      <path d="M7 3v5h8" />
+    </>
+  ),
+  bookmark: (
+    <>
+      <path d="M6 3h12v18l-6-4-6 4z" />
+    </>
+  ),
   lock: (
     <>
       <rect x="4" y="10.5" width="16" height="10.5" rx="2" />

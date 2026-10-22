@@ -348,6 +348,15 @@
   background: transparent;
 }
 
+.tab-strip::-webkit-scrollbar {
+  height: 4px;
+}
+
+.tab-strip::-webkit-scrollbar-thumb {
+  border: 0;
+  background-clip: border-box;
+}
+
 .progress-track {
   position: relative;
   overflow: hidden;
