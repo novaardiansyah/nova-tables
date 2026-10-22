@@ -9,9 +9,12 @@ export default function WorkspaceHeader({
   queryExecutionMode,
   canDropDatabase,
   dropDatabaseHint,
+  canManageUsers,
+  manageUsersHint,
   onSelectDatabase,
   onChangeExecutionMode,
   onDropDatabase,
+  onManageUsers,
   onRun,
   onDisconnect,
   onShowShortcuts,
@@ -36,6 +39,18 @@ export default function WorkspaceHeader({
             onChange={onSelectDatabase}
             disabled={options.length === 0}
           />
+          <span className="inline-flex" title={manageUsersHint}>
+            <button
+              type="button"
+              className="icon-btn hover:text-accent disabled:pointer-events-none disabled:opacity-40"
+              onClick={onManageUsers}
+              disabled={!canManageUsers}
+              title={manageUsersHint}
+              aria-label="Users and permissions"
+            >
+              <Icon name="users" size={14} />
+            </button>
+          </span>
           <span className="inline-flex" title={dropDatabaseHint}>
             <button
               type="button"

@@ -60,6 +60,15 @@ export const api = {
 
   dropDatabase: async (input) => call(() => bridge().databases.drop(input)),
 
+  listDatabaseUsers: async (connectionId, database) =>
+    call(() => bridge().security.list({ connectionId, database })),
+
+  createDatabaseUser: async (input) => call(() => bridge().security.create(input)),
+
+  updateDatabaseUserRoles: async (input) => call(() => bridge().security.updateRoles(input)),
+
+  dropDatabaseUser: async (input) => call(() => bridge().security.drop(input)),
+
   listTables: async (connectionId, database) =>
     (await call(() => bridge().tables.list({ connectionId, database }))).tables,
 
