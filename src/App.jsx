@@ -1770,7 +1770,8 @@ export default function App() {
             )}
 
             <StatusBar
-              session={session}
+              result={activeTab?.state.result ?? null}
+              editSource={activeTab?.editSource ?? null}
               activeDatabase={session.activeDatabase}
               queryStatus={activeTab?.state.status || 'idle'}
             />
@@ -1795,7 +1796,7 @@ export default function App() {
         />
       )}
 
-      <ShortcutPanel open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <ShortcutPanel open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} session={session} />
 
       <SettingsDialog
         open={settingsOpen}

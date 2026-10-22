@@ -1,31 +1,39 @@
 import Icon, { Spinner } from './Icon.jsx'
+import { formatDuration, formatNumber } from '../resultFormats.js'
 
-export default function StatusBar({ session, activeDatabase, queryStatus }) {
+export default function StatusBar({ result, editSource, activeDatabase, queryStatus }) {
+  const resultSets = result?.resultSets ?? []
+
   return (
     <footer className="flex h-7 shrink-0 items-center justify-between gap-4 border-t border-line bg-panel px-3 text-[length:var(--app-text-10)] text-text-muted">
       <div className="flex min-w-0 items-center gap-3">
-        {session ? (
+        {queryStatus === 'success' && editSource?.joined ? (
+          <span
+            title={`Only columns traced to ${editSource.tables
+              .map((source) => `${source.schema}.${source.table}`)
+              .join(', ')} can be edited; every other column stays read-only.`}
+            className="flex min-w-0 items-center gap-1 rounded bg-tint/[0.05] px-1.5 text-text-faint"
+          >
+            <Icon name="pencil" size={10} className="shrink-0" />
+            <span className="truncate">Editing {editSource.tables.map((source) => source.table).join(', ')}</span>
+          </span>
+        ) : null}
+
+        {queryStatus === 'success' && result ? (
           <>
-            <span className="flex min-w-0 items-center gap-1.5">
-              <Icon name="server" size={11} className="shrink-0 text-text-faint" />
-              <span className="truncate">{session.serverName}</span>
-            </span>
-            {session.serverVersion ? (
+            <span className="shrink-0 tabular-nums">{formatNumber(result.rowCount)} rows</span>
+            <span className="text-text-faint">•</span>
+            <span className="shrink-0 tabular-nums">{formatDuration(result.elapsedMs)}</span>
+            {resultSets.length > 1 ? (
               <>
                 <span className="text-text-faint">•</span>
-                <span className="shrink-0">SQL Server {session.serverVersion}</span>
-              </>
-            ) : null}
-            {session.edition ? (
-              <>
-                <span className="text-text-faint">•</span>
-                <span className="hidden truncate xl:block">{session.edition}</span>
+                <span className="shrink-0">{resultSets.length} result sets</span>
               </>
             ) : null}
           </>
-        ) : (
-          <span>Ready</span>
-        )}
+        ) : null}
+
+        {queryStatus === 'idle' ? <span>Ready</span> : null}
       </div>
 
       <div className="flex shrink-0 items-center gap-3">
