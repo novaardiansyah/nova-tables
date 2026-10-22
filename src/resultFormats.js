@@ -28,6 +28,16 @@ export function cellText(value) {
   return String(value)
 }
 
+export function formatNumber(value) {
+  return Number(value || 0).toLocaleString()
+}
+
+export function formatDuration(ms) {
+  if (ms === null || ms === undefined) return ''
+  if (ms < 1000) return `${ms} ms`
+  return `${(ms / 1000).toFixed(2)} s`
+}
+
 export function cleanText(matrix) {
   return matrix.map((cells) => cells.map(cellText).join('\t')).join('\n')
 }

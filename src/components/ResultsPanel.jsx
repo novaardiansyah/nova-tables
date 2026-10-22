@@ -4,20 +4,10 @@ import ContextMenu from './ContextMenu.jsx'
 import FilterDialog from './FilterDialog.jsx'
 import JsonView from './JsonView.jsx'
 import ResultGrid from './ResultGrid.jsx'
-import { cleanText, jsonRecords, sqlInsertRows } from '../resultFormats.js'
+import { cleanText, formatDuration, formatNumber, jsonRecords, sqlInsertRows } from '../resultFormats.js'
 import { editEditableColumns, editHasKeys } from '../edits.js'
 
 const ROW_PANEL_DEFAULT_WIDTH = 360
-
-function formatNumber(value) {
-  return Number(value || 0).toLocaleString()
-}
-
-function formatDuration(ms) {
-  if (ms === null || ms === undefined) return ''
-  if (ms < 1000) return `${ms} ms`
-  return `${(ms / 1000).toFixed(2)} s`
-}
 
 const SPECIAL_OPTIONS = [
   { id: 'null', label: 'NULL', value: null },
@@ -431,17 +421,6 @@ export default function ResultsPanel({
               Read-only · no primary key
             </span>
           ) : null}
-          {status === 'success' && editSource?.joined && hasKey ? (
-            <span
-              title={`Only columns traced to ${editSource.tables
-                .map((source) => `${source.schema}.${source.table}`)
-                .join(', ')} can be edited; every other column stays read-only.`}
-              className="flex max-w-[240px] items-center gap-1 truncate rounded bg-tint/[0.05] px-1.5 text-[length:var(--app-text-10)] text-text-faint"
-            >
-              <Icon name="pencil" size={10} />
-              Editing {editSource.tables.map((source) => source.table).join(', ')}
-            </span>
-          ) : null}
           {status === 'success' && editMode ? (
             changeCount === 0 ? (
               <button
@@ -492,19 +471,6 @@ export default function ResultsPanel({
                 Discard
               </button>
             </div>
-          ) : null}
-          {status === 'success' && result ? (
-            <>
-              <span className="tabular-nums">{formatNumber(result.rowCount)} rows</span>
-              <span className="text-text-faint">•</span>
-              <span className="tabular-nums">{formatDuration(result.elapsedMs)}</span>
-              {resultSets.length > 1 ? (
-                <>
-                  <span className="text-text-faint">•</span>
-                  <span>{resultSets.length} result sets</span>
-                </>
-              ) : null}
-            </>
           ) : null}
           {status === 'error' && error?.code ? (
             <span className="font-mono text-[length:var(--app-text-10)] text-text-faint">{error.code}</span>

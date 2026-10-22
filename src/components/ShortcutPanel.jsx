@@ -35,7 +35,7 @@ const GROUPS = [
   },
 ]
 
-export default function ShortcutPanel({ open, onClose }) {
+export default function ShortcutPanel({ open, onClose, session }) {
   useEffect(() => {
     if (!open) return
     const handleKeyDown = (event) => {
@@ -87,9 +87,25 @@ export default function ShortcutPanel({ open, onClose }) {
             </div>
           ))}
 
-          <p className="mt-1 border-t border-line pt-3 text-[length:var(--app-text-11)] text-text-faint">
-            In the editor, Monaco keeps its own keys, so Ctrl+F, Ctrl+D and friends still work there.
-          </p>
+          <div className="mt-1 space-y-2 border-t border-line pt-3">
+            {session ? (
+              <p className="flex items-start gap-1.5 text-[length:var(--app-text-11)] text-text-faint">
+                <Icon name="server" size={10} className="mt-0.5 shrink-0" />
+                <span className="truncate">
+                  {[
+                    session.serverName,
+                    session.serverVersion ? `SQL Server ${session.serverVersion}` : null,
+                    session.edition,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              </p>
+            ) : null}
+            <p className="text-[length:var(--app-text-11)] text-text-faint">
+              In the editor, Monaco keeps its own keys, so Ctrl+F, Ctrl+D and friends still work there.
+            </p>
+          </div>
         </div>
       </div>
     </div>
