@@ -73,6 +73,9 @@ export const api = {
   moduleDefinition: async (connectionId, database, schema, name) =>
     call(() => bridge().modules.definition({ connectionId, database, schema, name })),
 
+  describeResult: async (connectionId, database, sql) =>
+    (await call(() => bridge().results.columns({ connectionId, database, sql }))).columns,
+
   runQuery: async (input) => call(() => bridge().query.run(input)),
 
   copyText: async (text) => call(() => bridge().clipboard.writeText(text)),

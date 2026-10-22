@@ -13,6 +13,7 @@ import {
 } from './connectionStore.js'
 import {
   connect,
+  describeResult,
   disconnectConnection,
   listDatabases,
   listModules,
@@ -75,6 +76,8 @@ export function registerIpcHandlers() {
   handle('db:table-structure', async (input) => tableStructure(input))
 
   handle('db:table-relations', (input) => tableRelations(input))
+
+  handle('db:result-columns', (input) => describeResult(input))
 
   handle('query:run', (input) => runQuery(input))
 

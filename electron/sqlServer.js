@@ -339,6 +339,43 @@ export async function moduleDefinition({ connectionId, database, schema, name })
   }
 }
 
+export async function describeResult({ connectionId, database, sql: text }) {
+  const statement = String(text || '').trim().replace(/;+\s*$/, '')
+  if (!statement) return { columns: [] }
+  await getRuntime(connectionId)
+  const pool = await getDatabasePool(connectionId, database)
+
+  const result = await pool
+    .request()
+    .input('statement', sql.NVarChar(sql.MAX), statement)
+    .query(
+      `SELECT column_ordinal,
+              name,
+              source_schema,
+              source_table,
+              source_column,
+              is_updateable,
+              is_computed_column
+         FROM sys.dm_exec_describe_first_result_set(@statement, NULL, 1)
+        WHERE is_hidden = 0
+        ORDER BY column_ordinal`,
+    )
+
+  return {
+    columns: (result.recordset || [])
+      .filter((row) => row.name)
+      .map((row) => ({
+        ordinal: Number(row.column_ordinal),
+        name: String(row.name),
+        schema: row.source_schema ? String(row.source_schema) : null,
+        table: row.source_table ? String(row.source_table) : null,
+        column: row.source_column ? String(row.source_column) : null,
+        updateable: row.is_updateable === true,
+        computed: row.is_computed_column === true,
+      })),
+  }
+}
+
 export async function tableRelations({ connectionId, database, schema, table }) {
   await getRuntime(connectionId)
   const pool = await getDatabasePool(connectionId, database)

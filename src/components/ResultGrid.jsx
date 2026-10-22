@@ -91,6 +91,7 @@ export default function ResultGrid({
   onCellContextMenu,
   onHeaderContextMenu,
   editable = false,
+  editableColumns = null,
   editing = false,
   edits = {},
   onCellChange,
@@ -188,6 +189,13 @@ export default function ResultGrid({
     [columns, relationMap],
   )
 
+  const columnEditable = (columnIndex) => {
+    if (!editable || columnRelations[columnIndex]) return false
+    if (!editableColumns) return true
+    const column = columns[columnIndex]
+    return Boolean(column && editableColumns.has(column.name))
+  }
+
   const numericColumns = useMemo(
     () =>
       columns.map((_, index) => {
@@ -229,8 +237,7 @@ export default function ResultGrid({
 
   const handleCellDoubleClick = (event, origIndex, columnIndex) => {
     if (draggedRef.current || event.shiftKey) return
-    if (!editable || !onCellChange) return
-    if (columnRelations[columnIndex]) return
+    if (!onCellChange || !columnEditable(columnIndex)) return
     const captured = preClickBoundsRef.current
     preClickBoundsRef.current = null
     const block =
@@ -356,7 +363,7 @@ export default function ResultGrid({
     for (let row = range.rowStart; row <= range.rowEnd; row += 1) {
       for (let col = range.colStart; col <= range.colEnd; col += 1) {
         const column = columns[col]
-        if (!column || columnRelations[col]) continue
+        if (!column || !columnEditable(col)) continue
         onCellChange(row, column.name, value, cellValue(row, col))
       }
     }
@@ -483,7 +490,7 @@ export default function ResultGrid({
                       className={`relative whitespace-nowrap border-b border-line/70 px-3 py-[5px] group-hover:bg-row-hover ${
                         numericColumns[colIndex] ? 'text-right tabular-nums' : ''
                       } ${inSelection(origIndex, colIndex) ? 'bg-accent/[0.12]' : dirty ? 'bg-warning/[0.08]' : ''} ${
-                        editable && !columnRelations[colIndex] ? 'cursor-text' : ''
+                        editable && columnEditable(colIndex) ? 'cursor-text' : ''
                       }`}
                     >
                       {active?.row === origIndex && active?.col === colIndex ? (
