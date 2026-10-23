@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('nova', {
   },
   tables: {
     list: (input) => ipcRenderer.invoke('db:tables', input),
+    columns: (input) => ipcRenderer.invoke('db:columns', input),
     structure: (input) => ipcRenderer.invoke('db:table-structure', input),
     relations: (input) => ipcRenderer.invoke('db:table-relations', input),
   },

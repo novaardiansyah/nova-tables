@@ -24,6 +24,7 @@ import {
   dropDatabaseUser,
   listDatabaseUsers,
   listDatabases,
+  listColumns,
   listModules,
   listTables,
   moduleDefinition,
@@ -87,6 +88,8 @@ export function registerIpcHandlers() {
   handle('security:drop-user', (input) => dropDatabaseUser(input))
 
   handle('db:tables', (input) => listTables(input))
+
+  handle('db:columns', (input) => listColumns(input))
 
   handle('db:modules', (input) => listModules(input))
 

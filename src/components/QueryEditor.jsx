@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import Editor from '@monaco-editor/react'
 import { editorThemeName } from '../monaco.js'
+import { setCompletionCatalog } from '../completions.js'
 import { queryFontOptions, subscribeSettings } from '../settings.js'
 import { Spinner } from './Icon.jsx'
 
@@ -20,8 +21,9 @@ const EDITOR_OPTIONS = {
   tabSize: 2,
   automaticLayout: true,
   scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10, useShadows: false },
-  quickSuggestions: false,
-  suggestOnTriggerCharacters: false,
+  quickSuggestions: { other: true, strings: false, comments: false },
+  suggestOnTriggerCharacters: true,
+  wordBasedSuggestions: 'off',
   parameterHints: { enabled: false },
   overviewRulerLanes: 0,
   hideCursorInOverviewRuler: true,
@@ -33,6 +35,7 @@ export default function QueryEditor({
   seed,
   theme,
   settings,
+  catalog,
   onChange,
   onRun,
   onSelectionChange,
@@ -59,6 +62,10 @@ export default function QueryEditor({
       }),
     [],
   )
+
+  useEffect(() => {
+    setCompletionCatalog(catalog || null)
+  }, [catalog])
 
   useEffect(() => {
     if (lastSeedRef.current === null || lastSeedRef.current === seed.id) {
