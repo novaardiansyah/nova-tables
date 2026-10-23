@@ -72,6 +72,9 @@ export const api = {
   listTables: async (connectionId, database) =>
     (await call(() => bridge().tables.list({ connectionId, database }))).tables,
 
+  listColumns: async (connectionId, database) =>
+    (await call(() => bridge().tables.columns({ connectionId, database }))).tables,
+
   tableStructure: async (connectionId, database, schema, table) =>
     call(() => bridge().tables.structure({ connectionId, database, schema, table })),
 

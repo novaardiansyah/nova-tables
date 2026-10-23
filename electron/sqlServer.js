@@ -558,6 +558,38 @@ export async function listTables({ connectionId, database }) {
   return { database: database || null, tables: Array.from(tables.values()) }
 }
 
+export async function listColumns({ connectionId, database }) {
+  await getRuntime(connectionId)
+  const pool = await getDatabasePool(connectionId, database)
+
+  const result = await pool.request().query(
+    `SELECT s.name AS schemaName,
+            t.name AS tableName,
+            c.name AS columnName
+       FROM sys.tables t
+       JOIN sys.schemas s ON s.schema_id = t.schema_id
+       JOIN sys.columns c ON c.object_id = t.object_id
+      ORDER BY s.name, t.name, c.column_id`,
+  )
+
+  const tables = new Map()
+
+  for (const row of result.recordset || []) {
+    const schema = String(row.schemaName)
+    const name = String(row.tableName)
+    const key = JSON.stringify([schema, name])
+
+    let table = tables.get(key)
+    if (!table) {
+      table = { schema, name, columns: [] }
+      tables.set(key, table)
+    }
+    table.columns.push(String(row.columnName))
+  }
+
+  return { database: database || null, tables: Array.from(tables.values()) }
+}
+
 export async function listModules({ connectionId, database }) {
   await getRuntime(connectionId)
   const pool = await getDatabasePool(connectionId, database)

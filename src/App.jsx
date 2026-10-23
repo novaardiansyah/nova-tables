@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from './api.js'
 import { DEFAULT_SETTINGS, applySettings } from './settings.js'
 import { generateCreateTable } from './designSql.js'
@@ -51,6 +51,7 @@ END
 
 const EMPTY_TABLES = { status: 'idle', database: null, tables: [], error: null }
 const EMPTY_MODULES = { status: 'idle', database: null, modules: [], error: null }
+const EMPTY_COLUMNS = { status: 'idle', database: null, tables: [], error: null }
 const EMPTY_DATABASE_USERS = { status: 'idle', users: [], roles: [], logins: [], error: null }
 const IDLE_QUERY = { status: 'idle', result: null, error: null }
 const EDITOR_DEFAULT_HEIGHT = 320
@@ -188,6 +189,7 @@ function createSession(result, connection, database, tab) {
     connection,
     activeDatabase: database,
     tables: EMPTY_TABLES,
+    columns: EMPTY_COLUMNS,
     modules: EMPTY_MODULES,
     tabs: [tab],
     activeTabId: tab.id,
@@ -246,6 +248,7 @@ export default function App() {
   const tabIdRef = useRef(1)
   const splitRef = useRef(null)
   const tablesRequestRef = useRef({})
+  const columnsRequestRef = useRef({})
   const modulesRequestRef = useRef({})
   const databaseUsersRequestRef = useRef(0)
   const editSourceRequestsRef = useRef({})
@@ -366,6 +369,22 @@ export default function App() {
     [patchSession],
   )
 
+  const loadColumns = useCallback(
+    async (connectionId, database) => {
+      const requestId = (columnsRequestRef.current[connectionId] || 0) + 1
+      columnsRequestRef.current[connectionId] = requestId
+      try {
+        const columns = await api.listColumns(connectionId, database)
+        if (columnsRequestRef.current[connectionId] !== requestId) return
+        patchSession(connectionId, { columns: { status: 'ready', database, tables: columns, error: null } })
+      } catch {
+        if (columnsRequestRef.current[connectionId] !== requestId) return
+        patchSession(connectionId, { columns: { status: 'ready', database, tables: [], error: null } })
+      }
+    },
+    [patchSession],
+  )
+
   const loadModules = useCallback(
     async (connectionId, database) => {
       const requestId = (modulesRequestRef.current[connectionId] || 0) + 1
@@ -479,6 +498,7 @@ export default function App() {
         setScreen('workspace')
         seedEditor(tab.sql)
         await loadTables(connection.id, database)
+        await loadColumns(connection.id, database)
         await loadModules(connection.id, database)
       } catch (error) {
         if (error.code === 'PASSWORD_MISSING') {
@@ -494,7 +514,7 @@ export default function App() {
         setConnectingId(null)
       }
     },
-    [activateSession, loadModules, loadTables, seedEditor, showBanner],
+    [activateSession, loadColumns, loadModules, loadTables, seedEditor, showBanner],
   )
 
   const openConnectionScreen = useCallback(() => {
@@ -542,9 +562,10 @@ export default function App() {
       if (!current || !database) return
       patchSession(current.connectionId, { activeDatabase: database })
       await loadTables(current.connectionId, database)
+      await loadColumns(current.connectionId, database)
       await loadModules(current.connectionId, database)
     },
-    [activeSession, loadModules, loadTables, patchSession],
+    [activeSession, loadColumns, loadModules, loadTables, patchSession],
   )
 
   const handleRefreshDatabases = useCallback(
@@ -557,6 +578,7 @@ export default function App() {
         const database = current.activeDatabase
         if (database) {
           await loadTables(connectionId, database)
+          await loadColumns(connectionId, database)
           await loadModules(connectionId, database)
         }
         showBanner('success', `Refreshed databases (${databases.length}).`)
@@ -564,7 +586,7 @@ export default function App() {
         showBanner('error', error.message)
       }
     },
-    [loadModules, loadTables, patchSession, showBanner],
+    [loadColumns, loadModules, loadTables, patchSession, showBanner],
   )
 
   const handleOpenDropDatabase = useCallback(() => {
@@ -605,12 +627,13 @@ export default function App() {
         const database = pickDatabase(databases, current.database)
         patchSession(activeConnectionId, { databases, activeDatabase: database })
         await loadTables(activeConnectionId, database)
+        await loadColumns(activeConnectionId, database)
         await loadModules(activeConnectionId, database)
       } catch (error) {
         showBanner('error', `Database dropped, but the list could not refresh. ${error.message}`)
       }
     },
-    [activeConnectionId, databaseDrop, loadModules, loadTables, patchSession, showBanner],
+    [activeConnectionId, databaseDrop, loadColumns, loadModules, loadTables, patchSession, showBanner],
   )
 
   const handleOpenDatabaseUsers = useCallback(() => {
@@ -1632,13 +1655,14 @@ export default function App() {
         }
         setTablePrompt(null)
         await loadTables(current.connectionId, current.activeDatabase)
+        await loadColumns(current.connectionId, current.activeDatabase)
       } catch (error) {
         showBanner('error', error.message)
       } finally {
         setTableBusy(false)
       }
     },
-    [activeSession, loadTables, patchSession, showBanner, tablePrompt],
+    [activeSession, loadTables, loadColumns, patchSession, showBanner, tablePrompt],
   )
 
   const handleDropConfirm = useCallback(async () => {
@@ -1657,12 +1681,13 @@ export default function App() {
       setPinnedTables((prev) => prev.filter((item) => item !== `${dropTarget.schema}.${dropTarget.name}`))
       setDropTarget(null)
       await loadTables(current.connectionId, current.activeDatabase)
+      await loadColumns(current.connectionId, current.activeDatabase)
     } catch (error) {
       showBanner('error', error.message)
     } finally {
       setTableBusy(false)
     }
-  }, [activeSession, dropTarget, loadTables, patchSession, showBanner])
+  }, [activeSession, dropTarget, loadTables, loadColumns, patchSession, showBanner])
 
   const handleDesignGenerate = useCallback(
     (sql) => {
@@ -1694,6 +1719,7 @@ export default function App() {
         })
         showBanner('success', 'Structure applied.')
         await loadTables(current.connectionId, current.activeDatabase)
+        await loadColumns(current.connectionId, current.activeDatabase)
         await reloadDesign(tabId, draft.schema, draft.table)
       } catch (error) {
         showBanner('error', error.message)
@@ -1701,7 +1727,7 @@ export default function App() {
         updateTab(current.connectionId, tabId, { busy: false })
       }
     },
-    [activeSession, loadTables, reloadDesign, showBanner, updateTab],
+    [activeSession, loadTables, loadColumns, reloadDesign, showBanner, updateTab],
   )
 
   const handleDesignRename = useCallback(
@@ -1719,6 +1745,7 @@ export default function App() {
         })
         showBanner('success', `Renamed table to ${nextName}.`)
         await loadTables(current.connectionId, current.activeDatabase)
+        await loadColumns(current.connectionId, current.activeDatabase)
         await reloadDesign(tabId, draft.schema, nextName)
       } catch (error) {
         showBanner('error', error.message)
@@ -1726,7 +1753,7 @@ export default function App() {
         updateTab(current.connectionId, tabId, { busy: false })
       }
     },
-    [activeSession, loadTables, reloadDesign, showBanner, updateTab],
+    [activeSession, loadTables, loadColumns, reloadDesign, showBanner, updateTab],
   )
 
   const handleSqlChange = useCallback((value) => {
@@ -2077,6 +2104,13 @@ export default function App() {
   ])
 
   const session = activeConnectionId ? sessions[activeConnectionId] || null : null
+  const completionCatalog = useMemo(
+    () => ({
+      tables: session?.tables?.tables ?? [],
+      columns: session?.columns?.tables ?? [],
+    }),
+    [session?.tables, session?.columns],
+  )
   const activeTab = session
     ? session.tabs.find((tab) => tab.id === session.activeTabId) || null
     : null
@@ -2180,6 +2214,7 @@ export default function App() {
                     seed={query}
                     theme={settings.theme}
                     settings={settings}
+                    catalog={completionCatalog}
                     onChange={handleSqlChange}
                     onRun={handleRun}
                     onSelectionChange={handleSelectionChange}
