@@ -267,7 +267,7 @@ export default function App() {
 
   useEffect(() => {
     if (!banner) return undefined
-    const timer = setTimeout(() => setBanner(null), 4000)
+    const timer = setTimeout(() => setBanner(null), 2500)
     return () => clearTimeout(timer)
   }, [banner])
 
