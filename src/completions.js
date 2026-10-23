@@ -76,8 +76,6 @@ function parseChain(line, column) {
 }
 
 function buildColumnCache() {
-  // Urutan kolom dipertahankan dari listColumns di sqlServer.js,
-  // yang sudah ORDER BY s.name, t.name, c.column_id (urutan fisik di tabel).
   const cache = new Map()
 
   for (const table of catalog.columns) {
@@ -161,16 +159,16 @@ function resolveColumns(cache, references, parts) {
   return null
 }
 
-function suggestion(label, kind, insertText, range, bucket, detail, order) {
+function suggestion(label, kind, insertText, range, bucket, detail, sortIndex) {
   return {
     label,
     kind,
     insertText,
     range,
     detail: detail || '',
-    // Urutan array (urutan fisik di tabel) menggantikan urutan alfabetis,
-    // jadi kolom muncul seperti di struktur tabel.
-    sortText: order !== undefined ? String(order).padStart(10, '0') : `${bucket}${String(label).toLowerCase().replace(/\W/g, '')}`,
+    sortText: sortIndex !== undefined
+      ? `0${String(sortIndex).padStart(10, '0')}`
+      : `${bucket}${String(label).toLowerCase().replace(/\W/g, '')}`,
   }
 }
 
@@ -197,9 +195,10 @@ function buildBareSuggestions(cache, references, prefix, position) {
   if (unique.size === 1) {
     const columns = columnsForReference(cache, Array.from(unique.values())[0]) || []
 
-    for (const column of columns) {
+    for (let index = 0; index < columns.length; index += 1) {
+      const column = columns[index]
       if (!prefixLower || column.toLowerCase().startsWith(prefixLower)) {
-        items.push(suggestion(column, COLUMN_KIND, column, range, '0'))
+        items.push(suggestion(column, COLUMN_KIND, column, range, '0', undefined, index))
       }
     }
   }
@@ -261,9 +260,10 @@ function buildDottedSuggestions(cache, references, segments, position, chainStar
     const columns = resolveColumns(cache, references, [identifier])
 
     if (columns) {
-      for (const column of columns) {
+      for (let index = 0; index < columns.length; index += 1) {
+        const column = columns[index]
         if (!prefixLower || column.toLowerCase().startsWith(prefixLower)) {
-          items.push(suggestion(column, COLUMN_KIND, column, range, '0'))
+          items.push(suggestion(column, COLUMN_KIND, column, range, '0', undefined, index))
         }
       }
 
@@ -293,9 +293,10 @@ function buildDottedSuggestions(cache, references, segments, position, chainStar
     ])
 
     if (columns) {
-      for (const column of columns) {
+      for (let index = 0; index < columns.length; index += 1) {
+        const column = columns[index]
         if (!prefixLower || column.toLowerCase().startsWith(prefixLower)) {
-          items.push(suggestion(column, COLUMN_KIND, column, range, '0'))
+          items.push(suggestion(column, COLUMN_KIND, column, range, '0', undefined, index))
         }
       }
     }
@@ -309,8 +310,6 @@ function provideCompletionItems(model, position) {
   const line = model.getLineContent(position.lineNumber)
   const { chainStart, segments } = parseChain(line, position.column)
   const last = segments[segments.length - 1]
-  // Semua referensi diambil dari isi dokumen penuh (bukan hanya sebelum kursor),
-  // sehingga FROM/JOIN di belakang kursor tetap terbaca untuk resolve alias.
   const references = extractReferences(model.getValue())
 
   if (segments.length === 1) {
