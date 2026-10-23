@@ -29,6 +29,8 @@ export default function ResultsPanel({
   onDeleteRows,
   onApplyFilter,
   onActiveDataChange,
+  onExport,
+  tabTitle,
 }) {
   const { status, result, error } = state
   const resultSets = result?.resultSets ?? []
@@ -42,6 +44,7 @@ export default function ResultsPanel({
   const [menu, setMenu] = useState(null)
   const [headerMenu, setHeaderMenu] = useState(null)
   const [filterColumn, setFilterColumn] = useState(null)
+  const [exportMenu, setExportMenu] = useState(null)
 
   const columnNames = useMemo(
     () => (activeResultSet?.columns ?? []).map((column) => column.name),
@@ -129,6 +132,30 @@ export default function ResultsPanel({
     [activeResultSet, selectionBounds],
   )
 
+  const allRows = useMemo(() => {
+    if (!activeResultSet?.rows) return []
+    return activeResultSet.rows.map((values, row) =>
+      activeResultSet.columns.map((column, col) => {
+        const edit = edits[`${row}:${column.name}`]
+        return edit ? edit.value : values[col]
+      }),
+    )
+  }, [activeResultSet, edits])
+
+  const handleExportAll = useCallback(
+    (format) => {
+      if (!activeResultSet || !onExport) return
+      setExportMenu(null)
+      onExport({
+        format,
+        filename: tabTitle || 'query_results',
+        columnNames,
+        rows: allRows,
+      })
+    },
+    [activeResultSet, allRows, columnNames, onExport, tabTitle],
+  )
+
   useEffect(() => {
     if (!activeResultSet || !selectionBounds) {
       onActiveDataChange?.(null)
@@ -213,6 +240,34 @@ export default function ResultsPanel({
           )
         },
       },
+      {
+        id: 'export-selected',
+        label: 'Export Selection',
+        children: [
+          {
+            id: 'export-selected-csv',
+            label: 'CSV File (.csv)',
+            onSelect: () =>
+              onExport?.({
+                format: 'csv',
+                filename: `${tabTitle || 'selection'}_selected`,
+                columnNames: selectionColumnNames,
+                rows: selectionMatrix,
+              }),
+          },
+          {
+            id: 'export-selected-json',
+            label: 'JSON File (.json)',
+            onSelect: () =>
+              onExport?.({
+                format: 'json',
+                filename: `${tabTitle || 'selection'}_selected`,
+                columnNames: selectionColumnNames,
+                rows: selectionMatrix,
+              }),
+          },
+        ],
+      },
     ]
 
     if (editable && menu.column && (!editableColumns || editableColumns.has(menu.column.name))) {
@@ -261,11 +316,13 @@ export default function ResultsPanel({
     editableColumns,
     menu,
     onDeleteRows,
+    onExport,
     onSetCellValue,
     selectionBounds,
     selectionColumnNames,
     selectionLabel,
     selectionMatrix,
+    tabTitle,
     table,
   ])
 
@@ -334,6 +391,21 @@ export default function ResultsPanel({
             <span className="rounded bg-tint/[0.06] px-1 text-[length:var(--app-text-10)] tabular-nums text-text-muted">
               {formatNumber(messages.length)}
             </span>
+          </button>
+        ) : null}
+
+        {status === 'success' && activeResultSet?.rows?.length > 0 && view !== 'messages' ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              const rect = event.currentTarget.getBoundingClientRect()
+              setExportMenu({ x: rect.left, y: rect.bottom + 4 })
+            }}
+            title="Export query results to file"
+            className="flex h-6 shrink-0 items-center gap-1.5 rounded px-2 text-[length:var(--app-text-11)] text-text-muted transition-colors hover:bg-tint/[0.03] hover:text-text"
+          >
+            <Icon name="download" size={11} />
+            Export
           </button>
         ) : null}
 
@@ -454,6 +526,26 @@ export default function ResultsPanel({
 
       {menu ? (
         <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />
+      ) : null}
+
+      {exportMenu ? (
+        <ContextMenu
+          x={exportMenu.x}
+          y={exportMenu.y}
+          items={[
+            {
+              id: 'export-csv',
+              label: 'Export CSV (.csv)',
+              onSelect: () => handleExportAll('csv'),
+            },
+            {
+              id: 'export-json',
+              label: 'Export JSON (.json)',
+              onSelect: () => handleExportAll('json'),
+            },
+          ]}
+          onClose={() => setExportMenu(null)}
+        />
       ) : null}
 
       {headerMenu ? (

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from './api.js'
 import { DEFAULT_SETTINGS, applySettings } from './settings.js'
 import { generateCreateTable } from './designSql.js'
-import { jsonRecords, quoteIdentifier, sqlLiteral } from './resultFormats.js'
+import { csvRecords, jsonRecords, quoteIdentifier, sqlLiteral } from './resultFormats.js'
 import { buildFilteredSql, buildFilterWhere } from './filters.js'
 import {
   buildDeleteStatements,
@@ -1344,6 +1344,34 @@ export default function App() {
     [showBanner],
   )
 
+  const handleExportResult = useCallback(
+    async ({ format, filename, columnNames, rows }) => {
+      try {
+        const isCsv = format === 'csv'
+        const content = isCsv ? csvRecords(columnNames, rows) : jsonRecords(columnNames, rows)
+        const ext = isCsv ? 'csv' : 'json'
+        const filterName = isCsv ? 'CSV Files (*.csv)' : 'JSON Files (*.json)'
+        const defaultName = `${filename ? filename.replace(/[^a-zA-Z0-9_-]/g, '_') : 'query_results'}.${ext}`
+
+        const response = await api.saveFile({
+          defaultPath: defaultName,
+          filters: [
+            { name: filterName, extensions: [ext] },
+            { name: 'All Files', extensions: ['*'] },
+          ],
+          content,
+        })
+
+        if (response.saved && response.filePath) {
+          showBanner('success', `Exported to ${response.filePath}.`)
+        }
+      } catch (error) {
+        showBanner('error', `Export failed: ${error.message}`)
+      }
+    },
+    [showBanner],
+  )
+
   const activeQueryTab = useCallback(() => {
     const current = activeSession()
     if (!current) return null
@@ -2319,6 +2347,8 @@ export default function App() {
                   onDeleteRows={handleDeleteRows}
                   onApplyFilter={handleApplyFilter}
                   onActiveDataChange={setActiveResultData}
+                  onExport={handleExportResult}
+                  tabTitle={activeTab?.title}
                 />
               </div>
             )}

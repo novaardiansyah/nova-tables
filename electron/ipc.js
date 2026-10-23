@@ -1,4 +1,5 @@
-import { app, clipboard, ipcMain } from 'electron'
+import { app, clipboard, dialog, ipcMain } from 'electron'
+import fs from 'node:fs'
 import {
   addQueryHistory,
   clearQueryHistory,
@@ -158,5 +159,15 @@ export function registerIpcHandlers() {
   handle('clipboard:write-text', (text) => {
     clipboard.writeText(String(text ?? ''))
     return { written: true }
+  })
+
+  handle('file:save', async ({ defaultPath, filters, content }) => {
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      defaultPath,
+      filters: filters || [{ name: 'All Files', extensions: ['*'] }],
+    })
+    if (canceled || !filePath) return { saved: false, canceled: true }
+    await fs.promises.writeFile(filePath, content, 'utf8')
+    return { saved: true, filePath }
   })
 }

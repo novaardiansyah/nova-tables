@@ -71,6 +71,9 @@ contextBridge.exposeInMainWorld('nova', {
   clipboard: {
     writeText: (text) => ipcRenderer.invoke('clipboard:write-text', text),
   },
+  file: {
+    save: (input) => ipcRenderer.invoke('file:save', input),
+  },
   events: {
     onOpenConnection: (handler) => subscribe('menu:open-connection', handler),
     onNewConnection: (handler) => subscribe('menu:new-connection', handler),

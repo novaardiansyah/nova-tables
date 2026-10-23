@@ -222,6 +222,13 @@ const ICONS = {
       <path d="M7 3v5h8" />
     </>
   ),
+  download: (
+    <>
+      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+      <path d="M7 10l5 5 5-5" />
+      <path d="M12 15V3" />
+    </>
+  ),
   bookmark: (
     <>
       <path d="M6 3h12v18l-6-4-6 4z" />

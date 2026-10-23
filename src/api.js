@@ -114,6 +114,8 @@ export const api = {
 
   copyText: async (text) => call(() => bridge().clipboard.writeText(text)),
 
+  saveFile: async (input) => call(() => bridge().file.save(input)),
+
   loadSettings: async () => (await call(() => bridge().settings.get())).settings,
 
   saveSettings: async (settings) =>

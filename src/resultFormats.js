@@ -63,3 +63,18 @@ export function jsonRecords(columnNames, matrix) {
   })
   return JSON.stringify(records, null, 2)
 }
+
+function escapeCsvCell(value) {
+  if (value === null || value === undefined) return ''
+  const str = cellText(value)
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return `"${str.replace(/"/g, '""')}"`
+  }
+  return str
+}
+
+export function csvRecords(columnNames, matrix) {
+  const header = columnNames.map(escapeCsvCell).join(',')
+  const rows = matrix.map((cells) => cells.map(escapeCsvCell).join(','))
+  return [header, ...rows].join('\r\n')
+}
