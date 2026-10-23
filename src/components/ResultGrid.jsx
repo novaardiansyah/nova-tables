@@ -96,6 +96,7 @@ export default function ResultGrid({
   edits = {},
   onCellChange,
   onStartEdit,
+  onInspectCell,
 }) {
   const [sort, setSort] = useState(null)
   const [active, setActive] = useState(null)
@@ -237,7 +238,10 @@ export default function ResultGrid({
 
   const handleCellDoubleClick = (event, origIndex, columnIndex) => {
     if (draggedRef.current || event.shiftKey) return
-    if (!onCellChange || !columnEditable(columnIndex)) return
+    if (!onCellChange || !columnEditable(columnIndex)) {
+      onInspectCell?.(columnIndex, origIndex)
+      return
+    }
     const captured = preClickBoundsRef.current
     preClickBoundsRef.current = null
     const block =
@@ -263,7 +267,7 @@ export default function ResultGrid({
     if (!inSelection(origIndex, columnIndex) && onSelectionChange) {
       onSelectionChange({ anchor: { row: origIndex, col: columnIndex }, focus: { row: origIndex, col: columnIndex } })
     }
-    onCellContextMenu?.(event.clientX, event.clientY, columnIndex)
+    onCellContextMenu?.(event.clientX, event.clientY, columnIndex, origIndex)
   }
 
   const beginDrag = (event, anchor, focus) => {

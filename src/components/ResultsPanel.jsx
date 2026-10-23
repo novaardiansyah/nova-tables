@@ -3,6 +3,7 @@ import Icon, { Spinner } from './Icon.jsx'
 import ContextMenu from './ContextMenu.jsx'
 import FilterDialog from './FilterDialog.jsx'
 import ResultGrid from './ResultGrid.jsx'
+import ValueInspectorDialog from './ValueInspectorDialog.jsx'
 import { cleanText, formatDuration, formatNumber, jsonRecords, sqlInsertRows } from '../resultFormats.js'
 import { editEditableColumns, editHasKeys } from '../edits.js'
 
@@ -45,6 +46,7 @@ export default function ResultsPanel({
   const [headerMenu, setHeaderMenu] = useState(null)
   const [filterColumn, setFilterColumn] = useState(null)
   const [exportMenu, setExportMenu] = useState(null)
+  const [inspectTarget, setInspectTarget] = useState({ columnIndex: null, row: -1 })
 
   const columnNames = useMemo(
     () => (activeResultSet?.columns ?? []).map((column) => column.name),
@@ -180,9 +182,9 @@ export default function ResultsPanel({
   )
 
   const handleCellContextMenu = useCallback(
-    (x, y, columnIndex) => {
+    (x, y, columnIndex, origIndex) => {
       const column = activeResultSet?.columns[columnIndex] ?? null
-      setMenu({ x, y, column })
+      setMenu({ x, y, column, columnIndex, row: origIndex })
     },
     [activeResultSet],
   )
@@ -211,9 +213,24 @@ export default function ResultsPanel({
   const selectionColumnNames = wholeRowSelection ? columnNames : selectedColumns
   const selectionLabel = wholeRowSelection ? 'rows' : 'cells'
 
+  const openInspector = useCallback((columnIndex, row) => {
+    setInspectTarget({ columnIndex, row })
+  }, [])
+
   const menuItems = useMemo(() => {
     if (!menu) return []
     const items = [
+      {
+        id: 'inspect-value',
+        label: 'Inspect Value',
+        onSelect: () => {
+          const row = menu.row >= 0 ? menu.row : (selectionBounds?.rowStart ?? 0)
+          const colIndex = menu.columnIndex !== null && menu.columnIndex !== undefined
+            ? menu.columnIndex
+            : (selectionBounds?.colStart ?? 0)
+          openInspector(colIndex, row)
+        },
+      },
       {
         id: 'copy-text',
         label: 'Copy Text',
@@ -318,6 +335,7 @@ export default function ResultsPanel({
     onDeleteRows,
     onExport,
     onSetCellValue,
+    openInspector,
     selectionBounds,
     selectionColumnNames,
     selectionLabel,
@@ -517,6 +535,7 @@ export default function ResultsPanel({
                   edits={edits}
                   onCellChange={onCellChange}
                   onStartEdit={() => setEditMode(true)}
+                  onInspectCell={openInspector}
                 />
               </div>
             </div>
@@ -577,6 +596,41 @@ export default function ResultsPanel({
           setFilterColumn(null)
           onApplyFilter?.(conditions)
         }}
+      />
+
+      <ValueInspectorDialog
+        open={inspectTarget.columnIndex !== null && inspectTarget.row >= 0}
+        column={activeResultSet?.columns?.[inspectTarget.columnIndex] ?? null}
+        rowIndex={inspectTarget.row}
+        value={
+          inspectTarget.columnIndex !== null && inspectTarget.row >= 0
+            ? (edits[`${inspectTarget.row}:${activeResultSet?.columns?.[inspectTarget.columnIndex]?.name}`]?.value ??
+                activeResultSet?.rows?.[inspectTarget.row]?.[inspectTarget.columnIndex] ??
+                null)
+            : null
+        }
+        editable={
+          editable &&
+          inspectTarget.columnIndex !== null &&
+          Boolean(activeResultSet?.columns?.[inspectTarget.columnIndex]) &&
+          (!editableColumns ||
+            editableColumns.has(activeResultSet.columns[inspectTarget.columnIndex].name))
+        }
+        onSave={(newValue) => {
+          if (
+            inspectTarget.columnIndex === null ||
+            inspectTarget.row < 0 ||
+            !activeResultSet?.columns?.[inspectTarget.columnIndex]
+          ) {
+            return
+          }
+          const colName = activeResultSet.columns[inspectTarget.columnIndex].name
+          const origValue = activeResultSet.rows?.[inspectTarget.row]?.[inspectTarget.columnIndex]
+          setEditMode(true)
+          onCellChange?.(inspectTarget.row, colName, newValue, origValue)
+        }}
+        onClose={() => setInspectTarget({ columnIndex: null, row: -1 })}
+        onCopy={onCopyText}
       />
     </section>
   )
