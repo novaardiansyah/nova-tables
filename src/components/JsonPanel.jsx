@@ -161,8 +161,8 @@ export default function JsonPanel({
         >
           {renderPanel({
             icon: 'panel-right',
-            title: 'Hide JSON review panel',
-            onClick: hideOverlay,
+            title: 'Expand JSON review panel',
+            onClick: () => onToggleCollapsed(false),
           })}
         </aside>
       </>
