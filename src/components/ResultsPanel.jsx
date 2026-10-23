@@ -1,13 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Icon, { Spinner } from './Icon.jsx'
 import ContextMenu from './ContextMenu.jsx'
 import FilterDialog from './FilterDialog.jsx'
-import JsonView from './JsonView.jsx'
 import ResultGrid from './ResultGrid.jsx'
 import { cleanText, formatDuration, formatNumber, jsonRecords, sqlInsertRows } from '../resultFormats.js'
 import { editEditableColumns, editHasKeys } from '../edits.js'
-
-const ROW_PANEL_DEFAULT_WIDTH = 360
 
 const SPECIAL_OPTIONS = [
   { id: 'null', label: 'NULL', value: null },
@@ -31,6 +28,7 @@ export default function ResultsPanel({
   onOpenUpdate,
   onDeleteRows,
   onApplyFilter,
+  onActiveDataChange,
 }) {
   const { status, result, error } = state
   const resultSets = result?.resultSets ?? []
@@ -44,9 +42,6 @@ export default function ResultsPanel({
   const [menu, setMenu] = useState(null)
   const [headerMenu, setHeaderMenu] = useState(null)
   const [filterColumn, setFilterColumn] = useState(null)
-  const [panelWidth, setPanelWidth] = useState(ROW_PANEL_DEFAULT_WIDTH)
-  const [panelOpen, setPanelOpen] = useState(false)
-  const splitRef = useRef(null)
 
   const columnNames = useMemo(
     () => (activeResultSet?.columns ?? []).map((column) => column.name),
@@ -134,58 +129,21 @@ export default function ResultsPanel({
     [activeResultSet, selectionBounds],
   )
 
-  const handlePanelPointerDown = useCallback(
-    (event) => {
-      if (event.button !== 0) return
-      const container = splitRef.current
-      if (!container) return
-      event.preventDefault()
-
-      const bounds = container.getBoundingClientRect()
-      const startX = event.clientX
-      const startWidth = panelWidth
-      const move = (moveEvent) => {
-        const next = Math.min(Math.max(startWidth + (startX - moveEvent.clientX), 240), bounds.width - 240)
-        setPanelWidth(next)
-      }
-      const stop = () => {
-        window.removeEventListener('pointermove', move)
-        window.removeEventListener('pointerup', stop)
-        document.body.style.cursor = ''
-        document.body.style.userSelect = ''
-      }
-
-      document.body.style.cursor = 'col-resize'
-      document.body.style.userSelect = 'none'
-      window.addEventListener('pointermove', move)
-      window.addEventListener('pointerup', stop)
-    },
-    [panelWidth],
-  )
-
-  const selectedJson = useMemo(
-    () => (panelOpen && selectionRows.length ? jsonRecords(columnNames, selectionRows) : ''),
-    [columnNames, panelOpen, selectionRows],
-  )
-  const showPanel = panelOpen && !editMode && resultSets.length > 0 && view === 'results'
-
-  const [copied, setCopied] = useState(false)
-  const copyTimer = useRef(null)
-
   useEffect(() => {
-    setCopied(false)
-  }, [selectedJson])
-
-  useEffect(() => () => window.clearTimeout(copyTimer.current), [])
-
-  const handleCopy = useCallback(async () => {
-    if (!selectedJson || !onCopyText) return
-    const written = await onCopyText(selectedJson, 'Copied row JSON.')
-    if (!written) return
-    setCopied(true)
-    window.clearTimeout(copyTimer.current)
-    copyTimer.current = window.setTimeout(() => setCopied(false), 1500)
-  }, [onCopyText, selectedJson])
+    if (!activeResultSet || !selectionBounds) {
+      onActiveDataChange?.(null)
+      return
+    }
+    const label =
+      selectionBounds.rowStart === selectionBounds.rowEnd
+        ? `Row ${selectionBounds.rowStart + 1}`
+        : `Rows ${selectionBounds.rowStart + 1}–${selectionBounds.rowEnd + 1}`
+    onActiveDataChange?.({
+      columnNames,
+      rows: selectionRows,
+      label,
+    })
+  }, [activeResultSet, columnNames, onActiveDataChange, selectionBounds, selectionRows])
 
   const copy = useCallback(
     (payload, message) => {
@@ -312,7 +270,7 @@ export default function ResultsPanel({
   ])
 
   return (
-    <section ref={splitRef} className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto_minmax(0,1fr)] bg-surface">
+    <section className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto_minmax(0,1fr)] bg-surface">
       {status === 'running' ? (
         <div className="progress-track col-span-2 row-start-1 shrink-0" />
       ) : (
@@ -380,17 +338,6 @@ export default function ResultsPanel({
         ) : null}
 
         <div className="ml-auto flex shrink-0 items-center gap-3 pl-3 text-[length:var(--app-text-11)] text-text-muted">
-          {resultSets.length > 0 && !editMode ? (
-            <button
-              type="button"
-              onClick={() => setPanelOpen((open) => !open)}
-              title={panelOpen ? 'Hide JSON panel' : 'Show JSON panel'}
-              className={`icon-btn h-6 w-6 ${panelOpen ? 'bg-tint/[0.06] text-text-strong' : ''}`}
-            >
-              <Icon name="panel-right" size={13} />
-            </button>
-          ) : null}
-          {resultSets.length > 0 && !editMode ? <span className="h-4 w-px bg-line-strong" /> : null}
           {status === 'success' && editSource && !hasKey ? (
             <span
               title="Editing needs a primary key so each row can be identified in the UPDATE WHERE clause."
@@ -504,52 +451,6 @@ export default function ResultsPanel({
           )
         ) : null}
       </div>
-
-      {showPanel ? (
-        <div
-          style={{ width: panelWidth }}
-          className="col-start-2 row-span-2 row-start-2 relative flex min-h-0 flex-col border-l border-line bg-panel"
-        >
-          <div className="flex h-9 shrink-0 items-center gap-2 border-b border-line px-3">
-            <Icon name="grid" size={12} className="shrink-0 text-text-muted" />
-            <span className="text-[length:var(--app-text-11)] font-medium text-text-soft">
-              {selectionBounds
-                ? selection.anchor.row === selection.focus.row
-                  ? `Row ${selection.focus.row + 1}`
-                  : `Rows ${selectionBounds.rowStart + 1}–${selectionBounds.rowEnd + 1}`
-                : 'Selection'}
-            </span>
-            <button
-              type="button"
-              className="icon-btn ml-auto h-6 w-6"
-              title="Copy JSON"
-              onClick={handleCopy}
-            >
-              <Icon name="copy" size={12} className={copied ? 'text-success' : undefined} />
-            </button>
-            <button
-              type="button"
-              className="icon-btn h-6 w-6"
-              title="Hide JSON panel"
-              onClick={() => setPanelOpen(false)}
-            >
-              <Icon name="x" size={12} />
-            </button>
-          </div>
-          {selectionBounds ? (
-            <JsonView text={selectedJson} />
-          ) : (
-            <p className="px-3 py-2 text-[length:var(--app-text-11)] text-text-faint">
-              Select rows or cells to view JSON.
-            </p>
-          )}
-          <div
-            onPointerDown={handlePanelPointerDown}
-            className="absolute inset-y-0 left-0 w-1.5 -translate-x-1/2 cursor-col-resize transition-colors hover:bg-accent/40"
-            title="Drag to resize"
-          />
-        </div>
-      ) : null}
 
       {menu ? (
         <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />

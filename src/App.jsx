@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from './api.js'
 import { DEFAULT_SETTINGS, applySettings } from './settings.js'
 import { generateCreateTable } from './designSql.js'
-import { quoteIdentifier, sqlLiteral } from './resultFormats.js'
+import { jsonRecords, quoteIdentifier, sqlLiteral } from './resultFormats.js'
 import { buildFilteredSql, buildFilterWhere } from './filters.js'
 import {
   buildDeleteStatements,
@@ -23,6 +23,7 @@ import DropDatabaseDialog from './components/DropDatabaseDialog.jsx'
 import PromptDialog from './components/PromptDialog.jsx'
 import QueryEditor from './components/QueryEditor.jsx'
 import QueryGuardDialog from './components/QueryGuardDialog.jsx'
+import JsonPanel, { JSON_PANEL_DEFAULT_WIDTH } from './components/JsonPanel.jsx'
 import ResultsPanel from './components/ResultsPanel.jsx'
 import SaveQueryDialog from './components/SaveQueryDialog.jsx'
 import SavedQueriesDialog from './components/SavedQueriesDialog.jsx'
@@ -218,6 +219,10 @@ export default function App() {
   const [editorHeight, setEditorHeight] = useState(EDITOR_DEFAULT_HEIGHT)
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [jsonPanelWidth, setJsonPanelWidth] = useState(JSON_PANEL_DEFAULT_WIDTH)
+  const [jsonPanelCollapsed, setJsonPanelCollapsed] = useState(true)
+  const [jsonPanelHovered, setJsonPanelHovered] = useState(false)
+  const [activeResultData, setActiveResultData] = useState(null)
   const [appVersion, setAppVersion] = useState('')
   const [tablePrompt, setTablePrompt] = useState(null)
   const [dropTarget, setDropTarget] = useState(null)
@@ -2121,6 +2126,12 @@ export default function App() {
   const dropState = dropDatabaseState(session, activeDatabaseInfo, running)
   const manageUsers = manageUsersState(session, activeDatabaseInfo)
 
+  const jsonPanelVisible = !jsonPanelCollapsed || jsonPanelHovered
+  const jsonText = useMemo(
+    () => (jsonPanelVisible && activeResultData ? jsonRecords(activeResultData.columnNames, activeResultData.rows) : ''),
+    [jsonPanelVisible, activeResultData],
+  )
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {banner ? (
@@ -2247,6 +2258,7 @@ export default function App() {
                   onOpenUpdate={handleOpenUpdate}
                   onDeleteRows={handleDeleteRows}
                   onApplyFilter={handleApplyFilter}
+                  onActiveDataChange={setActiveResultData}
                 />
               </div>
             )}
@@ -2258,6 +2270,20 @@ export default function App() {
               queryStatus={activeTab?.state.status || 'idle'}
             />
           </main>
+
+          <JsonPanel
+            collapsed={jsonPanelCollapsed}
+            onToggleCollapsed={setJsonPanelCollapsed}
+            width={jsonPanelWidth}
+            onWidthChange={setJsonPanelWidth}
+            jsonText={jsonText}
+            selectionLabel={activeResultData?.label ?? 'Selection'}
+            onCopyJson={async () => {
+              if (!jsonText) return
+              await handleCopyText(jsonText, 'Copied row JSON.')
+            }}
+            onHoverVisibleChange={setJsonPanelHovered}
+          />
         </div>
       ) : (
         <ConnectionsScreen
