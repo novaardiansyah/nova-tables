@@ -85,6 +85,21 @@ function createSchema(handle) {
 
     CREATE INDEX IF NOT EXISTS saved_queries_scope
       ON saved_queries (connection_id, database_name, updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS query_history (
+      id TEXT PRIMARY KEY,
+      connection_id TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
+      database_name TEXT NOT NULL COLLATE NOCASE,
+      sql TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'success',
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      row_count INTEGER NOT NULL DEFAULT 0,
+      error_message TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS query_history_scope
+      ON query_history (connection_id, database_name, created_at DESC);
   `)
 }
 
@@ -687,3 +702,100 @@ export function deleteSavedQuery(id) {
 export function isSystemDatabase(name) {
   return SYSTEM_DATABASES.includes(String(name || '').toLowerCase())
 }
+
+function toQueryHistoryItem(row) {
+  return {
+    id: row.id,
+    connectionId: row.connection_id,
+    database: row.database_name,
+    sql: row.sql,
+    status: row.status,
+    durationMs: Number(row.duration_ms || 0),
+    rowCount: Number(row.row_count || 0),
+    errorMessage: row.error_message || null,
+    createdAt: row.created_at,
+  }
+}
+
+export function addQueryHistory(input = {}) {
+  const connectionId = cleanText(input.connectionId)
+  const database = cleanText(input.database)
+  const sql = String(input.sql ?? '').trim()
+  if (!connectionId || !database || !sql) return null
+
+  const handle = getDb()
+  const id = crypto.randomUUID()
+  const status = input.status === 'error' ? 'error' : 'success'
+  const durationMs = Math.max(0, Math.round(Number(input.durationMs) || 0))
+  const rowCount = Math.max(0, Math.round(Number(input.rowCount) || 0))
+  const errorMessage = input.errorMessage ? String(input.errorMessage) : null
+  const now = new Date().toISOString()
+
+  handle.run(
+    `INSERT INTO query_history (
+      id, connection_id, database_name, sql, status, duration_ms, row_count, error_message, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, connectionId, database, sql, status, durationMs, rowCount, errorMessage, now],
+  )
+
+  handle.run(
+    `DELETE FROM query_history
+     WHERE connection_id = ?
+       AND id NOT IN (
+         SELECT id FROM query_history
+         WHERE connection_id = ?
+         ORDER BY created_at DESC
+         LIMIT 500
+       )`,
+    [connectionId, connectionId],
+  )
+
+  const row = handle.get('SELECT * FROM query_history WHERE id = ?', [id])
+  return row ? toQueryHistoryItem(row) : null
+}
+
+export function listQueryHistory(connectionId, database = null, limit = 100) {
+  const id = cleanText(connectionId)
+  if (!id) return []
+  const handle = getDb()
+  const maxRows = Math.min(500, Math.max(1, Number(limit) || 100))
+  const scope = cleanText(database)
+
+  if (scope) {
+    return handle
+      .all(
+        'SELECT * FROM query_history WHERE connection_id = ? AND database_name = ? ORDER BY created_at DESC LIMIT ?',
+        [id, scope, maxRows],
+      )
+      .map(toQueryHistoryItem)
+  }
+
+  return handle
+    .all(
+      'SELECT * FROM query_history WHERE connection_id = ? ORDER BY created_at DESC LIMIT ?',
+      [id, maxRows],
+    )
+    .map(toQueryHistoryItem)
+}
+
+export function clearQueryHistory(connectionId, database = null) {
+  const id = cleanText(connectionId)
+  if (!id) return false
+  const handle = getDb()
+  const scope = cleanText(database)
+
+  if (scope) {
+    handle.run('DELETE FROM query_history WHERE connection_id = ? AND database_name = ?', [id, scope])
+  } else {
+    handle.run('DELETE FROM query_history WHERE connection_id = ?', [id])
+  }
+  return true
+}
+
+export function deleteQueryHistoryItem(id) {
+  const cleanId = cleanText(id)
+  if (!cleanId) return false
+  getDb().run('DELETE FROM query_history WHERE id = ?', [cleanId])
+  return true
+}
+

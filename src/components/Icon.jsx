@@ -227,6 +227,13 @@ const ICONS = {
       <path d="M6 3h12v18l-6-4-6 4z" />
     </>
   ),
+  history: (
+    <>
+      <path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
+      <path d="M12 7v5l3 2" />
+    </>
+  ),
   lock: (
     <>
       <rect x="4" y="10.5" width="16" height="10.5" rx="2" />

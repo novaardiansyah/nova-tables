@@ -1,10 +1,14 @@
 import { app, clipboard, ipcMain } from 'electron'
 import {
+  addQueryHistory,
+  clearQueryHistory,
   deleteConnection,
   deleteFolder,
+  deleteQueryHistoryItem,
   deleteSavedQuery,
   listConnections,
   listFolders,
+  listQueryHistory,
   listSavedQueries,
   moveConnection,
   readSettings,
@@ -101,7 +105,36 @@ export function registerIpcHandlers() {
 
   handle('db:result-columns', (input) => describeResult(input))
 
-  handle('query:run', (input) => runQuery(input))
+  handle('query:run', async (input) => {
+    const started = Date.now()
+    const record = (entry) => {
+      if (!input.recordHistory) return
+      try {
+        addQueryHistory({ connectionId: input.connectionId, database: input.database, sql: input.sql, ...entry })
+      } catch {}
+    }
+    try {
+      const result = await runQuery(input)
+      record({ status: 'success', durationMs: result.elapsedMs, rowCount: result.rowCount })
+      return result
+    } catch (error) {
+      record({ status: 'error', durationMs: Date.now() - started, errorMessage: error.message })
+      throw error
+    }
+  })
+
+  handle('query-history:list', (input) => ({
+    history: listQueryHistory(input.connectionId, input.database, input.limit),
+  }))
+
+  handle('query-history:clear', (input) => ({
+    cleared: clearQueryHistory(input.connectionId, input.database),
+  }))
+
+  handle('query-history:delete', (id) => ({
+    deleted: deleteQueryHistoryItem(id),
+    id,
+  }))
 
   handle('saved-queries:list', (input) => ({
     queries: listSavedQueries(input.connectionId, input.database),

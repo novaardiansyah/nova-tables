@@ -92,6 +92,15 @@ export const api = {
 
   runQuery: async (input) => call(() => bridge().query.run(input)),
 
+  listQueryHistory: async (connectionId, database, limit) =>
+    (await call(() => bridge().queryHistory.list({ connectionId, database, limit }))).history,
+
+  clearQueryHistory: async (connectionId, database) =>
+    call(() => bridge().queryHistory.clear({ connectionId, database })),
+
+  deleteQueryHistory: async (id) =>
+    call(() => bridge().queryHistory.remove(id)),
+
   listSavedQueries: async (connectionId, database) =>
     (await call(() => bridge().savedQueries.list({ connectionId, database }))).queries,
 

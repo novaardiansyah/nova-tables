@@ -27,6 +27,7 @@ import JsonPanel, { JSON_PANEL_DEFAULT_WIDTH } from './components/JsonPanel.jsx'
 import ResultsPanel from './components/ResultsPanel.jsx'
 import SaveQueryDialog from './components/SaveQueryDialog.jsx'
 import SavedQueriesDialog from './components/SavedQueriesDialog.jsx'
+import QueryHistoryDialog from './components/QueryHistoryDialog.jsx'
 import Sidebar, { SIDEBAR_DEFAULT_WIDTH } from './components/Sidebar.jsx'
 import ShortcutPanel from './components/ShortcutPanel.jsx'
 import SettingsDialog from './components/SettingsDialog.jsx'
@@ -240,6 +241,7 @@ export default function App() {
   const [queryRenameTarget, setQueryRenameTarget] = useState(null)
   const [queryDeleteTarget, setQueryDeleteTarget] = useState(null)
   const [queryBusy, setQueryBusy] = useState(false)
+  const [history, setHistory] = useState({ open: false, items: [], loading: false, error: null })
 
   const scopeDatabase = activeConnectionId
     ? sessions[activeConnectionId]?.activeDatabase ?? null
@@ -526,6 +528,7 @@ export default function App() {
     setScreen('connections')
     setBanner(null)
     setSavedQueriesOpen(false)
+    setHistory((prev) => ({ ...prev, open: false }))
     setSaveQueryDialog(null)
     setQueryRenameTarget(null)
     setQueryDeleteTarget(null)
@@ -801,6 +804,7 @@ export default function App() {
           connectionId: current.connectionId,
           database: current.activeDatabase,
           sql,
+          recordHistory: true,
         })
         const firstFilled = result.resultSets.findIndex((set) => set.rowCount > 0)
         updateTab(current.connectionId, tabId, {
@@ -1052,6 +1056,59 @@ export default function App() {
     setSavedQueriesOpen(true)
     refreshSavedQueries()
   }, [activeSession, refreshSavedQueries, showBanner])
+
+  const loadHistory = useCallback(async (connectionId, database) => {
+    setHistory((prev) => ({ ...prev, loading: true, error: null }))
+    try {
+      const items = await api.listQueryHistory(connectionId, database)
+      setHistory((prev) => ({ ...prev, items, loading: false }))
+    } catch (error) {
+      setHistory((prev) => ({ ...prev, loading: false, error: error.message }))
+    }
+  }, [])
+
+  const handleOpenQueryHistory = useCallback(() => {
+    const current = activeSession()
+    if (!current || !current.activeDatabase) {
+      showBanner('warn', 'Open a connection and pick a database to see its query history.')
+      return
+    }
+    setHistory({ open: true, items: [], loading: true, error: null })
+    loadHistory(current.connectionId, current.activeDatabase)
+  }, [activeSession, loadHistory, showBanner])
+
+  const handleOpenHistoryItem = useCallback(
+    (item) => {
+      const current = activeSession()
+      if (!current) return
+      setHistory((prev) => ({ ...prev, open: false }))
+      openTab(current.connectionId, 'History', item.sql)
+    },
+    [activeSession, openTab],
+  )
+
+  const handleDeleteHistoryItem = useCallback(
+    async (item) => {
+      try {
+        await api.deleteQueryHistory(item.id)
+        setHistory((prev) => ({ ...prev, items: prev.items.filter((entry) => entry.id !== item.id) }))
+      } catch (error) {
+        showBanner('error', error.message)
+      }
+    },
+    [showBanner],
+  )
+
+  const handleClearHistory = useCallback(async () => {
+    const current = activeSession()
+    if (!current?.activeDatabase) return
+    try {
+      await api.clearQueryHistory(current.connectionId, current.activeDatabase)
+      setHistory((prev) => ({ ...prev, items: [] }))
+    } catch (error) {
+      showBanner('error', error.message)
+    }
+  }, [activeSession, showBanner])
 
   const handleOpenSavedQuery = useCallback(
     (item) => {
@@ -2008,6 +2065,7 @@ export default function App() {
         Boolean(queryRenameTarget) ||
         Boolean(queryDeleteTarget) ||
         savedQueriesOpen ||
+        history.open ||
         shortcutsOpen ||
         settingsOpen
 
@@ -2102,6 +2160,7 @@ export default function App() {
     runGuard,
     saveQueryDialog,
     savedQueriesOpen,
+    history.open,
     screen,
     settingsOpen,
     shortcutsOpen,
@@ -2201,6 +2260,7 @@ export default function App() {
               onNewTab={handleNewTab}
               onSaveQuery={handleSaveQuery}
               onOpenSavedQueries={handleOpenSavedQueries}
+              onOpenQueryHistory={handleOpenQueryHistory}
             />
 
             {activeTab?.kind === 'design' ? (
@@ -2325,6 +2385,19 @@ export default function App() {
         onRename={(item) => setQueryRenameTarget({ ...item, error: null })}
         onDelete={(item) => setQueryDeleteTarget(item)}
         onClose={() => setSavedQueriesOpen(false)}
+      />
+
+      <QueryHistoryDialog
+        open={history.open}
+        connectionName={session?.name ?? ''}
+        database={session?.activeDatabase ?? ''}
+        items={history.items}
+        loading={history.loading}
+        error={history.error}
+        onOpen={handleOpenHistoryItem}
+        onDelete={handleDeleteHistoryItem}
+        onClear={handleClearHistory}
+        onClose={() => setHistory((prev) => ({ ...prev, open: false }))}
       />
 
       <SaveQueryDialog

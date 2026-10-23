@@ -9,6 +9,7 @@ export default function TabBar({
   onNewTab,
   onSaveQuery,
   onOpenSavedQueries,
+  onOpenQueryHistory,
 }) {
   return (
     <div className="flex h-9 shrink-0 items-stretch border-b border-line bg-panel">
@@ -89,9 +90,18 @@ export default function TabBar({
           onClick={onOpenSavedQueries}
           disabled={!canSave}
           title="Saved queries"
-          className="icon-btn mx-1 h-6 w-6 disabled:pointer-events-none disabled:opacity-30"
+          className="icon-btn ml-1 h-6 w-6 disabled:pointer-events-none disabled:opacity-30"
         >
           <Icon name="bookmark" size={13} />
+        </button>
+        <button
+          type="button"
+          onClick={onOpenQueryHistory}
+          disabled={!canSave}
+          title="Query history"
+          className="icon-btn mx-1 h-6 w-6 disabled:pointer-events-none disabled:opacity-30"
+        >
+          <Icon name="history" size={13} />
         </button>
       </div>
     </div>
