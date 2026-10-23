@@ -6,6 +6,7 @@ export default function ConfirmDialog({
   title,
   message,
   detail,
+  detailHtml = null,
   confirmLabel = 'Confirm',
   danger = false,
   busy = false,
@@ -41,7 +42,13 @@ export default function ConfirmDialog({
                 {message}
               </p>
             ) : null}
-            {detail ? (
+            {detail && detailHtml ? (
+              <pre
+                className="mt-3 max-h-[50vh] w-full overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-panel px-3 py-2.5 font-mono text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+6px)] text-text-soft"
+                dangerouslySetInnerHTML={{ __html: detailHtml }}
+              />
+            ) : null}
+            {detail && !detailHtml ? (
               <pre className="mt-3 max-h-[50vh] w-full overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-panel px-3 py-2.5 font-mono text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+6px)] text-text-soft">
                 {detail}
               </pre>
