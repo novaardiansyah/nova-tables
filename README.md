@@ -43,6 +43,10 @@ focused on doing that well.
 
 ![Table context menu](./public/demo/table-menu.png)
 
+### Customise themes, fonts and editor typography
+
+![Settings dialog](./public/demo/settings.png)
+
 ## Dazzling Tech Stack
 
 - [Electron 30](https://www.electronjs.org/) - Desktop application framework
