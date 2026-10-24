@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import Icon, { Spinner } from './Icon.jsx'
 import Select from './Select.jsx'
-import { generateAlterTable, generateCreateTable } from '../designSql.js'
+import {
+  checkRequiresRecreation,
+  generateAlterTable,
+  generateCreateTable,
+  generateRecreateTable,
+} from '../designSql.js'
 
 const COLUMN_TYPES = [
   { value: 'bigint', length: false },
@@ -98,6 +103,64 @@ function Section({ title, count, onAdd, addLabel, children }) {
   )
 }
 
+function RecreateConfirmDialog({ open, onCancel, onConfirmRecreate, onConfirmAlter }) {
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-6 backdrop-blur-[2px]">
+      <div className="animate-fade-in w-full max-w-lg overflow-hidden rounded-xl border border-line-strong bg-surface shadow-2xl shadow-black/70">
+        <div className="flex items-start gap-3 p-5">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-warning/15 text-warning">
+            <Icon name="alert-triangle" size={16} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-[length:var(--app-text-14)] font-semibold text-text-strong">
+              Table Re-creation Required
+            </h2>
+            <p className="mt-1 text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] text-text-soft">
+              Column positions were changed or inserted in the middle. SQL Server does not support column reordering via standard ALTER TABLE.
+            </p>
+          </div>
+          <button type="button" className="icon-btn h-6 w-6" onClick={onCancel} title="Close">
+            <Icon name="x" size={13} />
+          </button>
+        </div>
+
+        <div className="space-y-3 border-t border-line px-5 py-4 text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] text-text-muted">
+          <p>
+            To preserve the exact column order, the table must be recreated in a transaction (data is copied into a temporary table and restored).
+          </p>
+          <p>
+            Alternatively, you can choose <span className="font-medium text-text">Append at end</span> to use standard ALTER TABLE (new columns will be placed at the end without table recreation).
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line bg-panel/50 px-5 py-3">
+          <button type="button" className="btn-ghost h-7 px-3 text-[length:var(--app-text-11)]" onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn-soft h-7 px-3 text-[length:var(--app-text-11)]"
+            onClick={onConfirmAlter}
+            title="Append new columns at the end without table recreation"
+          >
+            Append at end (ALTER)
+          </button>
+          <button
+            type="button"
+            className="btn-primary h-7 px-3 text-[length:var(--app-text-11)]"
+            onClick={onConfirmRecreate}
+            title="Recreate table to preserve exact column order"
+          >
+            Re-create table
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function TableDesigner({
   design,
   mode,
@@ -110,6 +173,9 @@ export default function TableDesigner({
 }) {
   const [draft, setDraft] = useState(design ?? NEW_TABLE_TEMPLATE)
   const [notice, setNotice] = useState(null)
+  const [dragIndex, setDragIndex] = useState(null)
+  const [dragOverState, setDragOverState] = useState(null)
+  const [recreateDialog, setRecreateDialog] = useState({ open: false, action: null })
   const originalRef = useRef(design)
 
   useEffect(() => {
@@ -152,6 +218,29 @@ export default function TableDesigner({
 
   const addColumn = () =>
     setDraft((prev) => ({ ...prev, columns: [...prev.columns, { ...BLANK_COLUMN, name: `column_${prev.columns.length + 1}` }] }))
+
+  const insertColumnAt = (index) =>
+    setDraft((prev) => {
+      const next = [...prev.columns]
+      next.splice(index, 0, { ...BLANK_COLUMN, name: `column_${prev.columns.length + 1}` })
+      return { ...prev, columns: next }
+    })
+
+  const handleDropColumn = (targetIndex, position) => {
+    if (dragIndex === null || dragIndex === targetIndex) return
+    setDraft((prev) => {
+      const next = [...prev.columns]
+      const [item] = next.splice(dragIndex, 1)
+      let insertAt = targetIndex
+      if (dragIndex < targetIndex) {
+        insertAt = position === 'before' ? targetIndex - 1 : targetIndex
+      } else {
+        insertAt = position === 'before' ? targetIndex : targetIndex + 1
+      }
+      next.splice(insertAt, 0, item)
+      return { ...prev, columns: next }
+    })
+  }
 
   const removeColumn = (index) =>
     setDraft((prev) => {
@@ -289,15 +378,16 @@ export default function TableDesigner({
       }),
     }))
 
-  const buildSql = () => {
+  const buildSql = (forceMode) => {
     if (mode === 'new') return generateCreateTable(draft)
     if (!originalRef.current) return '-- Loading'
+    if (forceMode === 'recreate') return generateRecreateTable(originalRef.current, draft)
     return generateAlterTable(originalRef.current, draft)
   }
 
-  const preview = () => {
+  const preview = (forceMode) => {
     try {
-      const text = buildSql()
+      const text = buildSql(forceMode)
       setNotice(null)
       return text
     } catch (buildError) {
@@ -306,15 +396,37 @@ export default function TableDesigner({
     }
   }
 
-  const handleGenerate = () => {
-    const text = preview()
+  const handleGenerate = (forceMode) => {
+    if (mode === 'edit' && !forceMode && checkRequiresRecreation(originalRef.current, draft)) {
+      setRecreateDialog({ open: true, action: 'generate' })
+      return
+    }
+    const text = preview(forceMode)
     if (text) onGenerate(text)
   }
 
-  const handleApply = () => {
-    const text = preview()
+  const handleApply = (forceMode) => {
+    if (mode === 'edit' && !forceMode && checkRequiresRecreation(originalRef.current, draft)) {
+      setRecreateDialog({ open: true, action: 'apply' })
+      return
+    }
+    const text = preview(forceMode)
     if (!text) return
     onApply(text, draft)
+  }
+
+  const confirmRecreate = () => {
+    const action = recreateDialog.action
+    setRecreateDialog({ open: false, action: null })
+    if (action === 'generate') handleGenerate('recreate')
+    if (action === 'apply') handleApply('recreate')
+  }
+
+  const confirmAlter = () => {
+    const action = recreateDialog.action
+    setRecreateDialog({ open: false, action: null })
+    if (action === 'generate') handleGenerate('alter')
+    if (action === 'apply') handleApply('alter')
   }
 
   const handleRename = () => {
@@ -386,6 +498,7 @@ export default function TableDesigner({
             <table className="w-full min-w-[900px] border-collapse text-[length:var(--app-text-12)]">
               <thead>
                 <tr className="text-left text-[length:var(--app-text-10)] uppercase tracking-wider text-text-faint">
+                  <th className="w-8 px-1 py-2 text-center font-medium"></th>
                   <th className="px-3 py-2 font-medium">Name</th>
                   <th className="px-2 py-2 font-medium">Type</th>
                   <th className="px-2 py-2 font-medium">Length</th>
@@ -400,7 +513,56 @@ export default function TableDesigner({
                 {draft.columns.map((column, index) => {
                   const type = TYPE_BY_NAME.get(column.typeName)
                   return (
-                    <tr key={index} className="border-t border-line align-top">
+                    <tr
+                      key={index}
+                      onDragOver={(event) => {
+                        event.preventDefault()
+                        if (dragIndex === null) return
+                        const rect = event.currentTarget.getBoundingClientRect()
+                        const isTop = event.clientY - rect.top < rect.height / 2
+                        const position = isTop ? 'before' : 'after'
+                        if (dragOverState?.index !== index || dragOverState?.position !== position) {
+                          setDragOverState({ index, position })
+                        }
+                      }}
+                      onDragLeave={(event) => {
+                        if (!event.currentTarget.contains(event.relatedTarget)) {
+                          setDragOverState(null)
+                        }
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault()
+                        handleDropColumn(index, dragOverState?.position || 'after')
+                        setDragIndex(null)
+                        setDragOverState(null)
+                      }}
+                      className={`border-t border-line align-top transition-colors ${
+                        dragOverState?.index === index
+                          ? dragOverState.position === 'before'
+                            ? 'border-t-2 !border-t-accent'
+                            : 'border-b-2 !border-b-accent'
+                          : ''
+                      } ${dragIndex === index ? 'opacity-40' : ''}`}
+                    >
+                      <td className="w-8 px-1 py-2 text-center">
+                        <button
+                          type="button"
+                          draggable
+                          onDragStart={(event) => {
+                            event.dataTransfer.setData('text/plain', String(index))
+                            event.dataTransfer.effectAllowed = 'move'
+                            setDragIndex(index)
+                          }}
+                          onDragEnd={() => {
+                            setDragIndex(null)
+                            setDragOverState(null)
+                          }}
+                          className="inline-flex cursor-grab items-center justify-center p-1 text-text-faint hover:text-text active:cursor-grabbing"
+                          title="Drag to reorder column"
+                        >
+                          <Icon name="grip" size={13} />
+                        </button>
+                      </td>
                       <td className="px-3 py-1.5">
                         <input
                           className="field"
@@ -414,6 +576,9 @@ export default function TableDesigner({
                         <Select
                           value={column.typeName}
                           options={TYPE_OPTIONS}
+                          searchable
+                          searchPlaceholder="Search type…"
+                          panelClassName="w-48"
                           onChange={(value) => updateColumn(index, { typeName: value })}
                         />
                       </td>
@@ -494,15 +659,44 @@ export default function TableDesigner({
                         />
                       </td>
                       <td className="px-2 py-1.5 text-center">
-                        <button type="button" className="icon-btn h-6 w-6 hover:text-danger" onClick={() => removeColumn(index)} title="Remove column">
-                          <Icon name="trash" size={12} />
-                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            className="icon-btn h-6 w-6 hover:text-accent"
+                            onClick={() => insertColumnAt(index)}
+                            title="Insert column above"
+                          >
+                            <Icon name="plus" size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-btn h-6 w-6 hover:text-danger"
+                            onClick={() => removeColumn(index)}
+                            title="Remove column"
+                          >
+                            <Icon name="trash" size={12} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
                 })}
               </tbody>
             </table>
+          </div>
+
+          <div className="flex items-center justify-between border-t border-line bg-panel/40 px-3 py-2">
+            <button
+              type="button"
+              className="btn-soft h-7 px-2.5 text-[length:var(--app-text-11)]"
+              onClick={addColumn}
+            >
+              <Icon name="plus" size={12} />
+              Add column
+            </button>
+            <span className="text-[length:var(--app-text-11)] text-text-faint">
+              {draft.columns.length} column{draft.columns.length === 1 ? '' : 's'} · Drag grip to reorder or insert anywhere
+            </span>
           </div>
         </section>
 
@@ -643,6 +837,13 @@ export default function TableDesigner({
           )}
         </Section>
       </div>
+
+      <RecreateConfirmDialog
+        open={recreateDialog.open}
+        onCancel={() => setRecreateDialog({ open: false, action: null })}
+        onConfirmRecreate={confirmRecreate}
+        onConfirmAlter={confirmAlter}
+      />
     </div>
   )
 }

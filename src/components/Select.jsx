@@ -12,9 +12,25 @@ export default function Select({
   emptyLabel = 'No databases',
   panelAlign = 'left',
   panelClassName = 'w-64',
+  searchable = false,
+  searchPlaceholder = 'Search…',
 }) {
   const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
   const containerRef = useRef(null)
+  const searchInputRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) {
+      setSearch('')
+      return
+    }
+
+    if (searchable) {
+      const timer = setTimeout(() => searchInputRef.current?.focus(), 0)
+      return () => clearTimeout(timer)
+    }
+  }, [open, searchable])
 
   useEffect(() => {
     if (!open) return
@@ -35,6 +51,13 @@ export default function Select({
   }, [open])
 
   const current = options.find((option) => option.value === value)
+  const query = search.trim().toLowerCase()
+  const filtered = searchable && query
+    ? options.filter((option) =>
+        option.label?.toLowerCase().includes(query) ||
+        String(option.value).toLowerCase().includes(query),
+      )
+    : options
 
   return (
     <div ref={containerRef} className={`relative ${className}`}>
@@ -57,10 +80,34 @@ export default function Select({
         <div
           className={`absolute top-[calc(100%+6px)] z-40 max-h-80 animate-fade-in overflow-auto rounded-lg border border-line-strong bg-elevated p-1 shadow-2xl shadow-black/60 ${panelAlign === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left'} ${panelClassName}`}
         >
-          {options.length === 0 ? (
-            <p className="px-2 py-3 text-center text-[length:var(--app-text-12)] text-text-muted">{emptyLabel}</p>
+          {searchable ? (
+            <div className="sticky top-0 z-10 -mx-1 -mt-1 mb-1 border-b border-line bg-elevated p-1">
+              <div className="flex items-center gap-1.5 rounded border border-line bg-panel px-2 py-1">
+                <Icon name="search" size={11} className="shrink-0 text-text-muted" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && filtered.length > 0) {
+                      event.preventDefault()
+                      onChange(filtered[0].value)
+                      setOpen(false)
+                    }
+                  }}
+                  placeholder={searchPlaceholder}
+                  className="w-full bg-transparent text-[length:var(--app-text-11)] text-text outline-none placeholder:text-text-faint"
+                />
+              </div>
+            </div>
+          ) : null}
+          {filtered.length === 0 ? (
+            <p className="px-2 py-3 text-center text-[length:var(--app-text-12)] text-text-muted">
+              {searchable && query ? 'No matches' : emptyLabel}
+            </p>
           ) : (
-            options.map((option) => (
+            filtered.map((option) => (
               <button
                 key={option.value}
                 type="button"

@@ -224,3 +224,84 @@ export function generateAlterTable(original, design) {
   if (statements.length === 0) return '-- No changes'
   return statements.join('\n')
 }
+
+export function checkRequiresRecreation(original, design) {
+  if (!original?.columns || !design?.columns) return false
+  const origList = (original.columns ?? []).map((c) => c.name)
+  const draftList = design.columns ?? []
+
+  let lastOldIndex = -1
+  for (let i = 0; i < draftList.length; i++) {
+    const col = draftList[i]
+    const origName = col.originalName || (origList.includes(col.name) ? col.name : null)
+    if (origName) {
+      if (i < lastOldIndex) return true
+      lastOldIndex = i
+    } else {
+      const hasOldAfter = draftList.slice(i + 1).some((c) => {
+        const name = c.originalName || (origList.includes(c.name) ? c.name : null)
+        return Boolean(name)
+      })
+      if (hasOldAfter) return true
+    }
+  }
+
+  const draftOldNames = draftList
+    .map((c) => c.originalName || (origList.includes(c.name) ? c.name : null))
+    .filter(Boolean)
+  const origFiltered = origList.filter((name) => draftOldNames.includes(name))
+  for (let i = 0; i < draftOldNames.length; i++) {
+    if (draftOldNames[i] !== origFiltered[i]) return true
+  }
+
+  return false
+}
+
+export function generateRecreateTable(original, design) {
+  const tmpName = `_tmp_nova_${design.table}`.slice(0, 128)
+  const tmpDesign = {
+    ...design,
+    table: tmpName,
+  }
+  const fullOriginalTable = tableName(design)
+  const fullTmpTable = `${quoteIdentifier(design.schema)}.${quoteIdentifier(tmpName)}`
+
+  const createTmpSql = generateCreateTable(tmpDesign)
+
+  const origColMap = new Map((original.columns ?? []).map((c) => [c.name, c]))
+  const copyColumns = []
+  for (const col of design.columns ?? []) {
+    if (col.isComputed) continue
+    const origName = col.originalName || (origColMap.has(col.name) ? col.name : null)
+    if (origName && origColMap.has(origName)) {
+      copyColumns.push({ dest: col.name, src: origName })
+    }
+  }
+
+  const hasIdentity = (design.columns ?? []).some((c) => c.isIdentity)
+  const statements = ['BEGIN TRANSACTION;']
+
+  statements.push(createTmpSql)
+
+  if (copyColumns.length > 0) {
+    if (hasIdentity) {
+      statements.push(`SET IDENTITY_INSERT ${fullTmpTable} ON;`)
+    }
+    const destList = copyColumns.map((c) => quoteIdentifier(c.dest)).join(', ')
+    const srcList = copyColumns.map((c) => quoteIdentifier(c.src)).join(', ')
+    statements.push(
+      `INSERT INTO ${fullTmpTable} (${destList}) SELECT ${srcList} FROM ${fullOriginalTable} WITH (HOLDLOCK TABLOCKX);`,
+    )
+    if (hasIdentity) {
+      statements.push(`SET IDENTITY_INSERT ${fullTmpTable} OFF;`)
+    }
+  }
+
+  statements.push(`DROP TABLE ${fullOriginalTable};`)
+  statements.push(
+    `EXEC sp_rename N'${design.schema.replace(/'/g, "''")}.${tmpName.replace(/'/g, "''")}', N'${design.table.replace(/'/g, "''")}', 'OBJECT';`,
+  )
+  statements.push('COMMIT TRANSACTION;')
+
+  return statements.join('\n\n')
+}
