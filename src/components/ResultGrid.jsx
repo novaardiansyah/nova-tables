@@ -511,6 +511,7 @@ export default function ResultGrid({
                             event.stopPropagation()
                             onRelationClick(columnRelations[colIndex], display)
                           }}
+                          title={`Navigate to ${columnRelations[colIndex].referencedTable} (${columnRelations[colIndex].referencedColumn} = ${String(display)})`}
                           className="cursor-pointer border-b border-dashed border-text-muted/50 hover:border-text-soft"
                         >
                           {String(display)}

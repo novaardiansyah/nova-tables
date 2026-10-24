@@ -1242,15 +1242,12 @@ export default function App() {
     [showBanner],
   )
 
-  const handleCopyStructure = useCallback(
+  const handleScriptTable = useCallback(
     async (table) => {
       const current = activeSession()
-      if (!current) {
-        showBanner('warn', 'Open a connection before copying a structure.')
-        return
-      }
+      if (!current) return
       if (!current.activeDatabase) {
-        showBanner('warn', 'Select a database before copying a structure.')
+        showBanner('warn', 'Select a database before generating table script.')
         return
       }
       try {
@@ -1260,13 +1257,12 @@ export default function App() {
           table.schema,
           table.name,
         )
-        await api.copyText(structure.statement)
-        showBanner('success', `Copied structure of ${table.schema}.${table.name}.`)
+        openTab(current.connectionId, `${table.name}.sql`, `${structure.statement}\n`)
       } catch (error) {
         showBanner('error', error.message)
       }
     },
-    [activeSession, showBanner],
+    [activeSession, openTab, showBanner],
   )
 
   const handleOpenModule = useCallback(
@@ -1692,14 +1688,13 @@ export default function App() {
         )
         const copyName = `${table.name}_copy`
         const sql = generateCreateTable(cloneDesign(structure, copyName))
-        const tabId = openTab(current.connectionId, copyName, sql)
+        openTab(current.connectionId, copyName, sql)
         patchSession(current.connectionId, { selectedTable: `${structure.schema}.${copyName}` })
-        execute(sql, tabId)
       } catch (error) {
         showBanner('error', error.message)
       }
     },
-    [activeSession, execute, openTab, patchSession, showBanner],
+    [activeSession, openTab, patchSession, showBanner],
   )
 
   const handleTruncateTable = useCallback((table) => {
@@ -2237,7 +2232,7 @@ export default function App() {
             onSelectDatabase={handleSelectDatabase}
             onBrowseTable={handleBrowseTable}
             onCopyObjectName={handleCopyObjectName}
-            onCopyStructure={handleCopyStructure}
+            onScriptTable={handleScriptTable}
             onOpenStructure={handleOpenStructure}
             onOpenModule={handleOpenModule}
             onCopyModuleDefinition={handleCopyModuleDefinition}

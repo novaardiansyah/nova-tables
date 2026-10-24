@@ -15,7 +15,7 @@ export default function Sidebar({
   onCloseSession,
   onBrowseTable,
   onCopyObjectName,
-  onCopyStructure,
+  onScriptTable,
   onRefreshDatabases,
   onOpenStructure,
   onOpenModule,
@@ -465,9 +465,9 @@ export default function Sidebar({
                 onSelect: () => onCopyObjectName(menu.table),
               },
               {
-                id: 'copy-structure',
-                label: 'Copy structure',
-                onSelect: () => onCopyStructure(menu.table),
+                id: 'script-table',
+                label: 'Script as CREATE',
+                onSelect: () => onScriptTable(menu.table),
               },
               {
                 id: 'open-structure',
