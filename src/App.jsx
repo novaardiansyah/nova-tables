@@ -1340,6 +1340,26 @@ export default function App() {
     [showBanner],
   )
 
+  const handleCopyQuery = useCallback(async () => {
+    const current = activeSession()
+    if (!current || !current.activeDatabase) {
+      showBanner('warn', 'Open a connection and pick a database before copying a query.')
+      return
+    }
+
+    const tab = current.tabs.find((item) => item.id === current.activeTabId)
+    if (!tab || tab.kind !== 'query') return
+
+    const sql = selectionRef.current || sqlRef.current
+    if (!sql.trim()) {
+      showBanner('warn', 'Write a query before copying it.')
+      return
+    }
+
+    const ok = await handleCopyText(sql, 'Copied query to clipboard.')
+    if (!ok) return
+  }, [activeSession, handleCopyText, showBanner])
+
   const handleExportResult = useCallback(
     async ({ format, filename, columnNames, rows }) => {
       try {
@@ -2284,6 +2304,7 @@ export default function App() {
               onSaveQuery={handleSaveQuery}
               onOpenSavedQueries={handleOpenSavedQueries}
               onOpenQueryHistory={handleOpenQueryHistory}
+              onCopyQuery={handleCopyQuery}
             />
 
             {activeTab?.kind === 'design' ? (

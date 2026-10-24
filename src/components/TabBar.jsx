@@ -10,6 +10,7 @@ export default function TabBar({
   onSaveQuery,
   onOpenSavedQueries,
   onOpenQueryHistory,
+  onCopyQuery,
 }) {
   return (
     <div className="flex h-9 shrink-0 items-stretch border-b border-line bg-panel">
@@ -78,10 +79,19 @@ export default function TabBar({
       <div className="flex shrink-0 items-center border-l border-line">
         <button
           type="button"
+          onClick={onCopyQuery}
+          disabled={!canSave}
+          title="Copy query (or selection)"
+          className="icon-btn h-6 w-6 disabled:pointer-events-none disabled:opacity-30"
+        >
+          <Icon name="copy" size={13} />
+        </button>
+        <button
+          type="button"
           onClick={onSaveQuery}
           disabled={!canSave}
           title="Save query (Ctrl+S)"
-          className="icon-btn h-6 w-6 disabled:pointer-events-none disabled:opacity-30"
+          className="icon-btn ml-1 h-6 w-6 disabled:pointer-events-none disabled:opacity-30"
         >
           <Icon name="save" size={13} />
         </button>
