@@ -46,7 +46,7 @@ export default function ResultsPanel({
   const [headerMenu, setHeaderMenu] = useState(null)
   const [filterColumn, setFilterColumn] = useState(null)
   const [exportMenu, setExportMenu] = useState(null)
-  const [inspectTarget, setInspectTarget] = useState({ columnIndex: null, row: -1 })
+  const [inspectTarget, setInspectTarget] = useState(null)
 
   const columnNames = useMemo(
     () => (activeResultSet?.columns ?? []).map((column) => column.name),
@@ -214,20 +214,49 @@ export default function ResultsPanel({
   const selectionLabel = wholeRowSelection ? 'rows' : 'cells'
 
   const openInspector = useCallback((columnIndex, row) => {
-    setInspectTarget({ columnIndex, row })
-  }, [])
+    const col = activeResultSet?.columns?.[columnIndex] ?? null
+    const val = activeResultSet?.rows?.[row]?.[columnIndex] ?? null
+    setInspectTarget({
+      type: 'cell',
+      columnIndex,
+      rowIndex: row,
+      column: col,
+      value: val,
+    })
+  }, [activeResultSet])
 
   const menuItems = useMemo(() => {
     if (!menu) return []
+    const isMultiSelection = Boolean(
+      selectionBounds &&
+        (selectionBounds.rowStart !== selectionBounds.rowEnd ||
+          selectionBounds.colStart !== selectionBounds.colEnd),
+    )
+
     const items = [
       {
         id: 'inspect-value',
-        label: 'Inspect Value',
+        label: isMultiSelection
+          ? `Inspect ${wholeRowSelection ? 'Rows' : 'Selection'}`
+          : 'Inspect Value',
         onSelect: () => {
+          if (isMultiSelection) {
+            setInspectTarget({
+              type: wholeRowSelection ? 'rows' : 'selection',
+              title: wholeRowSelection
+                ? `Rows ${selectionBounds.rowStart + 1}–${selectionBounds.rowEnd + 1}`
+                : `Selection (${selectionRows.length} × ${selectionColumnNames.length})`,
+              subtitle: `${selectionRows.length} row${selectionRows.length === 1 ? '' : 's'} · ${selectionColumnNames.length} column${selectionColumnNames.length === 1 ? '' : 's'}`,
+              columnNames: selectionColumnNames,
+              matrix: selectionMatrix,
+            })
+            return
+          }
           const row = menu.row >= 0 ? menu.row : (selectionBounds?.rowStart ?? 0)
-          const colIndex = menu.columnIndex !== null && menu.columnIndex !== undefined
-            ? menu.columnIndex
-            : (selectionBounds?.colStart ?? 0)
+          const colIndex =
+            menu.columnIndex !== null && menu.columnIndex !== undefined
+              ? menu.columnIndex
+              : (selectionBounds?.colStart ?? 0)
           openInspector(colIndex, row)
         },
       },
@@ -340,8 +369,10 @@ export default function ResultsPanel({
     selectionColumnNames,
     selectionLabel,
     selectionMatrix,
+    selectionRows,
     tabTitle,
     table,
+    wholeRowSelection,
   ])
 
   return (
@@ -480,7 +511,10 @@ export default function ResultsPanel({
               </button>
               <button
                 type="button"
-                onClick={onDiscardEdits}
+                onClick={() => {
+                  setEditMode(false)
+                  onDiscardEdits?.()
+                }}
                 title="Discard pending changes"
                 className="flex h-6 items-center rounded px-1.5 text-[length:var(--app-text-11)] text-text-muted hover:bg-tint/[0.05] hover:text-text"
               >
@@ -599,37 +633,33 @@ export default function ResultsPanel({
       />
 
       <ValueInspectorDialog
-        open={inspectTarget.columnIndex !== null && inspectTarget.row >= 0}
-        column={activeResultSet?.columns?.[inspectTarget.columnIndex] ?? null}
-        rowIndex={inspectTarget.row}
-        value={
-          inspectTarget.columnIndex !== null && inspectTarget.row >= 0
-            ? (edits[`${inspectTarget.row}:${activeResultSet?.columns?.[inspectTarget.columnIndex]?.name}`]?.value ??
-                activeResultSet?.rows?.[inspectTarget.row]?.[inspectTarget.columnIndex] ??
-                null)
-            : null
-        }
+        open={Boolean(inspectTarget)}
+        target={inspectTarget}
+        edits={edits}
         editable={
           editable &&
-          inspectTarget.columnIndex !== null &&
+          inspectTarget?.type === 'cell' &&
+          inspectTarget?.columnIndex !== null &&
           Boolean(activeResultSet?.columns?.[inspectTarget.columnIndex]) &&
           (!editableColumns ||
             editableColumns.has(activeResultSet.columns[inspectTarget.columnIndex].name))
         }
         onSave={(newValue) => {
           if (
+            !inspectTarget ||
+            inspectTarget.type !== 'cell' ||
             inspectTarget.columnIndex === null ||
-            inspectTarget.row < 0 ||
+            inspectTarget.rowIndex < 0 ||
             !activeResultSet?.columns?.[inspectTarget.columnIndex]
           ) {
             return
           }
           const colName = activeResultSet.columns[inspectTarget.columnIndex].name
-          const origValue = activeResultSet.rows?.[inspectTarget.row]?.[inspectTarget.columnIndex]
+          const origValue = activeResultSet.rows?.[inspectTarget.rowIndex]?.[inspectTarget.columnIndex]
           setEditMode(true)
-          onCellChange?.(inspectTarget.row, colName, newValue, origValue)
+          onCellChange?.(inspectTarget.rowIndex, colName, newValue, origValue)
         }}
-        onClose={() => setInspectTarget({ columnIndex: null, row: -1 })}
+        onClose={() => setInspectTarget(null)}
         onCopy={onCopyText}
       />
     </section>

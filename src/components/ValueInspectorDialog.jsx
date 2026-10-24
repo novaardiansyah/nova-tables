@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Icon from './Icon.jsx'
 import JsonView from './JsonView.jsx'
+import { cellText } from '../resultFormats.js'
 
 function formatRaw(value) {
   if (value === null || value === undefined) return ''
@@ -103,17 +104,44 @@ function tokenizeXml(text) {
 
 export default function ValueInspectorDialog({
   open,
-  column,
-  rowIndex,
-  value,
+  target,
+  edits = {},
   editable = false,
   onSave,
   onClose,
   onCopy,
 }) {
-  const isNull = value === null || value === undefined
-  const initialText = useMemo(() => formatRaw(value), [value])
-  const initialFormat = useMemo(() => detectFormat(initialText), [initialText])
+  const isMulti = Boolean(target && (target.type === 'rows' || target.type === 'selection'))
+
+  const initialText = useMemo(() => {
+    if (!open || !target) return ''
+    if (target.type === 'cell') {
+      const edit = edits[`${target.rowIndex}:${target.column?.name}`]
+      const val = edit ? edit.value : target.value
+      return formatRaw(val)
+    }
+    if (target.type === 'rows' || target.type === 'selection') {
+      const cols = target.columnNames || []
+      const records = (target.matrix || []).map((row) => {
+        const item = {}
+        cols.forEach((colName, idx) => {
+          item[colName] = row[idx] ?? null
+        })
+        return item
+      })
+      try {
+        return JSON.stringify(records.length === 1 ? records[0] : records, null, 2)
+      } catch {
+        return (target.matrix || []).map((row) => row.map(cellText).join('\t')).join('\n')
+      }
+    }
+    return ''
+  }, [edits, open, target])
+
+  const initialFormat = useMemo(() => {
+    if (isMulti) return 'json'
+    return detectFormat(initialText)
+  }, [initialText, isMulti])
 
   const [format, setFormat] = useState('text')
   const [wrap, setWrap] = useState(true)
@@ -155,6 +183,7 @@ export default function ValueInspectorDialog({
     return initialText
   }, [draft, format, initialText, isEditing])
 
+  const isNull = !isMulti && (target?.value === null || target?.value === undefined)
   const charCount = (isEditing ? draft : initialText).length
   const byteCount = new Blob([isEditing ? draft : initialText]).size
 
@@ -170,7 +199,7 @@ export default function ValueInspectorDialog({
     onClose?.()
   }
 
-  if (!open) return null
+  if (!open || !target) return null
 
   return (
     <div
@@ -189,7 +218,7 @@ export default function ValueInspectorDialog({
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h2 className="truncate text-[length:var(--app-text-13)] font-semibold text-text-strong">
-                  {column?.name || 'Cell Value'}
+                  {target.type === 'cell' ? target.column?.name || 'Cell Value' : target.title || 'Selected Data'}
                 </h2>
                 {isNull ? (
                   <span className="rounded bg-line px-1.5 py-0.5 text-[length:var(--app-text-9)] font-medium uppercase text-text-faint">
@@ -198,9 +227,15 @@ export default function ValueInspectorDialog({
                 ) : null}
               </div>
               <p className="mt-0.5 flex items-center gap-2 text-[length:var(--app-text-11)] text-text-muted">
-                <span>Row {rowIndex + 1}</span>
-                <span className="text-text-faint">·</span>
-                <span>{column?.type || (isNull ? 'null' : typeof value)}</span>
+                {target.type === 'cell' ? (
+                  <>
+                    <span>Row {target.rowIndex + 1}</span>
+                    <span className="text-text-faint">·</span>
+                    <span>{target.column?.type || (isNull ? 'null' : typeof target.value)}</span>
+                  </>
+                ) : (
+                  <span>{target.subtitle}</span>
+                )}
                 <span className="text-text-faint">·</span>
                 <span>{charCount.toLocaleString()} chars</span>
                 <span className="text-text-faint">({byteCount.toLocaleString()} bytes)</span>
@@ -251,8 +286,8 @@ export default function ValueInspectorDialog({
               type="button"
               onClick={() => setWrap((w) => !w)}
               title={wrap ? 'Disable word wrap' : 'Enable word wrap'}
-              className={`icon-btn h-7 px-2 text-[length:var(--app-text-11)] ${
-                wrap ? 'bg-tint/[0.06] text-text-strong' : 'text-text-muted'
+              className={`btn-soft flex h-7 items-center px-2.5 text-[length:var(--app-text-11)] ${
+                wrap ? 'bg-tint/[0.08] font-medium text-text-strong' : ''
               }`}
             >
               Wrap
@@ -268,7 +303,7 @@ export default function ValueInspectorDialog({
               {copied ? 'Copied' : 'Copy'}
             </button>
 
-            {editable && !isEditing ? (
+            {editable && !isEditing && target.type === 'cell' ? (
               <button
                 type="button"
                 onClick={() => {
