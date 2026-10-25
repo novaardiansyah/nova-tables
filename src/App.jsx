@@ -1977,20 +1977,31 @@ export default function App() {
     [closeSession, patchSession, showBanner],
   )
 
+  const handleDeleteSelection = useCallback(
+    async ({ connectionIds = [], folderIds = [] }) => {
+      const result = await api.deleteTree({ connectionIds, folderIds })
+      setConnections(result.connections)
+      setFolders(result.folders)
+      for (const id of result.connectionIds) {
+        if (sessionsRef.current[id]) await closeSession(id)
+      }
+      return result
+    },
+    [closeSession],
+  )
+
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteTarget) return
     setDeleting(true)
     try {
-      await api.deleteConnection(deleteTarget.id)
-      setConnections(await api.listConnections())
-      if (sessionsRef.current[deleteTarget.id]) await closeSession(deleteTarget.id)
+      await handleDeleteSelection({ connectionIds: [deleteTarget.id] })
       setDeleteTarget(null)
     } catch (error) {
       showBanner('error', error.message)
     } finally {
       setDeleting(false)
     }
-  }, [closeSession, deleteTarget, showBanner])
+  }, [deleteTarget, handleDeleteSelection, showBanner])
 
   const handleCreateFolder = useCallback(
     async (name, parentId) => {
@@ -2009,23 +2020,6 @@ export default function App() {
       try {
         await api.saveFolder({ id: folder.id, name })
         setFolders(await api.listFolders())
-      } catch (error) {
-        showBanner('error', error.message)
-      }
-    },
-    [showBanner],
-  )
-
-  const handleDeleteFolder = useCallback(
-    async (folder) => {
-      try {
-        await api.deleteFolder(folder.id)
-        const [nextFolders, nextConnections] = await Promise.all([
-          api.listFolders(),
-          api.listConnections(),
-        ])
-        setFolders(nextFolders)
-        setConnections(nextConnections)
       } catch (error) {
         showBanner('error', error.message)
       }
@@ -2453,7 +2447,7 @@ export default function App() {
           onDeleteConnection={(connection) => setDeleteTarget(connection)}
           onCreateFolder={handleCreateFolder}
           onRenameFolder={handleRenameFolder}
-          onDeleteFolder={handleDeleteFolder}
+          onDeleteSelection={handleDeleteSelection}
           onMoveConnection={handleMoveConnection}
           onReorderTree={handleReorderTree}
           onReloadConnections={handleReloadConnections}

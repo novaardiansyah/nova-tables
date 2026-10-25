@@ -1,16 +1,46 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import EnvironmentBadge from './EnvironmentBadge.jsx'
 import Icon from './Icon.jsx'
+
+function byName(left, right) {
+  return String(left.name).localeCompare(String(right.name))
+}
+
+function includedFolders(connections, folders) {
+  const byId = new Map(folders.map((folder) => [folder.id, folder]))
+  const included = new Set()
+  for (const connection of connections) {
+    let current = connection.folderId ? byId.get(connection.folderId) : null
+    while (current && !included.has(current.id)) {
+      included.add(current.id)
+      current = current.parentId ? byId.get(current.parentId) : null
+    }
+  }
+  return included
+}
+
+function PreviewConnection({ connection, depth }) {
+  return (
+    <div
+      style={{ paddingLeft: depth * 14 + 20 }}
+      className="flex items-center gap-2 rounded px-2 py-1 text-[length:var(--app-text-11)] text-text-soft"
+    >
+      <Icon name="server" size={11} className="shrink-0 text-text-faint" />
+      <span className="truncate">{connection.name}</span>
+      <EnvironmentBadge environment={connection.environment} />
+    </div>
+  )
+}
 
 export default function ExportConnectionsDialog({
   open,
   connections = [],
-  initialSelectedIds = [],
+  folders = [],
+  selectedIds = [],
   busy = false,
   onClose,
   onExport,
 }) {
-  const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -18,15 +48,11 @@ export default function ExportConnectionsDialog({
 
   useEffect(() => {
     if (!open) return
-    const ids = initialSelectedIds.length > 0
-      ? initialSelectedIds
-      : connections.map((conn) => conn.id)
-    setSelectedIds(new Set(ids))
     setPassword('')
     setConfirmPassword('')
     setShowPassword(false)
     setError(null)
-  }, [open, connections, initialSelectedIds])
+  }, [open])
 
   useEffect(() => {
     if (!open) return undefined
@@ -37,28 +63,29 @@ export default function ExportConnectionsDialog({
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [open, onClose])
 
-  if (!open) return null
+  const targets = useMemo(() => {
+    const ids = new Set(selectedIds)
+    return connections.filter((connection) => ids.has(connection.id))
+  }, [connections, selectedIds])
 
-  const toggleSelect = (id) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
+  const included = useMemo(() => includedFolders(targets, folders), [targets, folders])
 
-  const toggleAll = () => {
-    if (selectedIds.size === connections.length) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(connections.map((conn) => conn.id)))
+  const preview = useMemo(() => {
+    const grouped = new Map()
+    for (const connection of targets) {
+      const key = connection.folderId ?? null
+      if (!grouped.has(key)) grouped.set(key, [])
+      grouped.get(key).push(connection)
     }
-  }
+    const visibleFolders = folders.filter((folder) => included.has(folder.id))
+    return { grouped, visibleFolders }
+  }, [targets, folders, included])
+
+  if (!open) return null
 
   const handleSubmit = (event) => {
     event.preventDefault()
-    if (selectedIds.size === 0) {
+    if (targets.length === 0) {
       setError('Select at least one connection to export.')
       return
     }
@@ -71,10 +98,36 @@ export default function ExportConnectionsDialog({
       return
     }
     setError(null)
-    onExport(Array.from(selectedIds), password)
+    onExport(targets.map((connection) => connection.id), password)
   }
 
-  const allSelected = connections.length > 0 && selectedIds.size === connections.length
+  const renderFolder = (folder, depth) => {
+    const childFolders = preview.visibleFolders
+      .filter((item) => item.parentId === folder.id)
+      .sort(byName)
+    const childConnections = preview.grouped.get(folder.id) ?? []
+
+    return (
+      <div key={folder.id}>
+        <div
+          style={{ paddingLeft: depth * 14 + 4 }}
+          className="flex items-center gap-1.5 px-2 py-1 text-[length:var(--app-text-11)] font-medium text-text"
+        >
+          <Icon name="folder" size={11} className="shrink-0 text-warning/70" />
+          <span className="truncate">{folder.name}</span>
+        </div>
+        {childConnections.map((connection) => (
+          <PreviewConnection key={connection.id} connection={connection} depth={depth + 1} />
+        ))}
+        {childFolders.map((child) => renderFolder(child, depth + 1))}
+      </div>
+    )
+  }
+
+  const rootFolders = preview.visibleFolders
+    .filter((folder) => (folder.parentId ?? null) === null)
+    .sort(byName)
+  const rootConnections = preview.grouped.get(null) ?? []
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-6 backdrop-blur-[2px]">
@@ -91,8 +144,9 @@ export default function ExportConnectionsDialog({
               Export connections
             </h2>
             <p className="mt-1 text-[length:var(--app-text-12)] leading-[calc(var(--app-text-12)+8px)] text-text-soft">
-              Connections and their folder structure are encrypted into a JSON file with your
-              chosen password.
+              {targets.length} connection{targets.length === 1 ? '' : 's'} ·{' '}
+              {included.size} folder{included.size === 1 ? '' : 's'} will be encrypted with your
+              password. Change the selection on the connections screen.
             </p>
           </div>
           <button type="button" className="icon-btn h-6 w-6" onClick={onClose} disabled={busy}>
@@ -102,52 +156,26 @@ export default function ExportConnectionsDialog({
 
         <div className="min-h-0 flex-1 overflow-y-auto border-t border-line px-5 py-4 space-y-4">
           <div>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-[length:var(--app-text-11)] font-medium text-text-muted">
-                Connections ({selectedIds.size} of {connections.length} selected)
-              </span>
-              <button
-                type="button"
-                className="btn-ghost h-6 px-2 text-[length:var(--app-text-11)]"
-                onClick={toggleAll}
-              >
-                {allSelected ? 'Deselect all' : 'Select all'}
-              </button>
-            </div>
-
-            <div className="max-h-48 overflow-y-auto rounded-lg border border-line bg-panel/50 p-1 divide-y divide-line/40">
-              {connections.map((conn) => {
-                const checked = selectedIds.has(conn.id)
-                return (
-                  <label
-                    key={conn.id}
-                    className="flex cursor-pointer items-center gap-2.5 rounded px-2 py-1.5 transition-colors hover:bg-tint/[0.04]"
-                  >
-                    <input
-                      type="checkbox"
-                      className="h-3.5 w-3.5 rounded border-line-strong accent-accent"
-                      checked={checked}
-                      onChange={() => toggleSelect(conn.id)}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate text-[length:var(--app-text-12)] font-medium text-text">
-                          {conn.name}
-                        </span>
-                        <EnvironmentBadge environment={conn.environment} />
-                      </div>
-                      <span className="block truncate text-[length:var(--app-text-10)] text-text-faint">
-                        {conn.host}:{conn.port}
-                        {conn.database ? ` · ${conn.database}` : ''}
-                      </span>
-                    </div>
-                  </label>
-                )
-              })}
+            <span className="mb-2 block text-[length:var(--app-text-11)] font-medium text-text-muted">
+              Preview
+            </span>
+            <div className="max-h-56 overflow-y-auto rounded-lg border border-line bg-panel/50 p-1">
+              {targets.length === 0 ? (
+                <p className="px-2 py-3 text-[length:var(--app-text-11)] text-text-faint">
+                  No connection selected.
+                </p>
+              ) : (
+                <>
+                  {rootFolders.map((folder) => renderFolder(folder, 0))}
+                  {rootConnections.map((connection) => (
+                    <PreviewConnection key={connection.id} connection={connection} depth={0} />
+                  ))}
+                </>
+              )}
             </div>
           </div>
 
-          <div className="space-y-3 pt-1">
+          <div className="space-y-3">
             <div>
               <label className="field-label block" htmlFor="export-password">
                 Encryption password
@@ -199,11 +227,7 @@ export default function ExportConnectionsDialog({
           <button type="button" className="btn-soft" onClick={onClose} disabled={busy}>
             Cancel
           </button>
-          <button
-            type="submit"
-            className="btn-primary"
-            disabled={selectedIds.size === 0 || !password || busy}
-          >
+          <button type="submit" className="btn-primary" disabled={targets.length === 0 || !password || busy}>
             {busy ? 'Exporting…' : 'Export'}
           </button>
         </div>

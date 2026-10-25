@@ -57,6 +57,8 @@ export const api = {
 
   reorderTree: async (input) => call(() => bridge().tree.reorder(input)),
 
+  deleteTree: async (input) => call(() => bridge().tree.remove(input)),
+
   testConnection: async (input) => call(() => bridge().connections.test(input)),
 
   connect: async (input) => call(() => bridge().connections.connect(input)),

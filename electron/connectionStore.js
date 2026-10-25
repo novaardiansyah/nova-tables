@@ -365,11 +365,78 @@ export function saveConnection(input = {}) {
 }
 
 export function deleteConnection(id) {
+  return deleteConnections([id]).length > 0
+}
+
+function removeTreeOrderEntries(handle, connectionIds, folderIds) {
+  const order = readOrder(handle)
+  const nextConnections = order.connections.filter((id) => !connectionIds.includes(id))
+  const nextFolders = order.folders.filter((id) => !folderIds.includes(id))
+  writeMeta(handle, ORDER_META_KEY, JSON.stringify({ connections: nextConnections, folders: nextFolders }))
+}
+
+export function deleteConnections(ids) {
   const handle = getDb()
-  if (!readConnection(id)) return false
-  handle.run('DELETE FROM connections WHERE id = ?', id)
-  sessionPasswords.delete(id)
-  return true
+  const requested = (Array.isArray(ids) ? ids : [ids]).map(String)
+  const removed = []
+
+  handle.exec('BEGIN')
+  try {
+    for (const id of requested) {
+      if (!readConnection(id)) continue
+      handle.run('DELETE FROM connections WHERE id = ?', id)
+      removed.push(id)
+    }
+    if (removed.length > 0) removeTreeOrderEntries(handle, removed, [])
+    handle.exec('COMMIT')
+  } catch (error) {
+    handle.exec('ROLLBACK')
+    throw error
+  }
+
+  for (const id of removed) sessionPasswords.delete(id)
+  return removed
+}
+
+function folderSubtreeIds(handle, ids) {
+  const found = new Set()
+  const queue = [...ids]
+  while (queue.length > 0) {
+    const id = queue.shift()
+    if (found.has(id) || !folderExists(handle, id)) continue
+    found.add(id)
+    for (const row of handle.all('SELECT id FROM folders WHERE parent_id = ?', [id])) queue.push(row.id)
+  }
+  return found
+}
+
+export function deleteFolders(ids) {
+  const handle = getDb()
+  const requested = (Array.isArray(ids) ? ids : [ids]).map(String)
+  const folderIds = [...folderSubtreeIds(handle, requested)]
+  if (folderIds.length === 0) return { folderIds: [], connectionIds: [] }
+
+  const connectionIds = folderIds.flatMap((id) =>
+    handle.all('SELECT id FROM connections WHERE folder_id = ?', [id]).map((row) => row.id),
+  )
+
+  const folderMarks = folderIds.map(() => '?').join(',')
+  handle.exec('BEGIN')
+  try {
+    if (connectionIds.length > 0) {
+      const connectionMarks = connectionIds.map(() => '?').join(',')
+      handle.run(`DELETE FROM connections WHERE id IN (${connectionMarks})`, connectionIds)
+    }
+    handle.run(`DELETE FROM folders WHERE id IN (${folderMarks})`, folderIds)
+    removeTreeOrderEntries(handle, connectionIds, folderIds)
+    handle.exec('COMMIT')
+  } catch (error) {
+    handle.exec('ROLLBACK')
+    throw error
+  }
+
+  for (const id of connectionIds) sessionPasswords.delete(id)
+  return { folderIds, connectionIds }
 }
 
 const EXPORT_KDF_ITERATIONS = 100000
@@ -778,22 +845,7 @@ export function saveFolder(input = {}) {
 }
 
 export function deleteFolder(id) {
-  const handle = getDb()
-  const folder = handle.get('SELECT * FROM folders WHERE id = ?', id)
-  if (!folder) return false
-
-  const parentId = folder.parent_id ?? null
-  handle.exec('BEGIN')
-  try {
-    handle.run('UPDATE folders SET parent_id = ? WHERE parent_id = ?', [parentId, id])
-    handle.run('UPDATE connections SET folder_id = ? WHERE folder_id = ?', [parentId, id])
-    handle.run('DELETE FROM folders WHERE id = ?', id)
-    handle.exec('COMMIT')
-  } catch (error) {
-    handle.exec('ROLLBACK')
-    throw error
-  }
-  return true
+  return deleteFolders([id]).folderIds.length > 0
 }
 
 export function moveConnection(id, folderId) {

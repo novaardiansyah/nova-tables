@@ -5,7 +5,9 @@ import {
   addQueryHistory,
   clearQueryHistory,
   deleteConnection,
+  deleteConnections,
   deleteFolder,
+  deleteFolders,
   deleteQueryHistoryItem,
   deleteSavedQuery,
   exportConnections,
@@ -106,6 +108,17 @@ export function registerIpcHandlers() {
   handle('folders:delete', (id) => ({ deleted: deleteFolder(id), folderId: id }))
 
   handle('tree:reorder', (input) => updateTreeOrder(input))
+
+  handle('tree:delete', (input) => {
+    const folders = deleteFolders(input?.folderIds ?? [])
+    const connections = deleteConnections(input?.connectionIds ?? [])
+    return {
+      folderIds: folders.folderIds,
+      connectionIds: [...folders.connectionIds, ...connections],
+      connections: listConnections(),
+      folders: listFolders(),
+    }
+  })
 
   handle('connections:test', (input) => testConnection(input))
 

@@ -89,6 +89,14 @@ const ICONS = {
       <path d="M6 6l12 12" />
     </>
   ),
+  check: <path d="M4.5 12.5l5 5 10-11" />,
+  'more-horizontal': (
+    <>
+      <circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none" />
+    </>
+  ),
   'alert-triangle': (
     <>
       <path d="M10.3 3.9L1.9 18a2 2 0 001.7 3h16.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z" />

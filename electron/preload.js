@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('nova', {
   },
   tree: {
     reorder: (input) => ipcRenderer.invoke('tree:reorder', input),
+    remove: (input) => ipcRenderer.invoke('tree:delete', input),
   },
   databases: {
     list: (input) => ipcRenderer.invoke('db:databases', input),
