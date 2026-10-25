@@ -2,8 +2,11 @@ import { Fragment, useMemo, useState } from 'react'
 import ConfirmDialog from './ConfirmDialog.jsx'
 import ContextMenu from './ContextMenu.jsx'
 import EnvironmentBadge from './EnvironmentBadge.jsx'
+import ExportConnectionsDialog from './ExportConnectionsDialog.jsx'
 import Icon, { BrandMark, Spinner } from './Icon.jsx'
+import ImportConnectionsDialog from './ImportConnectionsDialog.jsx'
 import PromptDialog from './PromptDialog.jsx'
+import { api } from '../api.js'
 
 function byName(left, right) {
   return String(left.name).localeCompare(String(right.name))
@@ -55,6 +58,8 @@ export default function ConnectionsScreen({
   onDeleteFolder,
   onMoveConnection,
   onReorderTree,
+  onReloadConnections,
+  onNotify,
 }) {
   const [openFolders, setOpenFolders] = useState(() => new Set())
   const [prompt, setPrompt] = useState(null)
@@ -64,6 +69,11 @@ export default function ConnectionsScreen({
   const [menu, setMenu] = useState(null)
   const [drag, setDrag] = useState(null)
   const [dropTarget, setDropTarget] = useState(null)
+  const [exportTarget, setExportTarget] = useState(null)
+  const [exportBusy, setExportBusy] = useState(false)
+  const [importFile, setImportFile] = useState(null)
+  const [importBusy, setImportBusy] = useState(false)
+  const [importError, setImportError] = useState(null)
 
   const flatFolders = useMemo(() => folderTree(folders), [folders])
   const connectionOrder = useMemo(() => connections.map((item) => item.id), [connections])
@@ -233,6 +243,56 @@ export default function ConnectionsScreen({
     }
   }
 
+  const handleOpenExport = (connectionIds = []) => {
+    setExportTarget({
+      selectedIds: connectionIds.length > 0 ? connectionIds : connections.map((conn) => conn.id),
+    })
+  }
+
+  const handleExportConfirm = async (selectedIds, password) => {
+    setExportBusy(true)
+    try {
+      const result = await api.exportConnections(selectedIds, password)
+      if (result.saved) {
+        setExportTarget(null)
+        onNotify?.('success', `Exported ${result.count} connection(s) successfully.`)
+      }
+    } catch (error) {
+      onNotify?.('error', error.message)
+    } finally {
+      setExportBusy(false)
+    }
+  }
+
+  const handleStartImport = async () => {
+    try {
+      const file = await api.selectImportFile()
+      if (file.canceled) return
+      setImportFile(file)
+      setImportError(null)
+    } catch (error) {
+      onNotify?.('error', error.message)
+    }
+  }
+
+  const handleImportConfirm = async (password) => {
+    if (!importFile?.content) return
+    setImportBusy(true)
+    setImportError(null)
+    try {
+      const result = await api.importConnections(importFile.content, password)
+      setImportFile(null)
+      await onReloadConnections?.()
+      const folders = result.importedFolderCount
+      const suffix = folders > 0 ? ` and ${folders} folder(s)` : ''
+      onNotify?.('success', `Imported ${result.importedCount} connection(s)${suffix} successfully.`)
+    } catch (error) {
+      setImportError(error.message)
+    } finally {
+      setImportBusy(false)
+    }
+  }
+
   const renderConnection = (connection, depth) => {
     const isConnecting = connectingId === connection.id
     const isOpen = openIds.includes(connection.id)
@@ -294,6 +354,14 @@ export default function ConnectionsScreen({
           </button>
 
           <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/conn:opacity-100">
+            <button
+              type="button"
+              className="icon-btn h-6 w-6"
+              title="Export connection"
+              onClick={() => handleOpenExport([connection.id])}
+            >
+              <Icon name="download" size={12} />
+            </button>
             <button
               type="button"
               className="icon-btn h-6 w-6"
@@ -430,6 +498,25 @@ export default function ConnectionsScreen({
         </span>
 
         <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            className="btn-soft"
+            onClick={handleStartImport}
+            title="Import connections from encrypted JSON file"
+          >
+            <Icon name="upload" size={14} />
+            Import
+          </button>
+          <button
+            type="button"
+            className="btn-soft"
+            onClick={() => handleOpenExport([])}
+            disabled={connections.length === 0}
+            title="Export connections to encrypted JSON file"
+          >
+            <Icon name="download" size={14} />
+            Export
+          </button>
           <button type="button" className="btn-soft" onClick={() => openCreatePrompt(null)}>
             <Icon name="folder" size={14} />
             New folder
@@ -535,6 +622,27 @@ export default function ConnectionsScreen({
           onClose={() => setMenu(null)}
         />
       ) : null}
+
+      <ExportConnectionsDialog
+        open={Boolean(exportTarget)}
+        connections={connections}
+        initialSelectedIds={exportTarget?.selectedIds ?? []}
+        busy={exportBusy}
+        onClose={() => setExportTarget(null)}
+        onExport={handleExportConfirm}
+      />
+
+      <ImportConnectionsDialog
+        open={Boolean(importFile)}
+        fileName={importFile?.fileName ?? ''}
+        busy={importBusy}
+        error={importError}
+        onClose={() => {
+          setImportFile(null)
+          setImportError(null)
+        }}
+        onImport={handleImportConfirm}
+      />
     </div>
   )
 }

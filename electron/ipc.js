@@ -1,5 +1,6 @@
 import { app, clipboard, dialog, ipcMain } from 'electron'
 import fs from 'node:fs'
+import path from 'node:path'
 import {
   addQueryHistory,
   clearQueryHistory,
@@ -7,6 +8,8 @@ import {
   deleteFolder,
   deleteQueryHistoryItem,
   deleteSavedQuery,
+  exportConnections,
+  importConnections,
   listConnections,
   listFolders,
   listQueryHistory,
@@ -66,6 +69,35 @@ export function registerIpcHandlers() {
     moved: moveConnection(input.id, input.folderId),
     connectionId: input.id,
   }))
+
+  handle('connections:export', async ({ connectionIds, password }) => {
+    const { content, count } = exportConnections(connectionIds, password)
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      defaultPath: 'nova-tables-connections.json',
+      filters: [{ name: 'Nova Tables Connections (*.json)', extensions: ['json'] }],
+    })
+    if (canceled || !filePath) return { saved: false, canceled: true }
+    await fs.promises.writeFile(filePath, content, 'utf8')
+    return { saved: true, filePath, count }
+  })
+
+  handle('connections:select-import-file', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [
+        { name: 'Nova Tables Connections (*.json)', extensions: ['json'] },
+        { name: 'All Files (*.*)', extensions: ['*'] },
+      ],
+    })
+    if (canceled || !filePaths?.length) return { canceled: true }
+    const filePath = filePaths[0]
+    const content = await fs.promises.readFile(filePath, 'utf8')
+    return { canceled: false, filePath, fileName: path.basename(filePath), content }
+  })
+
+  handle('connections:import', async ({ content, password }) => {
+    return importConnections(content, password)
+  })
 
   handle('folders:list', () => ({ folders: listFolders() }))
 

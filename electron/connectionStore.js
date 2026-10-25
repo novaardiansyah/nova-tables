@@ -372,6 +372,333 @@ export function deleteConnection(id) {
   return true
 }
 
+const EXPORT_KDF_ITERATIONS = 100000
+
+function encryptExportPayload(payload, password) {
+  const salt = crypto.randomBytes(16)
+  const iv = crypto.randomBytes(12)
+  const key = crypto.pbkdf2Sync(password, salt, EXPORT_KDF_ITERATIONS, 32, 'sha256')
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)
+  const raw = JSON.stringify(payload)
+  const encrypted = Buffer.concat([cipher.update(raw, 'utf8'), cipher.final()])
+  const tag = cipher.getAuthTag()
+
+  return JSON.stringify({
+    version: 1,
+    app: 'nova-tables',
+    kdf: 'pbkdf2',
+    algorithm: 'aes-256-gcm',
+    iterations: EXPORT_KDF_ITERATIONS,
+    salt: salt.toString('base64'),
+    iv: iv.toString('base64'),
+    tag: tag.toString('base64'),
+    data: encrypted.toString('base64'),
+  }, null, 2)
+}
+
+function decryptImportPayload(fileContent, password) {
+  let container
+  try {
+    container = typeof fileContent === 'string' ? JSON.parse(fileContent) : fileContent
+  } catch {
+    const error = new Error('File is not a valid JSON document')
+    error.code = 'INVALID_FORMAT'
+    throw error
+  }
+
+  if (!container?.salt || !container?.iv || !container?.tag || !container?.data) {
+    const error = new Error('Invalid or unrecognized export file format')
+    error.code = 'INVALID_FORMAT'
+    throw error
+  }
+
+  const salt = Buffer.from(container.salt, 'base64')
+  const iv = Buffer.from(container.iv, 'base64')
+  const tag = Buffer.from(container.tag, 'base64')
+  const data = Buffer.from(container.data, 'base64')
+  const iterations = Number(container.iterations) || EXPORT_KDF_ITERATIONS
+
+  const key = crypto.pbkdf2Sync(password, salt, iterations, 32, 'sha256')
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv)
+  decipher.setAuthTag(tag)
+
+  let decrypted
+  try {
+    decrypted = Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8')
+  } catch {
+    const error = new Error('Incorrect password or corrupted file')
+    error.code = 'INVALID_PASSWORD'
+    throw error
+  }
+
+  let parsed
+  try {
+    parsed = JSON.parse(decrypted)
+  } catch {
+    const error = new Error('Decrypted content is not valid JSON')
+    error.code = 'INVALID_FORMAT'
+    throw error
+  }
+
+  if (!parsed || !Array.isArray(parsed.connections)) {
+    const error = new Error('No connections found in export file')
+    error.code = 'INVALID_FORMAT'
+    throw error
+  }
+
+  return parsed
+}
+
+function exportFolderChain(folderId, folderById) {
+  const chain = []
+  let current = folderId ? folderById.get(folderId) : null
+  while (current && !chain.includes(current.id)) {
+    chain.unshift(current.id)
+    current = current.parentId ? folderById.get(current.parentId) : null
+  }
+  return chain
+}
+
+function importFolderKey(parentId, name) {
+  return `${parentId ?? ''}::${String(name).toLowerCase()}`
+}
+
+function importFolderDepth(folder, folderById) {
+  let depth = 0
+  let current = folder
+  while (current?.parentId && folderById.has(String(current.parentId)) && depth < 64) {
+    current = folderById.get(String(current.parentId))
+    depth += 1
+  }
+  return depth
+}
+
+export function exportConnections(connectionIds, password) {
+  const secret = String(password ?? '')
+  if (!secret) {
+    const error = new Error('Password is required to encrypt export')
+    error.code = 'PASSWORD_REQUIRED'
+    throw error
+  }
+
+  const allConnections = listConnections()
+  const allSelected = !Array.isArray(connectionIds) || connectionIds.length === 0
+  const targetIds = new Set(
+    allSelected ? allConnections.map((conn) => conn.id) : connectionIds.map(String),
+  )
+
+  const allFolders = listFolders()
+  const folderById = new Map(allFolders.map((folder) => [folder.id, folder]))
+  const folderIds = new Set()
+  const folderOrder = []
+
+  if (allSelected) {
+    for (const folder of allFolders) folderIds.add(folder.id)
+  } else {
+    for (const connection of allConnections) {
+      if (!targetIds.has(connection.id) || !connection.folderId) continue
+      for (const id of exportFolderChain(connection.folderId, folderById)) folderIds.add(id)
+    }
+  }
+
+  for (const folder of allFolders) {
+    if (folderIds.has(folder.id)) folderOrder.push(folder.id)
+  }
+
+  const list = []
+  const connectionOrder = []
+  for (const item of allConnections) {
+    if (!targetIds.has(item.id)) continue
+    const full = readConnection(item.id)
+    if (!full) continue
+    connectionOrder.push(full.id)
+    list.push({
+      name: full.name,
+      host: full.host,
+      port: full.port,
+      username: full.username,
+      database: full.database,
+      environment: full.environment,
+      encrypt: full.encrypt,
+      trustServerCertificate: full.trustServerCertificate,
+      password: getPassword(item.id) || null,
+      folderId: full.folderId ?? null,
+    })
+  }
+
+  if (list.length === 0) {
+    const error = new Error('No connections found to export')
+    error.code = 'NO_CONNECTIONS'
+    throw error
+  }
+
+  const folders = folderOrder.map((id) => {
+    const folder = folderById.get(id)
+    return {
+      id: folder.id,
+      name: folder.name,
+      parentId: folder.parentId ?? null,
+    }
+  })
+
+  const payload = {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    connections: list,
+    folders,
+    order: {
+      connections: connectionOrder,
+      folders: folderOrder,
+    },
+  }
+
+  return {
+    content: encryptExportPayload(payload, secret),
+    count: list.length,
+  }
+}
+
+export function importConnections(fileContent, password) {
+  const secret = String(password ?? '')
+  if (!secret) {
+    const error = new Error('Password is required to decrypt connections')
+    error.code = 'PASSWORD_REQUIRED'
+    throw error
+  }
+
+  const payload = decryptImportPayload(fileContent, secret)
+  const items = payload.connections
+  const sourceFolders = Array.isArray(payload.folders) ? payload.folders : []
+
+  const existingConnections = listConnections()
+  const existingNames = new Set(existingConnections.map((conn) => conn.name.toLowerCase()))
+  const existingFolders = listFolders()
+  const reusableFolders = new Map()
+  for (const folder of existingFolders) {
+    const key = importFolderKey(folder.parentId ?? null, folder.name)
+    if (!reusableFolders.has(key)) reusableFolders.set(key, folder.id)
+  }
+
+  const folderIdMap = new Map()
+  const importedFolderIds = []
+
+  const sourceFolderById = new Map(
+    sourceFolders
+      .filter((folder) => folder && folder.id)
+      .map((folder) => [String(folder.id), folder]),
+  )
+  const orderedSourceFolders = [...sourceFolderById.values()].sort(
+    (left, right) => importFolderDepth(left, sourceFolderById) - importFolderDepth(right, sourceFolderById),
+  )
+
+  for (const folder of orderedSourceFolders) {
+    const name = cleanText(folder.name)
+    if (!name) continue
+    const sourceParentId = folder.parentId ? String(folder.parentId) : null
+    const parentId = sourceParentId ? folderIdMap.get(sourceParentId) ?? null : null
+    const key = importFolderKey(parentId, name)
+    const reusableId = reusableFolders.get(key)
+    let targetId = reusableId
+
+    if (reusableId) {
+      reusableFolders.delete(key)
+    } else {
+      targetId = saveFolder({ name, parentId }).id
+      importedFolderIds.push(targetId)
+    }
+
+    folderIdMap.set(String(folder.id), targetId)
+  }
+
+  const nameFolderCache = new Map()
+  const resolveLegacyFolder = (folderName) => {
+    const name = cleanText(folderName)
+    if (!name) return null
+    const key = importFolderKey(null, name)
+    if (nameFolderCache.has(key)) return nameFolderCache.get(key)
+    const fine = reusableFolders.get(key) ?? null
+    if (fine) {
+      reusableFolders.delete(key)
+      nameFolderCache.set(key, fine)
+      return fine
+    }
+    const created = saveFolder({ name }).id
+    importedFolderIds.push(created)
+    nameFolderCache.set(key, created)
+    return created
+  }
+
+  const imported = []
+
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue
+    let name = cleanText(item.name)
+    if (!name) continue
+
+    if (existingNames.has(name.toLowerCase())) {
+      name = `(new) ${name}`
+      while (existingNames.has(name.toLowerCase())) {
+        name = `(new) ${name}`
+      }
+    }
+    existingNames.add(name.toLowerCase())
+
+    let folderId = null
+    if (item.folderId && folderIdMap.has(String(item.folderId))) {
+      folderId = folderIdMap.get(String(item.folderId))
+    } else if (item.folderName) {
+      folderId = resolveLegacyFolder(item.folderName)
+    }
+
+    const saved = saveConnection({
+      name,
+      host: item.host,
+      port: item.port,
+      username: item.username,
+      database: item.database || '',
+      environment: item.environment || '',
+      encrypt: item.encrypt !== false,
+      trustServerCertificate: item.trustServerCertificate !== false,
+      folderId,
+      password: item.password || null,
+    })
+
+    imported.push(saved)
+  }
+
+  if (imported.length > 0 || importedFolderIds.length > 0) {
+    const handle = getDb()
+    const currentOrder = readOrder(handle)
+    const connectionOrder = imported.map((connection) => connection.id)
+    const sourceOrder = Array.isArray(payload.order?.folders) ? payload.order.folders : []
+    const orderedFolders = []
+
+    for (const id of sourceOrder) {
+      const mapped = folderIdMap.get(String(id))
+      if (mapped && importedFolderIds.includes(mapped) && !orderedFolders.includes(mapped)) {
+        orderedFolders.push(mapped)
+      }
+    }
+    for (const id of importedFolderIds) {
+      if (!orderedFolders.includes(id)) orderedFolders.push(id)
+    }
+
+    updateTreeOrder({
+      connections: [...currentOrder.connections, ...connectionOrder],
+      folders: [...currentOrder.folders, ...orderedFolders],
+      connectionFolders: {},
+      folderParents: {},
+    })
+  }
+
+  return {
+    importedCount: imported.length,
+    importedFolderCount: importedFolderIds.length,
+    connections: listConnections(),
+    folders: listFolders(),
+  }
+}
+
 function folderDepth(handle, id) {
   let depth = 0
   let current = handle.get('SELECT id, parent_id FROM folders WHERE id = ?', id)

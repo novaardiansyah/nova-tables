@@ -15,6 +15,9 @@ contextBridge.exposeInMainWorld('nova', {
     test: (input) => ipcRenderer.invoke('connections:test', input),
     connect: (input) => ipcRenderer.invoke('connections:connect', input),
     disconnect: (connectionId) => ipcRenderer.invoke('connections:disconnect', connectionId),
+    export: (input) => ipcRenderer.invoke('connections:export', input),
+    selectImportFile: () => ipcRenderer.invoke('connections:select-import-file'),
+    import: (input) => ipcRenderer.invoke('connections:import', input),
   },
   folders: {
     list: () => ipcRenderer.invoke('folders:list'),

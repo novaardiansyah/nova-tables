@@ -2058,6 +2058,19 @@ export default function App() {
     [showBanner],
   )
 
+  const handleReloadConnections = useCallback(async () => {
+    try {
+      const [nextFolders, nextConnections] = await Promise.all([
+        api.listFolders(),
+        api.listConnections(),
+      ])
+      setFolders(nextFolders)
+      setConnections(nextConnections)
+    } catch (error) {
+      showBanner('error', error.message)
+    }
+  }, [showBanner])
+
   const handleSplitPointerDown = useCallback((event) => {
     if (event.button !== 0) return
     const container = splitRef.current
@@ -2443,6 +2456,8 @@ export default function App() {
           onDeleteFolder={handleDeleteFolder}
           onMoveConnection={handleMoveConnection}
           onReorderTree={handleReorderTree}
+          onReloadConnections={handleReloadConnections}
+          onNotify={showBanner}
         />
       )}
 

@@ -40,6 +40,15 @@ export const api = {
   moveConnection: async (id, folderId) =>
     call(() => bridge().connections.move({ id, folderId })),
 
+  exportConnections: async (connectionIds, password) =>
+    call(() => bridge().connections.export({ connectionIds, password })),
+
+  selectImportFile: async () =>
+    call(() => bridge().connections.selectImportFile()),
+
+  importConnections: async (content, password) =>
+    call(() => bridge().connections.import({ content, password })),
+
   listFolders: async () => (await call(() => bridge().folders.list())).folders,
 
   saveFolder: async (input) => (await call(() => bridge().folders.save(input))).folder,
