@@ -2347,6 +2347,8 @@ export default function App() {
                   loading={activeTab.loading}
                   error={activeTab.error}
                   busy={activeTab.busy}
+                  availableTables={session?.tables?.tables ?? []}
+                  availableColumns={session?.columns?.tables ?? []}
                   onGenerate={handleDesignGenerate}
                   onApply={(sql, draft) => handleDesignApply(activeTab.id, sql, draft)}
                   onRenameTable={(nextName) =>

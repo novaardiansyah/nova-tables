@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Icon, { Spinner } from './Icon.jsx'
 import Select from './Select.jsx'
 import {
@@ -74,7 +74,7 @@ function Editor({ label, value, onChange, placeholder, className = '', disabled 
     <label className={`block ${className}`}>
       <span className="field-label">{label}</span>
       <input
-        className="field"
+        className="field h-8 py-0 text-[length:var(--app-text-12)]"
         value={value ?? ''}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
@@ -167,6 +167,8 @@ export default function TableDesigner({
   loading,
   error,
   busy,
+  availableTables = [],
+  availableColumns = [],
   onRenameTable,
   onGenerate,
   onApply,
@@ -183,6 +185,25 @@ export default function TableDesigner({
     setDraft(design ?? NEW_TABLE_TEMPLATE)
     setNotice(null)
   }, [design])
+
+  const allTables = useMemo(() => {
+    const list = [...availableTables]
+    if (draft.table && !list.some((t) => t.schema === draft.schema && t.name === draft.table)) {
+      list.push({ schema: draft.schema || 'dbo', name: draft.table, primaryKey: draft.primaryKey })
+    }
+    return list
+  }, [availableTables, draft.schema, draft.table, draft.primaryKey])
+
+  const tableOptions = useMemo(
+    () => allTables.map((t) => {
+      const isDbo = !t.schema || t.schema.toLowerCase() === 'dbo'
+      return {
+        value: `${t.schema || 'dbo'}.${t.name}`,
+        label: isDbo ? t.name : `${t.schema}.${t.name}`,
+      }
+    }),
+    [allTables],
+  )
 
   const discard = () => {
     setDraft(originalRef.current ?? NEW_TABLE_TEMPLATE)
@@ -268,6 +289,30 @@ export default function TableDesigner({
     .filter((column) => column.name)
     .map((column) => ({ value: column.name, label: column.name }))
 
+  const getReferencedColumnOptions = (referencedSchema, referencedTable) => {
+    if (!referencedTable) return []
+    const schema = (referencedSchema || 'dbo').toLowerCase()
+    const table = referencedTable.toLowerCase()
+
+    let cols = []
+    if (schema === (draft.schema || 'dbo').toLowerCase() && table === (draft.table || '').toLowerCase()) {
+      cols = draft.columns.filter((c) => c.name).map((c) => c.name)
+    } else {
+      const match = availableColumns.find(
+        (t) => t.schema.toLowerCase() === schema && t.name.toLowerCase() === table
+      )
+      if (match?.columns?.length) {
+        cols = match.columns
+      } else {
+        const tableMatch = allTables.find(
+          (t) => t.schema.toLowerCase() === schema && t.name.toLowerCase() === table
+        )
+        cols = tableMatch?.primaryKey ?? []
+      }
+    }
+    return cols.map((name) => ({ value: name, label: name }))
+  }
+
   const primaryNames = draft.primaryKey
 
   const togglePrimaryColumn = (name) =>
@@ -315,6 +360,22 @@ export default function TableDesigner({
       ...prev,
       foreignKeys: prev.foreignKeys.map((key, position) => (position === index ? { ...key, ...patch } : key)),
     }))
+
+  const handleReferencedTableChange = (fkIndex, fullTableName) => {
+    const parts = fullTableName.split('.')
+    const schema = parts.length > 1 ? parts[0] : (draft.schema || 'dbo')
+    const tableName = parts.length > 1 ? parts.slice(1).join('.') : parts[0]
+    const foundTable = allTables.find((t) => t.schema === schema && t.name === tableName)
+    const defaultPk = foundTable?.primaryKey?.[0] || ''
+
+    updateForeign(fkIndex, {
+      referencedSchema: schema,
+      referencedTable: tableName,
+      columns: draft.foreignKeys[fkIndex].columns.map((c, i) =>
+        i === 0 && !c.referencedColumn && defaultPk ? { ...c, referencedColumn: defaultPk } : c,
+      ),
+    })
+  }
 
   const updateForeignColumn = (index, columnIndex, patch) =>
     setDraft((prev) => ({
@@ -437,35 +498,55 @@ export default function TableDesigner({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-line bg-panel px-3">
-        <Icon name="table" size={13} className="shrink-0 text-text-muted" />
-        <span className="text-[length:var(--app-text-11)] text-text-muted">{draft.schema}</span>
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-panel px-3.5">
+        <Icon name="table" size={14} className="shrink-0 text-text-muted" />
+        <span className="text-[length:var(--app-text-12)] text-text-muted">{draft.schema}</span>
         <button
           type="button"
           onClick={() => {}}
           title={mode === 'new' ? 'New table' : 'Click to load the name into the picker below'}
-          className="text-[length:var(--app-text-12)] text-text"
+          className="text-[length:var(--app-text-13)] font-medium text-text"
         >
           {draft.table || '(untitled)'}
         </button>
-        <span className="rounded border border-line-strong bg-tint/[0.03] px-1.5 py-0.5 text-[length:var(--app-text-9)] font-semibold uppercase tracking-wider text-text-muted">
+        <span className="rounded border border-line-strong bg-tint/[0.03] px-2 py-0.5 text-[length:var(--app-text-10)] font-semibold uppercase tracking-wider text-text-muted">
           {mode === 'new' ? 'new' : 'design'}
         </span>
 
         <div className="ml-auto flex items-center gap-2">
           {mode === 'edit' ? (
-            <button type="button" className="btn-ghost h-6 px-2 text-[length:var(--app-text-11)]" onClick={handleRename} disabled={!draft.table.trim() || draft.table === design?.table}>
+            <button
+              type="button"
+              className="btn-ghost h-8 px-3 text-[length:var(--app-text-12)]"
+              onClick={handleRename}
+              disabled={!draft.table.trim() || draft.table === design?.table}
+            >
               Rename
             </button>
           ) : null}
-          <button type="button" className="btn-ghost h-6 px-2 text-[length:var(--app-text-11)]" onClick={discard} disabled={busy}>
+          <button
+            type="button"
+            className="btn-ghost h-8 px-3 text-[length:var(--app-text-12)]"
+            onClick={discard}
+            disabled={busy}
+          >
             Discard
           </button>
-          <button type="button" className="btn-soft h-6 px-2 text-[length:var(--app-text-11)]" onClick={handleGenerate} disabled={busy}>
+          <button
+            type="button"
+            className="btn-soft h-8 px-3 text-[length:var(--app-text-12)]"
+            onClick={handleGenerate}
+            disabled={busy}
+          >
             Generate SQL
           </button>
-          <button type="button" className="btn-primary h-6 px-2.5 text-[length:var(--app-text-11)]" onClick={handleApply} disabled={busy || (mode === 'new' && !draft.table.trim())}>
-            {busy ? <Spinner size={11} /> : <Icon name="check-circle" size={12} />}
+          <button
+            type="button"
+            className="btn-primary h-8 px-3.5 text-[length:var(--app-text-12)]"
+            onClick={handleApply}
+            disabled={busy || (mode === 'new' && !draft.table.trim())}
+          >
+            {busy ? <Spinner size={13} /> : <Icon name="check-circle" size={13} />}
             Apply
           </button>
         </div>
@@ -478,7 +559,7 @@ export default function TableDesigner({
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3 pb-40">
         <div className="grid grid-cols-2 gap-3">
           <Editor label="Table name" value={draft.table} onChange={(value) => update({ table: value })} placeholder="my_table" />
           <Editor label="Schema" value={draft.schema} onChange={(value) => update({ schema: value })} disabled={mode === 'edit'} placeholder="dbo" />
@@ -748,50 +829,105 @@ export default function TableDesigner({
             <p className="text-[length:var(--app-text-11)] text-text-faint">No foreign keys.</p>
           ) : (
             <div className="space-y-3">
-              {draft.foreignKeys.map((key, index) => (
-                <div key={index} className="rounded-md border border-line bg-base p-2.5">
-                  <div className="flex items-end gap-2">
-                    <Editor label="Name" value={key.name} onChange={(value) => updateForeign(index, { name: value })} className="w-64" />
-                    <Editor label="Referenced schema" value={key.referencedSchema} onChange={(value) => updateForeign(index, { referencedSchema: value })} className="w-40" />
-                    <Editor label="Referenced table" value={key.referencedTable} onChange={(value) => updateForeign(index, { referencedTable: value })} />
-                    <button type="button" className="icon-btn h-8 w-8 hover:text-danger" onClick={() => removeForeign(index)} title="Remove foreign key">
-                      <Icon name="trash" size={12} />
-                    </button>
-                  </div>
-                  <div className="mt-2 space-y-1.5">
-                    {key.columns.map((item, columnIndex) => (
-                      <div key={columnIndex} className="flex items-center gap-2">
+              {draft.foreignKeys.map((key, index) => {
+                const currentTableValue = key.referencedTable
+                  ? `${key.referencedSchema || 'dbo'}.${key.referencedTable}`
+                  : ''
+                const currentTableLabel = key.referencedTable
+                  ? (!key.referencedSchema || key.referencedSchema.toLowerCase() === 'dbo'
+                      ? key.referencedTable
+                      : `${key.referencedSchema}.${key.referencedTable}`)
+                  : ''
+                const fkTableOptions =
+                  currentTableValue && !tableOptions.some((o) => o.value === currentTableValue)
+                    ? [{ value: currentTableValue, label: currentTableLabel }, ...tableOptions]
+                    : tableOptions
+                const refColOptions = getReferencedColumnOptions(key.referencedSchema, key.referencedTable)
+
+                return (
+                  <div key={index} className="rounded-md border border-line bg-base p-2.5">
+                    <div className="flex items-end gap-2">
+                      <Editor label="Name" value={key.name} onChange={(value) => updateForeign(index, { name: value })} className="w-56" />
+                      <div className="w-56">
+                        <span className="field-label">Referenced table</span>
                         <Select
-                          value={item.column}
-                          options={columnOptions}
-                          onChange={(value) => updateForeignColumn(index, columnIndex, { column: value })}
+                          value={currentTableValue}
+                          options={fkTableOptions}
+                          onChange={(value) => handleReferencedTableChange(index, value)}
+                          icon="table"
+                          placeholder="Select table…"
+                          emptyLabel="No tables"
+                          searchable
+                          searchPlaceholder="Search table…"
+                          panelClassName="w-64"
                         />
-                        <Icon name="chevron-right" size={12} className="shrink-0 text-text-faint" />
-                        <input
-                          className="field w-40"
-                          value={item.referencedColumn}
-                          onChange={(event) => updateForeignColumn(index, columnIndex, { referencedColumn: event.target.value })}
-                          placeholder="referenced column"
-                          spellCheck={false}
-                        />
-                        <button
-                          type="button"
-                          className="icon-btn h-6 w-6 hover:text-danger"
-                          onClick={() => removeForeignColumn(index, columnIndex)}
-                          disabled={key.columns.length === 1}
-                          title="Remove column pair"
-                        >
-                          <Icon name="x" size={12} />
-                        </button>
                       </div>
-                    ))}
-                    <button type="button" className="btn-ghost h-6 px-2 text-[length:var(--app-text-11)]" onClick={() => addForeignColumn(index)}>
-                      <Icon name="plus" size={11} />
-                      Add column pair
-                    </button>
+                      <button type="button" className="icon-btn h-8 w-8 hover:text-danger" onClick={() => removeForeign(index)} title="Remove foreign key">
+                        <Icon name="trash" size={12} />
+                      </button>
+                    </div>
+                    <div className="mt-2 space-y-1.5">
+                      {key.columns.map((item, columnIndex) => {
+                        const fkColOptions =
+                          item.referencedColumn && !refColOptions.some((o) => o.value === item.referencedColumn)
+                            ? [{ value: item.referencedColumn, label: item.referencedColumn }, ...refColOptions]
+                            : refColOptions
+
+                        return (
+                          <div key={columnIndex} className="flex items-center gap-2">
+                            <Select
+                              value={item.column}
+                              options={columnOptions}
+                              onChange={(value) => updateForeignColumn(index, columnIndex, { column: value })}
+                              icon="key"
+                              placeholder="Select column…"
+                              searchable
+                              searchPlaceholder="Search column…"
+                              className="w-44"
+                            />
+                            <Icon name="chevron-right" size={12} className="shrink-0 text-text-faint" />
+                            {refColOptions.length > 0 ? (
+                              <Select
+                                value={item.referencedColumn}
+                                options={fkColOptions}
+                                onChange={(value) => updateForeignColumn(index, columnIndex, { referencedColumn: value })}
+                                icon="key"
+                                placeholder="Referenced column…"
+                                emptyLabel="No columns"
+                                searchable
+                                searchPlaceholder="Search column…"
+                                className="w-48"
+                              />
+                            ) : (
+                              <input
+                                className="field h-8 w-48 py-0 text-[length:var(--app-text-12)]"
+                                value={item.referencedColumn}
+                                onChange={(event) => updateForeignColumn(index, columnIndex, { referencedColumn: event.target.value })}
+                                placeholder={key.referencedTable ? 'referenced column' : 'select table first'}
+                                disabled={!key.referencedTable}
+                                spellCheck={false}
+                              />
+                            )}
+                            <button
+                              type="button"
+                              className="icon-btn h-6 w-6 hover:text-danger"
+                              onClick={() => removeForeignColumn(index, columnIndex)}
+                              disabled={key.columns.length === 1}
+                              title="Remove column pair"
+                            >
+                              <Icon name="x" size={12} />
+                            </button>
+                          </div>
+                        )
+                      })}
+                      <button type="button" className="btn-ghost h-6 px-2 text-[length:var(--app-text-11)]" onClick={() => addForeignColumn(index)}>
+                        <Icon name="plus" size={11} />
+                        Add column pair
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </Section>
