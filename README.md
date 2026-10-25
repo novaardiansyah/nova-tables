@@ -10,7 +10,7 @@ Nova Tables is made for people who work with Microsoft SQL Server every day and 
 place to look something up, write a query and read the answer. It stays deliberately small and
 focused on doing that well.
 
-> **Note:** Nova Tables works with Microsoft SQL Server only. It is a local desktop application —
+> **Note:** Nova Tables works with Microsoft SQL Server only. It is a local desktop application -
 > nothing is uploaded anywhere, and neither your data nor your credentials ever leave your computer.
 
 ## Screenshots
@@ -18,6 +18,18 @@ focused on doing that well.
 ### Your connections, in one place
 
 ![Connections](./public/demo/connections.png)
+
+### Select several connections for bulk actions
+
+![Connection selection](./public/demo/connections-selection.png)
+
+### Export connections and their folders as one encrypted file
+
+![Export connections](./public/demo/export-connections.png)
+
+### Import the file on another machine with the same password
+
+![Import connections](./public/demo/import-connections.png)
 
 ### A new connection, tested before it is saved
 
@@ -110,4 +122,4 @@ intact. Let's spread the joy of coding together!
 ---
 
 **Happy coding and collaborating!**
-— Nova Ardiansyah
+- Nova Ardiansyah
