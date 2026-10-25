@@ -59,13 +59,16 @@ focused on doing that well.
 
 ## What You Can Do
 
-- Keep all of your connections in one place, and try one out before you save it.
-- Browse the databases and tables your server shares with you.
-- Write and run queries in a proper editor.
-- Read the results in a clean grid, and understand problems through clear messages.
-- Edit result cells in place and get ready-to-run `UPDATE` statements, without the app ever writing to
-  the server.
-- Switch between dark and light themes, and set the fonts and sizes you like.
+- Organize and manage all SQL Server connections with environment badges and collapsible folders.
+- Browse databases, tables, views, stored procedures, and functions in a fast sidebar tree.
+- Write and run queries in Monaco Editor with syntax highlighting, auto-completion, and query execution modes.
+- Inspect query performance with visual Estimated Execution Plans (operator tree with cost analysis and raw XML).
+- Design and alter tables visually with column drag-and-drop reordering, searchable data types, and foreign key reference pickers.
+- Read results in a high-performance grid with three-state column sorting, quick filtering by cell value, and foreign key link navigation.
+- Edit result cells inline and inspect rich values, long text, JSON, or XML in a dedicated modal.
+- Generate ready-to-run `UPDATE` or `CREATE TABLE` scripts without the client ever executing silent modifications against your database.
+- Export results directly to RFC 4180 CSV or formatted JSON, and review query history anytime.
+- Switch between dark and light themes, and customize fonts and editor typography.
 
 ## Good to Know
 
