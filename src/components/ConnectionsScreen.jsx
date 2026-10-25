@@ -56,7 +56,7 @@ export default function ConnectionsScreen({
   onMoveConnection,
   onReorderTree,
 }) {
-  const [collapsed, setCollapsed] = useState(() => new Set())
+  const [openFolders, setOpenFolders] = useState(() => new Set())
   const [prompt, setPrompt] = useState(null)
   const [promptBusy, setPromptBusy] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -70,7 +70,7 @@ export default function ConnectionsScreen({
   const folderOrder = useMemo(() => folders.map((item) => item.id), [folders])
 
   const toggleFolder = (id) => {
-    setCollapsed((prev) => {
+    setOpenFolders((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -134,11 +134,7 @@ export default function ConnectionsScreen({
         folderId = connections.find((item) => item.id === target.id)?.folderId ?? null
       } else if (target.kind === 'folder') {
         folderId = target.id
-        setCollapsed((prev) => {
-          const open = new Set(prev)
-          open.delete(target.id)
-          return open
-        })
+        setOpenFolders((prev) => new Set(prev).add(target.id))
       }
 
       next.splice(index, 0, dragged.id)
@@ -160,11 +156,7 @@ export default function ConnectionsScreen({
       if (!targetFolder) return
       if (target.position === 'inside') {
         parentId = target.id
-        setCollapsed((prev) => {
-          const open = new Set(prev)
-          open.delete(target.id)
-          return open
-        })
+        setOpenFolders((prev) => new Set(prev).add(target.id))
       } else {
         const targetIndex = next.indexOf(target.id)
         if (targetIndex < 0) return
@@ -219,7 +211,12 @@ export default function ConnectionsScreen({
     setPromptBusy(true)
     try {
       if (prompt.mode === 'rename') await onRenameFolder(prompt.folder, value)
-      else await onCreateFolder(value, prompt.parentId)
+      else {
+        await onCreateFolder(value, prompt.parentId)
+        if (prompt.parentId) {
+          setOpenFolders((prev) => new Set(prev).add(prompt.parentId))
+        }
+      }
       setPrompt(null)
     } finally {
       setPromptBusy(false)
@@ -329,7 +326,7 @@ export default function ConnectionsScreen({
   }
 
   const renderFolder = (folder, depth) => {
-    const isOpen = !collapsed.has(folder.id)
+    const isOpen = openFolders.has(folder.id)
     const childFolders = folders.filter((item) => item.parentId === folder.id)
     const childConnections = connections.filter((item) => item.folderId === folder.id)
     const childCount = childFolders.length + childConnections.length
