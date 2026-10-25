@@ -4,6 +4,7 @@ import ContextMenu from './ContextMenu.jsx'
 import FilterDialog from './FilterDialog.jsx'
 import ResultGrid from './ResultGrid.jsx'
 import ValueInspectorDialog from './ValueInspectorDialog.jsx'
+import ExecutionPlanView from './ExecutionPlanView.jsx'
 import { cleanText, formatDuration, formatNumber, jsonRecords, sqlInsertRows } from '../resultFormats.js'
 import { editEditableColumns, editHasKeys } from '../edits.js'
 
@@ -32,6 +33,8 @@ export default function ResultsPanel({
   onActiveDataChange,
   onExport,
   tabTitle,
+  executionPlan = null,
+  onCopyXml = null,
 }) {
   const { status, result, error } = state
   const resultSets = result?.resultSets ?? []
@@ -75,6 +78,10 @@ export default function ResultsPanel({
     const lines = result?.messages ?? []
     setView(sets.length === 0 && lines.length > 0 ? 'messages' : 'results')
   }, [result])
+
+  useEffect(() => {
+    if (executionPlan) setView('plan')
+  }, [executionPlan])
 
   useEffect(() => {
     setEditMode(false)
@@ -261,6 +268,28 @@ export default function ResultsPanel({
         },
       },
       {
+        id: 'filter-by-value',
+        label: 'Filter by this value',
+        onSelect: () => {
+          const colIndex =
+            menu.columnIndex !== null && menu.columnIndex !== undefined
+              ? menu.columnIndex
+              : (selectionBounds?.colStart ?? 0)
+          const row = menu.row >= 0 ? menu.row : (selectionBounds?.rowStart ?? 0)
+          const column = activeResultSet?.columns[colIndex]
+          if (!column) return
+          const rawValue = activeResultSet?.rows[row]?.[colIndex]
+          const isNull = rawValue === null || rawValue === undefined
+          onApplyFilter?.([
+            {
+              column: column.name,
+              operator: isNull ? 'is-null' : 'equals',
+              value: isNull ? '' : String(rawValue),
+            },
+          ])
+        },
+      },
+      {
         id: 'copy-text',
         label: 'Copy Text',
         onSelect: () =>
@@ -355,12 +384,15 @@ export default function ResultsPanel({
 
     return items
   }, [
+    activeResultSet?.columns,
+    activeResultSet?.rows,
     copy,
     deletable,
     editMode,
     editable,
     editableColumns,
     menu,
+    onApplyFilter,
     onDeleteRows,
     onExport,
     onSetCellValue,
@@ -440,6 +472,21 @@ export default function ResultsPanel({
             <span className="rounded bg-tint/[0.06] px-1 text-[length:var(--app-text-10)] tabular-nums text-text-muted">
               {formatNumber(messages.length)}
             </span>
+          </button>
+        ) : null}
+
+        {executionPlan ? (
+          <button
+            type="button"
+            onClick={() => setView('plan')}
+            className={`flex h-6 shrink-0 items-center gap-1.5 rounded px-2 text-[length:var(--app-text-11)] transition-colors ${
+              view === 'plan'
+                ? 'bg-tint/[0.06] text-text-strong'
+                : 'text-text-muted hover:bg-tint/[0.03] hover:text-text'
+            }`}
+          >
+            <Icon name="plan" size={12} className="text-accent" />
+            Execution Plan
           </button>
         ) : null}
 
@@ -529,8 +576,11 @@ export default function ResultsPanel({
       </div>
 
       <div className="col-start-1 row-start-3 min-h-0 overflow-hidden">
-        {status === 'idle' ? <IdleState /> : null}
-        {status === 'running' ? (
+        {view === 'plan' && executionPlan ? (
+          <ExecutionPlanView plan={executionPlan} onCopyXml={onCopyXml} />
+        ) : null}
+        {view !== 'plan' && status === 'idle' ? <IdleState /> : null}
+        {view !== 'plan' && status === 'running' ? (
           <div className="flex h-full items-center justify-center">
             <div className="flex items-center gap-2 text-[length:var(--app-text-12)] text-text-muted">
               <Spinner size={14} />
@@ -538,8 +588,8 @@ export default function ResultsPanel({
             </div>
           </div>
         ) : null}
-        {status === 'error' ? <ErrorState error={error} /> : null}
-        {status === 'success' && result ? (
+        {view !== 'plan' && status === 'error' ? <ErrorState error={error} /> : null}
+        {view !== 'plan' && status === 'success' && result ? (
           view === 'messages' ? (
             <MessageList messages={messages} />
           ) : resultSets.length === 0 ? (

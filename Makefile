@@ -79,10 +79,10 @@ deploy: package
 	if [ -n "$(IMAGE_MAGICK)" ]; then \
 		for size in $(ICON_SIZES); do \
 			mkdir -p "$(ICON_ROOT)/$${size}x$${size}/apps"; \
-			$(IMAGE_MAGICK) public/nova.png -resize "$${size}x$${size}" "$(ICON_ROOT)/$${size}x$${size}/apps/nova-tables.png"; \
+			$(IMAGE_MAGICK) public/logo.png -resize "$${size}x$${size}" "$(ICON_ROOT)/$${size}x$${size}/apps/nova-tables.png"; \
 		done; \
 	else \
-		cp public/nova.png "$(ICON_ROOT)/512x512/apps/nova-tables.png"; \
+		cp public/logo.png "$(ICON_ROOT)/512x512/apps/nova-tables.png"; \
 	fi
 	printf '%s\n' \
 		'[Desktop Entry]' \

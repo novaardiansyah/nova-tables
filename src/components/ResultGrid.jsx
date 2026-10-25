@@ -173,7 +173,8 @@ export default function ResultGrid({
   const handleSort = (index) => {
     setSort((prev) => {
       if (!prev || prev.index !== index) return { index, direction: 'asc' }
-      return { index, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+      if (prev.direction === 'asc') return { index, direction: 'desc' }
+      return null
     })
   }
 

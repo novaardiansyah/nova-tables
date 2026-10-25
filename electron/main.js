@@ -92,7 +92,7 @@ function createWindow() {
     show: false,
     backgroundColor: '#0b0e13',
     title: 'Nova Tables',
-    icon: path.join(process.env.VITE_PUBLIC, 'nova.png'),
+    icon: path.join(process.env.VITE_PUBLIC, 'logo.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,

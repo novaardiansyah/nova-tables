@@ -92,6 +92,8 @@ export const api = {
 
   runQuery: async (input) => call(() => bridge().query.run(input)),
 
+  getExecutionPlan: async (input) => call(() => bridge().query.plan(input)),
+
   listQueryHistory: async (connectionId, database, limit) =>
     (await call(() => bridge().queryHistory.list({ connectionId, database, limit }))).history,
 

@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld('nova', {
   },
   query: {
     run: (input) => ipcRenderer.invoke('query:run', input),
+    plan: (input) => ipcRenderer.invoke('query:plan', input),
   },
   queryHistory: {
     list: (input) => ipcRenderer.invoke('query-history:list', input),

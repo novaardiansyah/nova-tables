@@ -255,6 +255,15 @@ const ICONS = {
       <path d="M16 3.13a4 4 0 010 7.75" />
     </>
   ),
+  plan: (
+    <>
+      <circle cx="6" cy="6" r="3" />
+      <circle cx="18" cy="18" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <path d="M9 6h4a4 4 0 014 4v5" />
+      <path d="M6 9v6" />
+    </>
+  ),
 }
 
 export default function Icon({ name, size = 15, className = '', strokeWidth = 1.7 }) {

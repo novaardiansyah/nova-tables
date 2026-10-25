@@ -34,6 +34,7 @@ import {
   listTables,
   moduleDefinition,
   runQuery,
+  getExecutionPlan,
   tableRelations,
   tableStructure,
   testConnection,
@@ -123,6 +124,8 @@ export function registerIpcHandlers() {
       throw error
     }
   })
+
+  handle('query:plan', (input) => getExecutionPlan(input))
 
   handle('query-history:list', (input) => ({
     history: listQueryHistory(input.connectionId, input.database, input.limit),

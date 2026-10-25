@@ -14,14 +14,14 @@
     "node_modules/node-sqlite3-wasm/dist/*.wasm"
   ],
   "mac": {
-    "icon": "public/nova.png",
+    "icon": "public/logo.png",
     "target": [
       "dmg"
     ],
     "artifactName": "${productName}-Mac-${version}-Installer.${ext}"
   },
   "win": {
-    "icon": "public/nova.png",
+    "icon": "public/logo.png",
     "target": [
       {
         "target": "nsis",
@@ -39,7 +39,7 @@
     "deleteAppDataOnUninstall": false
   },
   "linux": {
-    "icon": "public/nova.png",
+    "icon": "public/logo.png",
     "target": [
       "AppImage"
     ],

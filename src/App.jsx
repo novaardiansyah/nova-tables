@@ -14,6 +14,7 @@ import {
   editTableFromSql,
 } from './edits.js'
 import { executionGuard } from './queryModes.js'
+import { parseShowPlanXml } from './planParser.js'
 import Banner from './components/Banner.jsx'
 import ConfirmDialog from './components/ConfirmDialog.jsx'
 import ConnectionDialog from './components/ConnectionDialog.jsx'
@@ -282,6 +283,13 @@ export default function App() {
     const id = activeIdRef.current
     return id ? sessionsRef.current[id] || null : null
   }, [])
+
+  const activeQueryTab = useCallback(() => {
+    const current = activeSession()
+    if (!current) return null
+    const tab = current.tabs.find((item) => item.id === current.activeTabId)
+    return tab ? { connectionId: current.connectionId, tab } : null
+  }, [activeSession])
 
   const patchSession = useCallback((connectionId, patch) => {
     setSessions((prev) => {
@@ -872,6 +880,36 @@ export default function App() {
     runWithGuard(sql, current.activeTabId)
   }, [activeSession, runWithGuard, showBanner])
 
+  const handleEstimatedPlan = useCallback(async () => {
+    const current = activeSession()
+    if (!current) {
+      showBanner('warn', 'Open a connection before generating an execution plan.')
+      return
+    }
+    const target = activeQueryTab()
+    if (!target) return
+    const sql = (selectionRef.current || sqlRef.current || '').trim()
+    if (!sql) {
+      showBanner('warn', 'Nothing to analyze — write or select a query first.')
+      return
+    }
+
+    updateTab(current.connectionId, target.tab.id, { busy: true })
+    try {
+      const res = await api.getExecutionPlan({
+        connectionId: current.connectionId,
+        database: current.activeDatabase,
+        sql,
+      })
+      const parsed = parseShowPlanXml(res.xml)
+      updateTab(current.connectionId, target.tab.id, { executionPlan: parsed, busy: false })
+      showBanner('success', 'Generated estimated execution plan.')
+    } catch (error) {
+      updateTab(current.connectionId, target.tab.id, { busy: false })
+      showBanner('error', error.message)
+    }
+  }, [activeQueryTab, activeSession, showBanner, updateTab])
+
   const handleSelectionChange = useCallback((text) => {
     selectionRef.current = text
   }, [])
@@ -1387,13 +1425,6 @@ export default function App() {
     },
     [showBanner],
   )
-
-  const activeQueryTab = useCallback(() => {
-    const current = activeSession()
-    if (!current) return null
-    const tab = current.tabs.find((item) => item.id === current.activeTabId)
-    return tab ? { connectionId: current.connectionId, tab } : null
-  }, [activeSession])
 
   const tabResultSet = (tab) => {
     const resultSets = tab.state?.result?.resultSets ?? []
@@ -2290,6 +2321,7 @@ export default function App() {
               onDropDatabase={handleOpenDropDatabase}
               onManageUsers={handleOpenDatabaseUsers}
               onRun={handleRun}
+              onEstimatedPlan={handleEstimatedPlan}
               onDisconnect={() => closeSession(session.connectionId)}
               onShowShortcuts={() => setShortcutsOpen(true)}
             />
@@ -2365,6 +2397,8 @@ export default function App() {
                   onActiveDataChange={setActiveResultData}
                   onExport={handleExportResult}
                   tabTitle={activeTab?.title}
+                  executionPlan={activeTab?.executionPlan ?? null}
+                  onCopyXml={(xml) => handleCopyText(xml, 'Copied execution plan XML.')}
                 />
               </div>
             )}

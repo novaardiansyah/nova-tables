@@ -1094,3 +1094,33 @@ export async function runQuery({ connectionId, database, sql: text }) {
     throw error
   }
 }
+
+export async function getExecutionPlan({ connectionId, database, sql: text }) {
+  const statement = typeof text === 'string' ? text.trim() : ''
+  if (!statement) throw codedError('EMPTY_QUERY', 'Nothing to run — the editor is empty.')
+
+  const pool = await getDatabasePool(connectionId, database)
+  const tx = pool.transaction()
+  await tx.begin()
+
+  try {
+    const req = tx.request()
+    await req.batch('SET SHOWPLAN_XML ON')
+    const result = await req.batch(statement)
+    await req.batch('SET SHOWPLAN_XML OFF')
+    await tx.rollback()
+
+    const firstRow = result.recordsets?.[0]?.[0] || {}
+    const xml = Object.values(firstRow)[0] || ''
+    return { xml: String(xml) }
+  } catch (error) {
+    try {
+      await tx.rollback()
+    } catch {}
+    const code = String(error?.code || '')
+    if (code === 'ECONNCLOSED' || /connection is closed/i.test(String(error?.message))) {
+      await dropDatabasePool(connectionId, database)
+    }
+    throw error
+  }
+}

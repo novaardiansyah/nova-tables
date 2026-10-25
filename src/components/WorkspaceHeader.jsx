@@ -16,6 +16,7 @@ export default function WorkspaceHeader({
   onDropDatabase,
   onManageUsers,
   onRun,
+  onEstimatedPlan,
   onDisconnect,
   onShowShortcuts,
 }) {
@@ -88,6 +89,17 @@ export default function WorkspaceHeader({
         </button>
 
         <QueryModeMenu value={queryExecutionMode} onChange={onChangeExecutionMode} />
+
+        <button
+          type="button"
+          className="btn-soft h-8 px-2.5 text-[length:var(--app-text-12)]"
+          onClick={onEstimatedPlan}
+          disabled={!session || running}
+          title="Display Estimated Execution Plan"
+        >
+          <Icon name="plan" size={13} />
+          Estimated plan
+        </button>
 
         <button
           type="button"
