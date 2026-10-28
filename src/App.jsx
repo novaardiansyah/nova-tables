@@ -8,6 +8,7 @@ import {
   buildDeleteStatements,
   buildEditSource,
   buildQueryEditSource,
+  buildUpdateStatements,
   editAllows,
   editSqlHeader,
   editTableFromSql,
@@ -34,6 +35,7 @@ import SettingsDialog from './components/SettingsDialog.jsx'
 import StatusBar from './components/StatusBar.jsx'
 import TabBar from './components/TabBar.jsx'
 import TableDesigner from './components/TableDesigner.jsx'
+import UpdateConfirmDialog from './components/UpdateConfirmDialog.jsx'
 import WorkspaceHeader from './components/WorkspaceHeader.jsx'
 
 const STARTER_SQL = `-- Nova Tables
@@ -237,6 +239,8 @@ export default function App() {
   const [queryDeleteTarget, setQueryDeleteTarget] = useState(null)
   const [queryBusy, setQueryBusy] = useState(false)
   const [history, setHistory] = useState({ open: false, items: [], loading: false, error: null })
+  const [editConfirmOpen, setEditConfirmOpen] = useState(false)
+  const [editConfirmTarget, setEditConfirmTarget] = useState(null)
 
   const scopeDatabase = activeConnectionId
     ? sessions[activeConnectionId]?.activeDatabase ?? null
@@ -871,7 +875,13 @@ export default function App() {
       showBanner('warn', 'Open a connection before running a query.')
       return
     }
+    const tab = current.tabs.find((item) => item.id === current.activeTabId)
     const sql = selectionRef.current || sqlRef.current
+    if (tab && Object.keys(tab.edits || {}).length > 0) {
+      setEditConfirmTarget({ type: 'run', sql })
+      setEditConfirmOpen(true)
+      return
+    }
     runWithGuard(sql, current.activeTabId)
   }, [activeSession, runWithGuard, showBanner])
 
@@ -884,6 +894,11 @@ export default function App() {
     const tab = current.tabs.find((item) => item.id === current.activeTabId)
     if (!tab || tab.kind !== 'query') return
     const sql = tab.lastExecutedSql
+    if (Object.keys(tab.edits || {}).length > 0) {
+      setEditConfirmTarget({ type: 'run', sql })
+      setEditConfirmOpen(true)
+      return
+    }
     if (!sql || !sql.trim()) {
       showBanner('warn', 'No query has been run on this tab yet.')
       return
@@ -1513,12 +1528,6 @@ export default function App() {
     [activeQueryTab, openTab, showBanner],
   )
 
-  const handleDiscardEdits = useCallback(() => {
-    const target = activeQueryTab()
-    if (!target) return
-    updateTab(target.connectionId, target.tab.id, { edits: {} })
-  }, [activeQueryTab, updateTab])
-
   const handleRunUpdate = useCallback(
     async (sql) => {
       if (!sql || !sql.trim()) return false
@@ -1541,14 +1550,6 @@ export default function App() {
       }
     },
     [activeSession, showBanner, updateTab],
-  )
-
-  const handleCopyUpdateQuery = useCallback(
-    async (sql) => {
-      if (!sql || !sql.trim()) return
-      await handleCopyText(sql, 'Copied UPDATE query to clipboard.')
-    },
-    [handleCopyText],
   )
 
   const handleApplyFilter = useCallback(
@@ -1913,6 +1914,12 @@ export default function App() {
       if (!current || tabId === current.activeTabId) return
       const next = current.tabs.find((tab) => tab.id === tabId)
       if (!next) return
+      const active = current.tabs.find((tab) => tab.id === current.activeTabId)
+      if (active && Object.keys(active.edits || {}).length > 0) {
+        setEditConfirmTarget({ type: 'switch-tab', tabId })
+        setEditConfirmOpen(true)
+        return
+      }
       syncLiveSql(current.connectionId, current.activeTabId)
       patchSession(current.connectionId, { activeTabId: tabId })
       seedEditor(next.sql)
@@ -1926,6 +1933,12 @@ export default function App() {
       if (!current) return
       const index = current.tabs.findIndex((tab) => tab.id === tabId)
       if (index === -1) return
+      const tab = current.tabs[index]
+      if (tab && Object.keys(tab.edits || {}).length > 0) {
+        setEditConfirmTarget({ type: 'close-tab', tabId })
+        setEditConfirmOpen(true)
+        return
+      }
 
       const remaining = current.tabs.filter((tab) => tab.id !== tabId)
 
@@ -1948,6 +1961,79 @@ export default function App() {
     },
     [activeSession, patchSession, seedEditor],
   )
+
+  const handleEditConfirmApply = useCallback(async () => {
+    const target = editConfirmTarget
+    const current = activeSession()
+    if (!current) return
+    const tab = current.tabs.find((item) => item.id === current.activeTabId)
+    let sql = ''
+    if (tab) {
+      try {
+        sql = `${editSqlHeader(tab.editSource)}${buildUpdateStatements(tab.editSource, tabResultSet(tab), tab.edits || {}).join('\n\n')}`
+      } catch {
+        sql = ''
+      }
+    }
+    const ok = await handleRunUpdate(sql)
+    if (!ok) return
+    setEditConfirmOpen(false)
+    setEditConfirmTarget(null)
+    if (target?.type === 'switch-tab') {
+      const next = current.tabs.find((item) => item.id === target.tabId)
+      if (next) {
+        syncLiveSql(current.connectionId, current.activeTabId)
+        patchSession(current.connectionId, { activeTabId: target.tabId })
+        seedEditor(next.sql)
+      }
+    } else if (target?.type === 'close-tab') {
+      handleCloseTab(target.tabId)
+    } else if (target?.type === 'run') {
+      const runSql = target.sql ?? ''
+      if (runSql.trim()) runWithGuard(runSql, current.activeTabId)
+    }
+  }, [
+    activeSession,
+    editConfirmTarget,
+    handleRunUpdate,
+    handleCloseTab,
+    syncLiveSql,
+    patchSession,
+    seedEditor,
+    runWithGuard,
+  ])
+
+  const handleEditConfirmDiscard = useCallback(() => {
+    const target = editConfirmTarget
+    const current = activeSession()
+    if (!current) return
+    const tab = current.tabs.find((item) => item.id === current.activeTabId)
+    if (tab) updateTab(current.connectionId, tab.id, { edits: {} })
+    setEditConfirmOpen(false)
+    setEditConfirmTarget(null)
+    if (target?.type === 'close-tab') {
+      handleCloseTab(target.tabId)
+    }
+  }, [activeSession, editConfirmTarget, updateTab, handleCloseTab])
+
+  const handleEditConfirmCopy = useCallback(async () => {
+    const current = activeSession()
+    if (!current) return
+    const tab = current.tabs.find((item) => item.id === current.activeTabId)
+    if (!tab) return
+    let sql = ''
+    try {
+      sql = `${editSqlHeader(tab.editSource)}${buildUpdateStatements(tab.editSource, tabResultSet(tab), tab.edits || {}).join('\n\n')}`
+    } catch {
+      sql = ''
+    }
+    await handleCopyText(sql, 'Copied UPDATE query to clipboard.')
+  }, [activeSession, handleCopyText])
+
+  const handleEditConfirmClose = useCallback(() => {
+    setEditConfirmOpen(false)
+    setEditConfirmTarget(null)
+  }, [])
 
   const handleNewTab = useCallback(() => {
     const current = activeSession()
@@ -2252,6 +2338,10 @@ export default function App() {
     handleReRun,
     handleRun,
     handleSaveQuery,
+    handleEditConfirmApply,
+    handleEditConfirmClose,
+    handleEditConfirmCopy,
+    handleEditConfirmDiscard,
     handleSelectTabIndex,
     openConnectionScreen,
     queryDeleteTarget,
@@ -2277,6 +2367,14 @@ export default function App() {
   const activeTab = session
     ? session.tabs.find((tab) => tab.id === session.activeTabId) || null
     : null
+  const confirmSql = useMemo(() => {
+    if (!editConfirmOpen || !activeTab) return ''
+    try {
+      return `${editSqlHeader(activeTab.editSource)}${buildUpdateStatements(activeTab.editSource, tabResultSet(activeTab), activeTab.edits || {}).join('\n\n')}`
+    } catch {
+      return ''
+    }
+  }, [editConfirmOpen, activeTab])
   const running = activeTab?.state.status === 'running'
   const activeDatabaseInfo = session
     ? (session.databases ?? []).find((database) => database.name === session.activeDatabase) ?? null
@@ -2416,9 +2514,10 @@ export default function App() {
                   edits={activeTab?.edits ?? {}}
                   onCellChange={handleCellChange}
                   onSetCellValue={handleSetCellValue}
-                  onDiscardUpdate={handleDiscardEdits}
-                  onRunUpdate={handleRunUpdate}
-                  onCopyUpdateQuery={handleCopyUpdateQuery}
+                  onConfirmOpen={() => {
+                    setEditConfirmTarget(null)
+                    setEditConfirmOpen(true)
+                  }}
                   onDeleteRows={handleDeleteRows}
                   onApplyFilter={handleApplyFilter}
                   onActiveDataChange={setActiveResultData}
@@ -2560,6 +2659,16 @@ export default function App() {
         sql={runGuard?.sql}
         onCancel={() => setRunGuard(null)}
         onConfirm={handleGuardConfirm}
+      />
+
+      <UpdateConfirmDialog
+        open={editConfirmOpen}
+        changeCount={activeTab ? Object.keys(activeTab.edits || {}).length : 0}
+        sql={confirmSql}
+        onClose={handleEditConfirmClose}
+        onApply={handleEditConfirmApply}
+        onCopyQuery={handleEditConfirmCopy}
+        onDiscard={handleEditConfirmDiscard}
       />
 
       <ConfirmDialog
