@@ -8,7 +8,6 @@ import {
   buildDeleteStatements,
   buildEditSource,
   buildQueryEditSource,
-  buildUpdateStatements,
   editAllows,
   editSqlHeader,
   editTableFromSql,
@@ -73,6 +72,7 @@ function createTab(id, title, sql, editSource = null, savedQuery = null) {
     relations: [],
     editSource,
     edits: {},
+    lastExecutedSql: null,
   }
 }
 
@@ -145,12 +145,6 @@ function relatedSql(relation, value) {
 
 function queryTitle(index) {
   return `Query ${index}`
-}
-
-function editTargetTitle(editSource, action) {
-  const names = editSource?.tables.map((table) => table.table) ?? []
-  if (names.length === 1) return `${action} ${names[0]}`
-  return names.length > 1 ? `${action} rows` : action
 }
 
 function nextQueryTitle(tabs) {
@@ -797,6 +791,7 @@ export default function App() {
         state: { status: 'running', result: null, error: null },
         activeSet: 0,
         edits: {},
+        lastExecutedSql: sql,
       }
       const source = tab?.editSource && tab.editSource.sql === sql ? tab.editSource : null
       if (tab && !source) {
@@ -877,6 +872,22 @@ export default function App() {
       return
     }
     const sql = selectionRef.current || sqlRef.current
+    runWithGuard(sql, current.activeTabId)
+  }, [activeSession, runWithGuard, showBanner])
+
+  const handleReRun = useCallback(() => {
+    const current = activeSession()
+    if (!current) {
+      showBanner('warn', 'Open a connection before running a query.')
+      return
+    }
+    const tab = current.tabs.find((item) => item.id === current.activeTabId)
+    if (!tab || tab.kind !== 'query') return
+    const sql = tab.lastExecutedSql
+    if (!sql || !sql.trim()) {
+      showBanner('warn', 'No query has been run on this tab yet.')
+      return
+    }
     runWithGuard(sql, current.activeTabId)
   }, [activeSession, runWithGuard, showBanner])
 
@@ -1508,37 +1519,37 @@ export default function App() {
     updateTab(target.connectionId, target.tab.id, { edits: {} })
   }, [activeQueryTab, updateTab])
 
-  const handleCopyUpdate = useCallback(async () => {
-    const target = activeQueryTab()
-    if (!target) return
-    const { tab } = target
-    const statements = buildUpdateStatements(tab.editSource, tabResultSet(tab), tab.edits || {})
-    if (!statements.length) return
-    try {
-      await api.copyText(`${editSqlHeader(tab.editSource)}${statements.join('\n\n')}`)
-      showBanner(
-        'success',
-        `Copied ${statements.length} UPDATE statement${statements.length === 1 ? '' : 's'}.`,
-      )
-    } catch (error) {
-      showBanner('error', error.message)
-    }
-  }, [activeQueryTab, showBanner])
+  const handleRunUpdate = useCallback(
+    async (sql) => {
+      if (!sql || !sql.trim()) return false
+      const current = activeSession()
+      if (!current || !current.activeDatabase) return false
+      try {
+        await api.runQuery({
+          connectionId: current.connectionId,
+          database: current.activeDatabase,
+          sql,
+          recordHistory: true,
+        })
+        const tab = current.tabs.find((item) => item.id === current.activeTabId)
+        if (tab) updateTab(current.connectionId, tab.id, { edits: {} })
+        showBanner('success', 'Changes applied to the database.')
+        return true
+      } catch (error) {
+        showBanner('error', error.message)
+        return false
+      }
+    },
+    [activeSession, showBanner, updateTab],
+  )
 
-  const handleOpenUpdate = useCallback(() => {
-    const target = activeQueryTab()
-    if (!target) return
-    const { connectionId, tab } = target
-    const statements = buildUpdateStatements(tab.editSource, tabResultSet(tab), tab.edits || {})
-    if (!statements.length) return
-    const title = editTargetTitle(tab.editSource, 'Update')
-    openTab(
-      connectionId,
-      title,
-      `${editSqlHeader(tab.editSource)}${statements.join('\n\n')}\n`,
-    )
-    updateTab(connectionId, tab.id, { edits: {} })
-  }, [activeQueryTab, openTab, updateTab])
+  const handleCopyUpdateQuery = useCallback(
+    async (sql) => {
+      if (!sql || !sql.trim()) return
+      await handleCopyText(sql, 'Copied UPDATE query to clipboard.')
+    },
+    [handleCopyText],
+  )
 
   const handleApplyFilter = useCallback(
     async (conditions) => {
@@ -2209,6 +2220,12 @@ export default function App() {
         return
       }
 
+      if (key === 'r') {
+        event.preventDefault()
+        handleReRun()
+        return
+      }
+
       if (event.key === 'Tab') {
         event.preventDefault()
         handleCycleTab(event.shiftKey ? -1 : 1)
@@ -2232,6 +2249,7 @@ export default function App() {
     handleCloseActiveTab,
     handleCycleTab,
     handleNewTab,
+    handleReRun,
     handleRun,
     handleSaveQuery,
     handleSelectTabIndex,
@@ -2398,9 +2416,9 @@ export default function App() {
                   edits={activeTab?.edits ?? {}}
                   onCellChange={handleCellChange}
                   onSetCellValue={handleSetCellValue}
-                  onDiscardEdits={handleDiscardEdits}
-                  onCopyUpdate={handleCopyUpdate}
-                  onOpenUpdate={handleOpenUpdate}
+                  onDiscardUpdate={handleDiscardEdits}
+                  onRunUpdate={handleRunUpdate}
+                  onCopyUpdateQuery={handleCopyUpdateQuery}
                   onDeleteRows={handleDeleteRows}
                   onApplyFilter={handleApplyFilter}
                   onActiveDataChange={setActiveResultData}

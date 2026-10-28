@@ -3,10 +3,11 @@ import Icon, { Spinner } from './Icon.jsx'
 import ContextMenu from './ContextMenu.jsx'
 import FilterDialog from './FilterDialog.jsx'
 import ResultGrid from './ResultGrid.jsx'
+import UpdateConfirmDialog from './UpdateConfirmDialog.jsx'
 import ValueInspectorDialog from './ValueInspectorDialog.jsx'
 import ExecutionPlanView from './ExecutionPlanView.jsx'
 import { cleanText, formatDuration, formatNumber, jsonRecords, sqlInsertRows } from '../resultFormats.js'
-import { editEditableColumns, editHasKeys } from '../edits.js'
+import { buildUpdateStatements, editEditableColumns, editHasKeys, editSqlHeader } from '../edits.js'
 
 const SPECIAL_OPTIONS = [
   { id: 'null', label: 'NULL', value: null },
@@ -25,9 +26,9 @@ export default function ResultsPanel({
   edits = {},
   onCellChange,
   onSetCellValue,
-  onDiscardEdits,
-  onCopyUpdate,
-  onOpenUpdate,
+  onDiscardUpdate,
+  onRunUpdate,
+  onCopyUpdateQuery,
   onDeleteRows,
   onApplyFilter,
   onActiveDataChange,
@@ -45,6 +46,7 @@ export default function ResultsPanel({
   const rowsAffected = (result?.rowsAffected ?? []).reduce((total, count) => total + count, 0)
   const [selection, setSelection] = useState(null)
   const [editMode, setEditMode] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const [view, setView] = useState('results')
   const [menu, setMenu] = useState(null)
   const [headerMenu, setHeaderMenu] = useState(null)
@@ -69,6 +71,11 @@ export default function ResultsPanel({
   const editable = keyInResult && Boolean(activeResultSet) && resultSets.length === 1
   const deletable = editable && editSource.tables.length === 1
   const changeCount = Object.keys(edits).length
+
+  const updateSql = useMemo(() => {
+    if (!activeResultSet || !editSource) return ''
+    return `${editSqlHeader(editSource)}${buildUpdateStatements(editSource, activeResultSet, edits).join('\n\n')}`
+  }, [activeResultSet, editSource, edits])
 
   useEffect(() => {
     setSelection(null)
@@ -550,40 +557,15 @@ export default function ResultsPanel({
             )
           ) : null}
           {status === 'success' && changeCount > 0 ? (
-            <div className="flex items-center gap-1">
-              <span className="rounded bg-warning/15 px-1.5 text-[length:var(--app-text-10)] font-medium tabular-nums text-warning">
-                {changeCount} change{changeCount === 1 ? '' : 's'}
-              </span>
-              <button
-                type="button"
-                onClick={onCopyUpdate}
-                title="Copy UPDATE statements for the changes"
-                className="flex h-6 items-center gap-1 rounded px-1.5 text-[length:var(--app-text-11)] text-text-soft hover:bg-tint/[0.05] hover:text-text"
-              >
-                <Icon name="copy" size={11} />
-                Copy update
-              </button>
-              <button
-                type="button"
-                onClick={onOpenUpdate}
-                title="Open the UPDATE statements in a new query tab"
-                className="flex h-6 items-center gap-1 rounded px-1.5 text-[length:var(--app-text-11)] text-text-soft hover:bg-tint/[0.05] hover:text-text"
-              >
-                <Icon name="code" size={11} />
-                Open update
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditMode(false)
-                  onDiscardEdits?.()
-                }}
-                title="Discard pending changes"
-                className="flex h-6 items-center rounded px-1.5 text-[length:var(--app-text-11)] text-text-muted hover:bg-tint/[0.05] hover:text-text"
-              >
-                Discard
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setConfirmOpen(true)}
+              title="Apply pending changes"
+              className="flex h-6 items-center gap-1 rounded px-1.5 text-[length:var(--app-text-11)] text-text-soft hover:bg-tint/[0.05] hover:text-text"
+            >
+              <Icon name="pencil" size={11} />
+              {changeCount} change{changeCount === 1 ? '' : 's'}
+            </button>
           ) : null}
           {status === 'error' && error?.code ? (
             <span className="font-mono text-[length:var(--app-text-10)] text-text-faint">{error.code}</span>
@@ -695,6 +677,27 @@ export default function ResultsPanel({
         onApply={(conditions) => {
           setFilterColumn(null)
           onApplyFilter?.(conditions)
+        }}
+      />
+
+      <UpdateConfirmDialog
+        open={confirmOpen}
+        changeCount={changeCount}
+        sql={updateSql}
+        onClose={() => setConfirmOpen(false)}
+        onApply={async () => {
+          setConfirmOpen(false)
+          const ok = await onRunUpdate?.(updateSql)
+          if (ok) setEditMode(false)
+        }}
+        onCopyQuery={() => {
+          onCopyUpdateQuery?.(updateSql)
+          setConfirmOpen(false)
+        }}
+        onDiscard={() => {
+          setConfirmOpen(false)
+          setEditMode(false)
+          onDiscardUpdate?.()
         }}
       />
 
