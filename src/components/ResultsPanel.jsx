@@ -35,6 +35,7 @@ export default function ResultsPanel({
   tabTitle,
   executionPlan = null,
   onCopyXml = null,
+  onOpenStructure,
 }) {
   const { status, result, error } = state
   const resultSets = result?.resultSets ?? []
@@ -472,6 +473,21 @@ export default function ResultsPanel({
             <span className="rounded bg-tint/[0.06] px-1 text-[length:var(--app-text-10)] tabular-nums text-text-muted">
               {formatNumber(messages.length)}
             </span>
+          </button>
+        ) : null}
+
+        {status === 'success' && activeResultSet?.rows?.length > 0 && resultSets.length === 1 && editSource?.tables?.length === 1 && onOpenStructure ? (
+          <button
+            type="button"
+            onClick={() => {
+              const source = editSource.tables[0]
+              onOpenStructure({ schema: source.schema, name: source.table })
+            }}
+            title="Open table structure"
+            className="flex h-6 shrink-0 items-center gap-1.5 rounded px-2 text-[length:var(--app-text-11)] text-text-muted transition-colors hover:bg-tint/[0.03] hover:text-text"
+          >
+            <Icon name="table" size={12} />
+            Structure
           </button>
         ) : null}
 

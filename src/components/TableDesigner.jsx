@@ -711,7 +711,6 @@ export default function TableDesigner({
                           className="field"
                           value={column.defaultDefinition ?? ''}
                           onChange={(event) => updateColumn(index, { defaultDefinition: event.target.value || null })}
-                          placeholder="(getdate())"
                           spellCheck={false}
                         />
                       </td>

@@ -2408,6 +2408,7 @@ export default function App() {
                   tabTitle={activeTab?.title}
                   executionPlan={activeTab?.executionPlan ?? null}
                   onCopyXml={(xml) => handleCopyText(xml, 'Copied execution plan XML.')}
+                  onOpenStructure={handleOpenStructure}
                 />
               </div>
             )}
