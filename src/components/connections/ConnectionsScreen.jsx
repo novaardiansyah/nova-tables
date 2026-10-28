@@ -1,100 +1,18 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
-import ConfirmDialog from './ConfirmDialog.jsx'
-import ContextMenu from './ContextMenu.jsx'
-import EnvironmentBadge from './EnvironmentBadge.jsx'
+import { useEffect, useMemo, useState } from 'react'
+import ConfirmDialog from '../common/ConfirmDialog.jsx'
+import ContextMenu from '../common/ContextMenu.jsx'
 import ExportConnectionsDialog from './ExportConnectionsDialog.jsx'
-import Icon, { BrandMark, Spinner } from './Icon.jsx'
+import Icon, { BrandMark } from '../common/Icon.jsx'
 import ImportConnectionsDialog from './ImportConnectionsDialog.jsx'
-import PromptDialog from './PromptDialog.jsx'
-import { api } from '../api.js'
-
-function byName(left, right) {
-  return String(left.name).localeCompare(String(right.name))
-}
-
-function folderTree(folders, parentId = null, depth = 0, result = []) {
-  const children = folders.filter((folder) => (folder.parentId ?? null) === parentId).sort(byName)
-  for (const folder of children) {
-    result.push({ folder, depth })
-    folderTree(folders, folder.id, depth + 1, result)
-  }
-  return result
-}
-
-function flattenRows(connections, folders, openFolders, parentId = null, depth = 0, result = []) {
-  for (const connection of connections.filter((item) => (item.folderId ?? null) === parentId)) {
-    result.push({ kind: 'connection', id: connection.id, depth })
-  }
-  const children = folders.filter((folder) => (folder.parentId ?? null) === parentId).sort(byName)
-  for (const folder of children) {
-    result.push({ kind: 'folder', id: folder.id, depth })
-    if (openFolders.has(folder.id)) {
-      flattenRows(connections, folders, openFolders, folder.id, depth + 1, result)
-    }
-  }
-  return result
-}
-
-function folderSubtree(folders, id) {
-  const ids = new Set([id])
-  const queue = [id]
-  while (queue.length > 0) {
-    const current = queue.shift()
-    for (const folder of folders) {
-      if (folder.parentId === current && !ids.has(folder.id)) {
-        ids.add(folder.id)
-        queue.push(folder.id)
-      }
-    }
-  }
-  return ids
-}
-
-function DragHandle({ title, onDragStart, onDragEnd }) {
-  return (
-    <button
-      type="button"
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      title={title}
-      aria-label={title}
-      className="icon-btn h-6 w-6 cursor-grab text-text-faint hover:text-text active:cursor-grabbing"
-    >
-      <Icon name="grip" size={12} />
-    </button>
-  )
-}
-
-function DropLine({ depth }) {
-  return (
-    <div style={{ marginLeft: depth * 14 + 8 }} className="mr-2 h-0.5 rounded-full bg-accent" />
-  )
-}
-
-function SelectBox({ checked, active, label, onClick }) {
-  return (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={checked}
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      className={`flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-[4px] border transition-all duration-150 ${
-        checked
-          ? 'border-accent bg-accent text-on-accent'
-          : `border-line-strong text-transparent hover:border-accent/70 ${
-              active
-                ? 'opacity-60 hover:opacity-100'
-                : 'opacity-0 group-hover/row:opacity-60 focus-visible:opacity-100'
-            }`
-      }`}
-    >
-      <Icon name="check" size={9} strokeWidth={3} />
-    </button>
-  )
-}
+import PromptDialog from '../common/PromptDialog.jsx'
+import { api } from '../../api.js'
+import {
+  flattenRows,
+  folderSubtree,
+  folderTree,
+  resolveTarget,
+} from './connectionTreeUtils.js'
+import { ConnectionRow, FolderRow } from './ConnectionTreeRow.jsx'
 
 export default function ConnectionsScreen({
   connections,
@@ -340,20 +258,6 @@ export default function ConnectionsScreen({
     setDropTarget(null)
   }
 
-  const resolveTarget = (event, kind, item) => {
-    const bounds = event.currentTarget.getBoundingClientRect()
-    if (kind === 'connection') {
-      const position = event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after'
-      return { kind: 'connection', id: item.id, position }
-    }
-    if (drag.kind === 'folder') {
-      const offset = (event.clientY - bounds.top) / bounds.height
-      const position = offset < 0.25 ? 'before' : offset > 0.75 ? 'after' : 'inside'
-      return { kind: 'folder', id: item.id, position }
-    }
-    return { kind: 'folder', id: item.id, position: 'inside' }
-  }
-
   const applyDrop = (dragged, target) => {
     setDrag(null)
     setDropTarget(null)
@@ -419,14 +323,14 @@ export default function ConnectionsScreen({
     if (kind === 'folder' && drag.kind === 'folder' && drag.id === item.id) return
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
-    setDropTarget(resolveTarget(event, kind, item))
+    setDropTarget(resolveTarget(event, kind, item, drag))
   }
 
   const handleRowDrop = (event, kind, item) => {
     if (!drag) return
     event.preventDefault()
     event.stopPropagation()
-    applyDrop(drag, resolveTarget(event, kind, item))
+    applyDrop(drag, resolveTarget(event, kind, item, drag))
   }
 
   const handleRootDragOver = (event) => {
@@ -539,8 +443,8 @@ export default function ConnectionsScreen({
       const result = await api.importConnections(importFile.content, password)
       setImportFile(null)
       await onReloadConnections?.()
-      const folders = result.importedFolderCount
-      const suffix = folders > 0 ? ` and ${folders} folder(s)` : ''
+      const foldersCount = result.importedFolderCount
+      const suffix = foldersCount > 0 ? ` and ${foldersCount} folder(s)` : ''
       onNotify?.('success', `Imported ${result.importedCount} connection(s)${suffix} successfully.`)
     } catch (error) {
       setImportError(error.message)
@@ -652,184 +556,54 @@ export default function ConnectionsScreen({
     return () => document.removeEventListener('keydown', handleKeyDown)
   })
 
-  const renderConnection = (connection, depth) => {
-    const isConnecting = connectingId === connection.id
-    const isOpen = openIds.includes(connection.id)
-    const isSelected = selectedConnectionIds.has(connection.id)
-    const isDragged = drag?.kind === 'connection' && drag.ids.includes(connection.id)
-    const isDropLine = (position) =>
-      dropTarget?.kind === 'connection' &&
-      dropTarget.id === connection.id &&
-      dropTarget.position === position
+  const renderConnectionItem = (connection, depth) => (
+    <ConnectionRow
+      key={connection.id}
+      connection={connection}
+      depth={depth}
+      connectingId={connectingId}
+      openIds={openIds}
+      selectedConnectionIds={selectedConnectionIds}
+      selectedCount={selectedCount}
+      drag={drag}
+      dropTarget={dropTarget}
+      menu={menu}
+      onOpen={onOpen}
+      onOpenRowMenu={openRowMenu}
+      onSelectClick={handleSelectClick}
+      onModifierClick={applyModifierClick}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onRowDragOver={handleRowDragOver}
+      onRowDrop={handleRowDrop}
+    />
+  )
 
-    return (
-      <Fragment key={connection.id}>
-        {isDropLine('before') ? <DropLine depth={depth} /> : null}
-        <div
-          style={{ marginLeft: depth * 14 }}
-          className={`group/row group/conn flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors ${
-            isSelected ? 'bg-accent/[0.08]' : 'hover:bg-tint/[0.04]'
-          } ${isDragged ? 'opacity-40' : ''}`}
-          onContextMenu={(event) => openRowMenu(event, 'connection', connection)}
-          onDragOver={(event) => handleRowDragOver(event, 'connection', connection)}
-          onDrop={(event) => handleRowDrop(event, 'connection', connection)}
-        >
-          <SelectBox
-            checked={isSelected}
-            active={selectedCount > 0}
-            label={isSelected ? `Deselect ${connection.name}` : `Select ${connection.name}`}
-            onClick={(event) => handleSelectClick(event, 'connection', connection.id)}
-          />
-          <DragHandle
-            title="Drag to reorder or move into a folder"
-            onDragStart={(event) => handleDragStart(event, 'connection', connection.id)}
-            onDragEnd={handleDragEnd}
-          />
-          <button
-            type="button"
-            disabled={isConnecting}
-            onClick={(event) => {
-              if (applyModifierClick(event, 'connection', connection.id)) return
-              onOpen(connection)
-            }}
-            className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:opacity-70"
-            title={isOpen ? `Switch to ${connection.name}` : `Connect to ${connection.name} (${connection.host}:${connection.port})`}
-          >
-            {isConnecting ? (
-              <Spinner size={12} className="shrink-0 text-accent" />
-            ) : (
-              <span
-                className={`h-[7px] w-[7px] shrink-0 rounded-full ${
-                  isOpen ? 'bg-success shadow-[0_0_6px_rgba(52,211,153,0.6)]' : 'bg-line-strong'
-                }`}
-              />
-            )}
-            <span className="min-w-0 flex-1">
-              <span className="flex items-center gap-2">
-                <span className="truncate text-[length:var(--app-text-12)] text-text">{connection.name}</span>
-                <span className="flex shrink-0 items-center gap-1.5">
-                  <EnvironmentBadge environment={connection.environment} />
-                  {isOpen ? (
-                    <span className="shrink-0 rounded border border-success/30 bg-success/10 px-1 text-[length:var(--app-text-9)] font-semibold uppercase tracking-wide text-success">
-                      open
-                    </span>
-                  ) : null}
-                </span>
-              </span>
-              <span className="block truncate text-[length:var(--app-text-10)] leading-[calc(var(--app-text-12)+4px)] text-text-faint">
-                {connection.host}:{connection.port}
-                {connection.database ? ` · ${connection.database}` : ''}
-              </span>
-            </span>
-          </button>
-
-          <button
-            type="button"
-            className={`icon-btn h-6 w-6 shrink-0 transition-opacity ${
-              menu?.kind === 'connection' && menu.item.id === connection.id
-                ? 'opacity-100'
-                : 'opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100'
-            }`}
-            title="Connection actions"
-            aria-label={`Actions for ${connection.name}`}
-            onClick={(event) => openRowMenu(event, 'connection', connection)}
-          >
-            <Icon name="more-horizontal" size={13} />
-          </button>
-        </div>
-        {isDropLine('after') ? <DropLine depth={depth} /> : null}
-      </Fragment>
-    )
-  }
-
-  const renderFolder = (folder, depth) => {
-    const isOpen = openFolders.has(folder.id)
-    const isSelected = selectedFolderIds.has(folder.id)
-    const childFolders = folders.filter((item) => item.parentId === folder.id)
-    const childConnections = connections.filter((item) => item.folderId === folder.id)
-    const childCount = childFolders.length + childConnections.length
-    const isDragged = drag?.kind === 'folder' && drag.id === folder.id
-    const isDropLine = (position) =>
-      dropTarget?.kind === 'folder' &&
-      dropTarget.id === folder.id &&
-      dropTarget.position === position
-    const isDropInside = isDropLine('inside')
-
-    return (
-      <Fragment key={folder.id}>
-        {isDropLine('before') ? <DropLine depth={depth} /> : null}
-        <div
-          style={{ marginLeft: depth * 14 }}
-          className={`group/row group/folder flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors ${
-            isSelected ? 'bg-accent/[0.08]' : 'hover:bg-tint/[0.03]'
-          } ${isDropInside ? 'bg-accent/10 ring-1 ring-accent/40' : ''} ${isDragged ? 'opacity-40' : ''}`}
-          onContextMenu={(event) => openRowMenu(event, 'folder', folder)}
-          onDragOver={(event) => handleRowDragOver(event, 'folder', folder)}
-          onDrop={(event) => handleRowDrop(event, 'folder', folder)}
-        >
-          <SelectBox
-            checked={isSelected}
-            active={selectedCount > 0}
-            label={isSelected ? `Deselect ${folder.name}` : `Select ${folder.name}`}
-            onClick={(event) => handleSelectClick(event, 'folder', folder.id)}
-          />
-          <DragHandle
-            title="Drag to reorder or move into a folder"
-            onDragStart={(event) => handleDragStart(event, 'folder', folder.id)}
-            onDragEnd={handleDragEnd}
-          />
-          <button
-            type="button"
-            onClick={(event) => {
-              if (applyModifierClick(event, 'folder', folder.id)) return
-              toggleFolder(folder.id)
-            }}
-            className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-            title={isOpen ? 'Collapse folder' : 'Expand folder'}
-          >
-            <Icon
-              name="chevron-right"
-              size={11}
-              className={`shrink-0 text-text-faint transition-transform ${isOpen ? 'rotate-90' : ''}`}
-            />
-            <Icon name="folder" size={13} className="shrink-0 text-warning/70" />
-            <span className="truncate text-[length:var(--app-text-12)] font-medium text-text">{folder.name}</span>
-            <span className="shrink-0 text-[length:var(--app-text-10)] tabular-nums text-text-faint">{childCount}</span>
-          </button>
-
-          <button
-            type="button"
-            className={`icon-btn h-6 w-6 shrink-0 transition-opacity ${
-              menu?.kind === 'folder' && menu.item.id === folder.id
-                ? 'opacity-100'
-                : 'opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100'
-            }`}
-            title="Folder actions"
-            aria-label={`Actions for ${folder.name}`}
-            onClick={(event) => openRowMenu(event, 'folder', folder)}
-          >
-            <Icon name="more-horizontal" size={13} />
-          </button>
-        </div>
-
-        {isOpen ? (
-          <div className="space-y-px">
-            {childConnections.map((connection) => renderConnection(connection, depth + 1))}
-            {childFolders.map((child) => renderFolder(child, depth + 1))}
-            {childCount === 0 ? (
-              <p
-                style={{ marginLeft: (depth + 1) * 14 }}
-                className="px-2 py-1 text-[length:var(--app-text-11)] text-text-faint"
-              >
-                Empty folder
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-        {isDropLine('after') ? <DropLine depth={depth} /> : null}
-      </Fragment>
-    )
-  }
+  const renderFolderItem = (folder, depth) => (
+    <FolderRow
+      key={folder.id}
+      folder={folder}
+      depth={depth}
+      folders={folders}
+      connections={connections}
+      openFolders={openFolders}
+      selectedFolderIds={selectedFolderIds}
+      selectedCount={selectedCount}
+      drag={drag}
+      dropTarget={dropTarget}
+      menu={menu}
+      onToggleFolder={toggleFolder}
+      onOpenRowMenu={openRowMenu}
+      onSelectClick={handleSelectClick}
+      onModifierClick={applyModifierClick}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onRowDragOver={handleRowDragOver}
+      onRowDrop={handleRowDrop}
+      renderConnection={renderConnectionItem}
+      renderFolder={renderFolderItem}
+    />
+  )
 
   const rootFolders = folders.filter((folder) => (folder.parentId ?? null) === null)
   const rootConnections = connections.filter((connection) => (connection.folderId ?? null) === null)
@@ -858,18 +632,22 @@ export default function ConnectionsScreen({
             type="button"
             className="btn-soft"
             onClick={() => handleOpenExport(selectedCount > 0 ? selectedExportIds : null)}
-            disabled={connections.length === 0 || (selectedCount > 0 && selectedExportIds.length === 0)}
             title={
               selectedCount > 0
-                ? 'Export the selected connections to an encrypted JSON file'
-                : 'Export all connections to an encrypted JSON file'
+                ? `Export ${selectedExportIds.length} connection(s)`
+                : 'Export all connections to encrypted JSON file'
             }
           >
             <Icon name="download" size={14} />
             {selectedCount > 0 ? 'Export selected' : 'Export'}
           </button>
-          <button type="button" className="btn-soft" onClick={() => openCreatePrompt(null)}>
-            <Icon name="folder" size={14} />
+          <button
+            type="button"
+            className="btn-soft"
+            onClick={() => openCreatePrompt(null)}
+            title="Create a folder to group connections"
+          >
+            <Icon name="folder-plus" size={14} />
             New folder
           </button>
           <button type="button" className="btn-primary" onClick={onNewConnection}>
@@ -879,20 +657,48 @@ export default function ConnectionsScreen({
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-7">
+      <div
+        className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-6"
+        onDragOver={handleRootDragOver}
+        onDrop={handleRootDrop}
+      >
         <div className="mx-auto w-full max-w-3xl">
-          <h1 className="text-[length:var(--app-text-15)] font-semibold text-text-strong">Connections</h1>
-          <p className="mt-1 text-[length:var(--app-text-12)] text-text-muted">
-            Pick a connection to open it. Tick a row on hover, or use Ctrl/Cmd-click, Shift-click
-            and right-click to work on several at once.
-          </p>
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h1 className="text-[length:var(--app-text-15)] font-semibold text-text-strong">Connections</h1>
+              <p className="mt-0.5 text-[length:var(--app-text-11)] text-text-muted">
+                {connections.length} saved · Click to open, drag handle to organize
+              </p>
+            </div>
+            {folders.length > 0 ? (
+              <div className="flex items-center gap-1 text-[length:var(--app-text-11)] text-text-faint">
+                <button
+                  type="button"
+                  onClick={() => setOpenFolders(new Set(folders.map((f) => f.id)))}
+                  className="rounded px-1.5 py-0.5 hover:bg-panel hover:text-text"
+                >
+                  Expand all
+                </button>
+                <span>·</span>
+                <button
+                  type="button"
+                  onClick={() => setOpenFolders(new Set())}
+                  className="rounded px-1.5 py-0.5 hover:bg-panel hover:text-text"
+                >
+                  Collapse all
+                </button>
+              </div>
+            ) : null}
+          </div>
 
           {isEmpty ? (
-            <div className="mt-8 rounded-xl border border-dashed border-line-strong px-6 py-12 text-center">
-              <Icon name="server" size={22} className="mx-auto mb-3 text-text-faint" />
-              <p className="text-[length:var(--app-text-13)] text-text-soft">No saved connections</p>
-              <p className="mt-1 text-[length:var(--app-text-12)] text-text-faint">
-                Create one to start browsing your databases.
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-line-strong py-16 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-tint/[0.04] text-text-faint">
+                <Icon name="server" size={24} />
+              </div>
+              <p className="mt-3 text-[length:var(--app-text-13)] font-medium text-text">No connections yet</p>
+              <p className="mt-1 max-w-sm text-[length:var(--app-text-11)] leading-[calc(var(--app-text-12)+6px)] text-text-muted">
+                Create your first Microsoft SQL Server connection to start querying databases.
               </p>
               <button type="button" className="btn-primary mt-4" onClick={onNewConnection}>
                 <Icon name="plus" size={14} />
@@ -901,144 +707,140 @@ export default function ConnectionsScreen({
             </div>
           ) : (
             <div
-              className={`mt-5 space-y-px rounded-lg border border-line bg-panel/60 p-2 ${
-                dropTarget?.kind === 'root' ? 'bg-accent/[0.04] ring-1 ring-accent/40' : ''
+              className={`rounded-xl border border-line bg-panel p-2 transition-colors ${
+                dropTarget?.kind === 'root' ? 'ring-2 ring-accent' : ''
               }`}
-              onDragOver={handleRootDragOver}
-              onDrop={handleRootDrop}
             >
-              {rootConnections.map((connection) => renderConnection(connection, 0))}
-              {rootFolders.map((folder) => renderFolder(folder, 0))}
+              <div className="space-y-px">
+                {rootConnections.map((conn) => renderConnectionItem(conn, 0))}
+                {rootFolders.map((folder) => renderFolderItem(folder, 0))}
+              </div>
             </div>
           )}
         </div>
+
+        {selectedCount > 0 ? (
+          <div className="animate-fade-in pointer-events-none sticky bottom-4 z-20 mt-auto flex justify-center pt-4">
+            <div className="pointer-events-auto flex items-center gap-2 rounded-xl border border-line-strong bg-elevated px-3 py-2 shadow-2xl shadow-black/60">
+              <span className="text-[length:var(--app-text-11)] font-medium text-text-strong">
+                {selectedSummary} selected
+              </span>
+              <span className="h-3 w-px bg-line-strong" />
+
+              {selectedExportIds.length > 0 ? (
+                <button
+                  type="button"
+                  className="btn-soft h-7 px-2.5 text-[length:var(--app-text-11)]"
+                  onClick={() => handleOpenExport(selectedExportIds)}
+                  title={`Export ${selectedExportIds.length} connection(s)`}
+                >
+                  <Icon name="download" size={12} />
+                  Export
+                </button>
+              ) : null}
+
+              {selectedConnectionIds.size > 0 ? (
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="btn-soft h-7 px-2.5 text-[length:var(--app-text-11)]"
+                    onClick={(event) => {
+                      const bounds = event.currentTarget.getBoundingClientRect()
+                      setActionMoveMenu({ x: bounds.left, y: bounds.top - 8 })
+                    }}
+                    title="Move selected connections to a folder"
+                  >
+                    <Icon name="folder" size={12} />
+                    Move
+                  </button>
+                  {actionMoveMenu ? (
+                    <ContextMenu
+                      x={actionMoveMenu.x}
+                      y={actionMoveMenu.y}
+                      items={folderMoveItems(moveSelectionTo)}
+                      onClose={() => setActionMoveMenu(null)}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+
+              <button
+                type="button"
+                className="btn-danger h-7 px-2.5 text-[length:var(--app-text-11)]"
+                onClick={openBulkDelete}
+                title="Delete selected items"
+              >
+                <Icon name="trash" size={12} />
+                Delete
+              </button>
+
+              <button
+                type="button"
+                className="btn-ghost h-7 px-2 text-[length:var(--app-text-11)]"
+                onClick={clearSelection}
+                title="Clear selection (Esc)"
+              >
+                <Icon name="x" size={12} />
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
-      {selectedCount > 0 ? (
-        <div className="pointer-events-none fixed inset-x-0 bottom-10 z-40 flex justify-center px-6">
-          <div className="animate-fade-in pointer-events-auto flex items-center gap-1 rounded-full border border-line-strong bg-elevated/95 py-1.5 pl-4 pr-1.5 shadow-2xl shadow-black/50 backdrop-blur">
-            <span className="text-[length:var(--app-text-11)] font-semibold text-text-strong">
-              {selectedCount} selected
-            </span>
-            {selectedFolderIds.size > 0 ? (
-              <span className="ml-2 hidden text-[length:var(--app-text-10)] text-text-faint sm:inline">
-                {selectedSummary}
-              </span>
-            ) : null}
-            <span className="mx-2 h-4 w-px bg-line" />
-            <button
-              type="button"
-              className="btn-ghost h-7 px-2 text-[length:var(--app-text-11)]"
-              disabled={selectedExportIds.length === 0}
-              onClick={() => handleOpenExport(selectedExportIds)}
-              title="Export the selected connections"
-            >
-              <Icon name="download" size={13} />
-              Export
-            </button>
-            <button
-              type="button"
-              className="btn-ghost h-7 px-2 text-[length:var(--app-text-11)]"
-              disabled={selectedConnectionIds.size === 0}
-              onClick={(event) => {
-                const bounds = event.currentTarget.getBoundingClientRect()
-                setActionMoveMenu({ x: bounds.left, y: bounds.top - 6 })
-              }}
-              title="Move the selected connections into a folder"
-            >
-              <Icon name="folder" size={13} />
-              Move
-            </button>
-            <button
-              type="button"
-              className="btn-ghost h-7 px-2 text-[length:var(--app-text-11)] text-danger hover:bg-danger/10 hover:text-danger"
-              onClick={openBulkDelete}
-              title="Delete the selection (Delete)"
-            >
-              <Icon name="trash" size={13} />
-              Delete
-            </button>
-            <button
-              type="button"
-              className="icon-btn ml-0.5 h-7 w-7 rounded-full"
-              onClick={clearSelection}
-              title="Clear selection (Esc)"
-              aria-label="Clear selection"
-            >
-              <Icon name="x" size={13} />
-            </button>
-          </div>
-        </div>
-      ) : null}
-
       <footer className="flex h-9 shrink-0 items-center justify-between border-t border-line px-6 text-[length:var(--app-text-10)] text-text-faint">
-        <span>
-          {connections.length} {connections.length === 1 ? 'connection' : 'connections'}
-          {folders.length > 0 ? ` · ${folders.length} ${folders.length === 1 ? 'folder' : 'folders'}` : ''}
-        </span>
-        <span>{appVersion ? `v${appVersion}` : ''}</span>
+        <span>Microsoft SQL Server client</span>
+        <span>v{appVersion}</span>
       </footer>
 
-      <PromptDialog
-        open={Boolean(prompt)}
-        title={prompt?.mode === 'rename' ? 'Rename folder' : 'New folder'}
-        description={
-          prompt?.mode === 'rename'
-            ? `Rename “${prompt.folder.name}”.`
-            : prompt?.parentName
-              ? `Create a folder inside “${prompt.parentName}”.`
-              : 'Create a folder at the top level.'
-        }
-        label="Folder name"
-        confirmLabel={promptBusy ? 'Saving…' : prompt?.mode === 'rename' ? 'Rename' : 'Create'}
-        initialValue={prompt?.mode === 'rename' ? prompt.folder.name : ''}
-        busy={promptBusy}
-        onCancel={() => setPrompt(null)}
-        onConfirm={handlePromptConfirm}
-      />
+      {prompt ? (
+        <PromptDialog
+          open
+          title={
+            prompt.mode === 'rename'
+              ? `Rename ${prompt.folder.name}`
+              : prompt.parentName
+                ? `New folder inside ${prompt.parentName}`
+                : 'New folder'
+          }
+          label="Folder name"
+          initialValue={prompt.mode === 'rename' ? prompt.folder.name : ''}
+          placeholder="e.g. Production"
+          confirmLabel={prompt.mode === 'rename' ? 'Rename' : 'Create'}
+          busy={promptBusy}
+          onConfirm={handlePromptConfirm}
+          onCancel={() => setPrompt(null)}
+        />
+      ) : null}
 
-      <ConfirmDialog
-        open={Boolean(deleteTarget)}
-        title="Delete folder"
-        message={
-          deleteTarget
-            ? `“${deleteTarget.name}” and everything inside it will be removed from this device, including its connections, subfolders and saved passwords.`
-            : ''
-        }
-        confirmLabel={deleting ? 'Deleting…' : 'Delete folder'}
-        danger
-        busy={deleting}
-        onCancel={() => setDeleteTarget(null)}
-        onConfirm={handleDeleteConfirm}
-      />
+      {deleteTarget ? (
+        <ConfirmDialog
+          open
+          title={`Delete folder "${deleteTarget.name}"?`}
+          message="Everything inside this folder will also be deleted: all subfolders, connections, their saved passwords and query history. This cannot be undone."
+          confirmLabel="Delete folder and contents"
+          danger
+          busy={deleting}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      ) : null}
 
-      <ConfirmDialog
-        open={Boolean(bulkDelete)}
-        title="Delete selection"
-        message={
-          bulkDelete
-            ? `${[
-                bulkDelete.connectionIds.length > 0
-                  ? `${bulkDelete.connectionIds.length} connection${
-                      bulkDelete.connectionIds.length === 1 ? '' : 's'
-                    }`
-                  : null,
-                bulkDelete.folderIds.length > 0
-                  ? `${bulkDelete.folderIds.length} folder${
-                      bulkDelete.folderIds.length === 1 ? '' : 's'
-                    }`
-                  : null,
-              ]
-                .filter(Boolean)
-                .join(' and ')} will be removed from this device. Connections inside the selected folders are deleted too, along with their saved passwords.`
-            : ''
-        }
-        confirmLabel={bulkBusy ? 'Deleting…' : 'Delete'}
-        danger
-        busy={bulkBusy}
-        onCancel={() => setBulkDelete(null)}
-        onConfirm={handleBulkDeleteConfirm}
-      />
+      {bulkDelete ? (
+        <ConfirmDialog
+          open
+          title="Delete selected items?"
+          message={
+            bulkDelete.folderIds.length > 0
+              ? `You are about to delete ${selectedSummary}. Folders will be deleted together with all their subfolders and connections. This cannot be undone.`
+              : `You are about to delete ${selectedSummary}. Their saved queries and history will also be removed. This cannot be undone.`
+          }
+          confirmLabel="Delete selected"
+          danger
+          busy={bulkBusy}
+          onConfirm={handleBulkDeleteConfirm}
+          onCancel={() => setBulkDelete(null)}
+        />
+      ) : null}
 
       {menu ? (
         <ContextMenu
@@ -1055,36 +857,31 @@ export default function ConnectionsScreen({
         />
       ) : null}
 
-      {actionMoveMenu ? (
-        <ContextMenu
-          x={actionMoveMenu.x}
-          y={actionMoveMenu.y}
-          items={folderMoveItems(moveSelectionTo)}
-          onClose={() => setActionMoveMenu(null)}
+      {exportTarget ? (
+        <ExportConnectionsDialog
+          open
+          connections={connections}
+          folders={folders}
+          selectedIds={exportTarget}
+          busy={exportBusy}
+          onCancel={() => setExportTarget(null)}
+          onConfirm={handleExportConfirm}
         />
       ) : null}
 
-      <ExportConnectionsDialog
-        open={Boolean(exportTarget)}
-        connections={connections}
-        folders={folders}
-        selectedIds={exportTarget ?? []}
-        busy={exportBusy}
-        onClose={() => setExportTarget(null)}
-        onExport={handleExportConfirm}
-      />
-
-      <ImportConnectionsDialog
-        open={Boolean(importFile)}
-        fileName={importFile?.fileName ?? ''}
-        busy={importBusy}
-        error={importError}
-        onClose={() => {
-          setImportFile(null)
-          setImportError(null)
-        }}
-        onImport={handleImportConfirm}
-      />
+      {importFile ? (
+        <ImportConnectionsDialog
+          open
+          fileName={importFile.fileName}
+          busy={importBusy}
+          error={importError}
+          onClose={() => {
+            setImportFile(null)
+            setImportError(null)
+          }}
+          onImport={handleImportConfirm}
+        />
+      ) : null}
     </div>
   )
 }

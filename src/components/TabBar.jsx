@@ -1,4 +1,4 @@
-import Icon, { Spinner } from './Icon.jsx'
+import Icon, { Spinner } from './common/Icon.jsx'
 
 export default function TabBar({
   tabs,

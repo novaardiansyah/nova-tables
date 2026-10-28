@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import Icon, { Spinner } from './Icon.jsx'
-import Select from './Select.jsx'
-import { ENVIRONMENT_OPTIONS } from '../environments.js'
+import Icon, { Spinner } from '../common/Icon.jsx'
+import Select from '../common/Select.jsx'
+import { ENVIRONMENT_OPTIONS } from '../../environments.js'
 
 const DEFAULTS = {
   name: '',

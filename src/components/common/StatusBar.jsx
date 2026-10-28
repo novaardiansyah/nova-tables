@@ -1,5 +1,5 @@
 import Icon, { Spinner } from './Icon.jsx'
-import { formatDuration, formatNumber } from '../resultFormats.js'
+import { formatDuration, formatNumber } from '../../resultFormats.js'
 
 export default function StatusBar({ result, editSource, activeDatabase, queryStatus }) {
   const resultSets = result?.resultSets ?? []

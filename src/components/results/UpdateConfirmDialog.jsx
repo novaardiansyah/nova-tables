@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { monaco } from '../monaco.js'
-import Icon from './Icon.jsx'
+import { monaco } from '../../monaco.js'
+import Icon from '../common/Icon.jsx'
 
 export default function UpdateConfirmDialog({
   open,

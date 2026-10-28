@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from './api.js'
 import { DEFAULT_SETTINGS, applySettings } from './settings.js'
-import { generateCreateTable } from './designSql.js'
 import { csvRecords, jsonRecords, quoteIdentifier, sqlLiteral } from './resultFormats.js'
 import { buildFilteredSql, buildFilterWhere } from './filters.js'
 import {
@@ -15,27 +14,32 @@ import {
 } from './edits.js'
 import { executionGuard } from './queryModes.js'
 import { parseShowPlanXml } from './planParser.js'
-import Banner from './components/Banner.jsx'
-import ConfirmDialog from './components/ConfirmDialog.jsx'
-import ConnectionDialog from './components/ConnectionDialog.jsx'
-import ConnectionsScreen from './components/ConnectionsScreen.jsx'
-import DatabaseUsersDialog from './components/DatabaseUsersDialog.jsx'
-import DropDatabaseDialog from './components/DropDatabaseDialog.jsx'
-import PromptDialog from './components/PromptDialog.jsx'
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts.js'
+import { useDatabaseUsers } from './hooks/useDatabaseUsers.js'
+import { useQueryHistory } from './hooks/useQueryHistory.js'
+import { useSavedQueries } from './hooks/useSavedQueries.js'
+import { useTableOperations } from './hooks/useTableOperations.js'
+import Banner from './components/common/Banner.jsx'
+import ConfirmDialog from './components/common/ConfirmDialog.jsx'
+import ConnectionDialog from './components/connections/ConnectionDialog.jsx'
+import ConnectionsScreen from './components/connections/ConnectionsScreen.jsx'
+import DatabaseUsersDialog from './components/dialogs/DatabaseUsersDialog.jsx'
+import DropDatabaseDialog from './components/dialogs/DropDatabaseDialog.jsx'
+import PromptDialog from './components/common/PromptDialog.jsx'
 import QueryEditor from './components/QueryEditor.jsx'
-import QueryGuardDialog from './components/QueryGuardDialog.jsx'
-import JsonPanel, { JSON_PANEL_DEFAULT_WIDTH } from './components/JsonPanel.jsx'
-import ResultsPanel from './components/ResultsPanel.jsx'
-import SaveQueryDialog from './components/SaveQueryDialog.jsx'
-import SavedQueriesDialog from './components/SavedQueriesDialog.jsx'
-import QueryHistoryDialog from './components/QueryHistoryDialog.jsx'
+import QueryGuardDialog from './components/dialogs/QueryGuardDialog.jsx'
+import JsonPanel, { JSON_PANEL_DEFAULT_WIDTH } from './components/results/JsonPanel.jsx'
+import ResultsPanel from './components/results/ResultsPanel.jsx'
+import SaveQueryDialog from './components/dialogs/SaveQueryDialog.jsx'
+import SavedQueriesDialog from './components/dialogs/SavedQueriesDialog.jsx'
+import QueryHistoryDialog from './components/dialogs/QueryHistoryDialog.jsx'
 import Sidebar, { SIDEBAR_DEFAULT_WIDTH } from './components/Sidebar.jsx'
-import ShortcutPanel from './components/ShortcutPanel.jsx'
-import SettingsDialog from './components/SettingsDialog.jsx'
-import StatusBar from './components/StatusBar.jsx'
+import ShortcutPanel from './components/dialogs/ShortcutPanel.jsx'
+import SettingsDialog from './components/dialogs/SettingsDialog.jsx'
+import StatusBar from './components/common/StatusBar.jsx'
 import TabBar from './components/TabBar.jsx'
-import TableDesigner from './components/TableDesigner.jsx'
-import UpdateConfirmDialog from './components/UpdateConfirmDialog.jsx'
+import TableDesigner from './components/designer/TableDesigner.jsx'
+import UpdateConfirmDialog from './components/results/UpdateConfirmDialog.jsx'
 import WorkspaceHeader from './components/WorkspaceHeader.jsx'
 
 const STARTER_SQL = `-- Nova Tables
@@ -56,7 +60,6 @@ END
 const EMPTY_TABLES = { status: 'idle', database: null, tables: [], error: null }
 const EMPTY_MODULES = { status: 'idle', database: null, modules: [], error: null }
 const EMPTY_COLUMNS = { status: 'idle', database: null, tables: [], error: null }
-const EMPTY_DATABASE_USERS = { status: 'idle', users: [], roles: [], logins: [], error: null }
 const IDLE_QUERY = { status: 'idle', result: null, error: null }
 const EDITOR_DEFAULT_HEIGHT = 320
 const BROWSE_ROWS = 300
@@ -157,31 +160,6 @@ function nextQueryTitle(tabs) {
   return queryTitle(highest + 1)
 }
 
-function constraintName(prefix, table, columns) {
-  return `${prefix}_${table}_${columns.join('_')}`.slice(0, 128)
-}
-
-function cloneDesign(structure, name) {
-  return {
-    schema: structure.schema,
-    table: name,
-    columns: structure.columns.map((column) => ({ ...column, defaultName: null, originalName: null })),
-    primaryKey: structure.primaryKey[0]?.columns ?? [],
-    uniqueKeys: structure.uniqueKeys.map((key) => ({
-      ...key,
-      name: constraintName('UQ', name, key.columns),
-    })),
-    foreignKeys: structure.foreignKeys.map((key) => ({
-      ...key,
-      name: constraintName('FK', name, key.columns.map((item) => item.column)),
-    })),
-    indexes: structure.indexes.map((index) => ({
-      ...index,
-      name: constraintName('IX', name, index.columns),
-    })),
-  }
-}
-
 function createSession(result, connection, database, tab) {
   return {
     ...result,
@@ -211,9 +189,6 @@ export default function App() {
   const [deleting, setDeleting] = useState(false)
   const [databaseDrop, setDatabaseDrop] = useState(null)
   const [databaseDropBusy, setDatabaseDropBusy] = useState(false)
-  const [databaseUsersOpen, setDatabaseUsersOpen] = useState(false)
-  const [databaseUsers, setDatabaseUsers] = useState(EMPTY_DATABASE_USERS)
-  const [databaseUsersBusy, setDatabaseUsersBusy] = useState(false)
   const [editorHeight, setEditorHeight] = useState(EDITOR_DEFAULT_HEIGHT)
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -222,23 +197,10 @@ export default function App() {
   const [jsonPanelHovered, setJsonPanelHovered] = useState(false)
   const [activeResultData, setActiveResultData] = useState(null)
   const [appVersion, setAppVersion] = useState('')
-  const [tablePrompt, setTablePrompt] = useState(null)
-  const [dropTarget, setDropTarget] = useState(null)
-  const [tableBusy, setTableBusy] = useState(false)
-  const [pinnedTables, setPinnedTables] = useState([])
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
   const [runGuard, setRunGuard] = useState(null)
-  const [savedQueriesOpen, setSavedQueriesOpen] = useState(false)
-  const [savedQueries, setSavedQueries] = useState([])
-  const [savedQueriesLoading, setSavedQueriesLoading] = useState(false)
-  const [savedQueriesError, setSavedQueriesError] = useState(null)
-  const [saveQueryDialog, setSaveQueryDialog] = useState(null)
-  const [queryRenameTarget, setQueryRenameTarget] = useState(null)
-  const [queryDeleteTarget, setQueryDeleteTarget] = useState(null)
-  const [queryBusy, setQueryBusy] = useState(false)
-  const [history, setHistory] = useState({ open: false, items: [], loading: false, error: null })
   const [editConfirmOpen, setEditConfirmOpen] = useState(false)
   const [editConfirmTarget, setEditConfirmTarget] = useState(null)
 
@@ -256,7 +218,6 @@ export default function App() {
   const tablesRequestRef = useRef({})
   const columnsRequestRef = useRef({})
   const modulesRequestRef = useRef({})
-  const databaseUsersRequestRef = useRef(0)
   const editSourceRequestsRef = useRef({})
 
   useEffect(() => {
@@ -415,26 +376,6 @@ export default function App() {
     [patchSession],
   )
 
-  const loadDatabaseUsers = useCallback(async (connectionId, database) => {
-    const requestId = databaseUsersRequestRef.current + 1
-    databaseUsersRequestRef.current = requestId
-    setDatabaseUsers((current) => ({ ...current, status: 'loading', error: null }))
-    try {
-      const data = await api.listDatabaseUsers(connectionId, database)
-      if (databaseUsersRequestRef.current !== requestId) return
-      setDatabaseUsers({
-        status: 'ready',
-        users: data.users,
-        roles: data.roles,
-        logins: data.logins,
-        error: null,
-      })
-    } catch (error) {
-      if (databaseUsersRequestRef.current !== requestId) return
-      setDatabaseUsers((current) => ({ ...current, status: 'error', error: error.message }))
-    }
-  }, [])
-
   const seedEditor = useCallback((sql, focus = true) => {
     seedIdRef.current += 1
     sqlRef.current = sql
@@ -533,11 +474,6 @@ export default function App() {
   const openConnectionScreen = useCallback(() => {
     setScreen('connections')
     setBanner(null)
-    setSavedQueriesOpen(false)
-    setHistory((prev) => ({ ...prev, open: false }))
-    setSaveQueryDialog(null)
-    setQueryRenameTarget(null)
-    setQueryDeleteTarget(null)
   }, [])
 
   const saveSettings = useCallback(
@@ -648,107 +584,6 @@ export default function App() {
       }
     },
     [activeConnectionId, databaseDrop, loadColumns, loadModules, loadTables, patchSession, showBanner],
-  )
-
-  const handleOpenDatabaseUsers = useCallback(() => {
-    const current = activeSession()
-    if (!current?.activeDatabase) return
-    const info = (current.databases ?? []).find(
-      (database) => database.name === current.activeDatabase,
-    )
-    if (!info?.isOnline || info.isSystem) return
-    setDatabaseUsersOpen(true)
-    loadDatabaseUsers(current.connectionId, current.activeDatabase)
-  }, [activeSession, loadDatabaseUsers])
-
-  const handleCloseDatabaseUsers = useCallback(() => {
-    if (databaseUsersBusy) return
-    databaseUsersRequestRef.current += 1
-    setDatabaseUsersOpen(false)
-    setDatabaseUsers(EMPTY_DATABASE_USERS)
-  }, [databaseUsersBusy])
-
-  const handleRefreshDatabaseUsers = useCallback(() => {
-    const current = activeSession()
-    if (!current?.activeDatabase) return
-    loadDatabaseUsers(current.connectionId, current.activeDatabase)
-  }, [activeSession, loadDatabaseUsers])
-
-  const handleCreateDatabaseUser = useCallback(
-    async (login, roles) => {
-      const current = activeSession()
-      if (!current?.activeDatabase) return false
-      setDatabaseUsersBusy(true)
-      setDatabaseUsers((value) => ({ ...value, error: null }))
-      try {
-        await api.createDatabaseUser({
-          connectionId: current.connectionId,
-          database: current.activeDatabase,
-          login,
-          roles,
-        })
-        await loadDatabaseUsers(current.connectionId, current.activeDatabase)
-        showBanner('success', `Created database user “${login}”.`)
-        return true
-      } catch (error) {
-        setDatabaseUsers((value) => ({ ...value, error: error.message }))
-        return false
-      } finally {
-        setDatabaseUsersBusy(false)
-      }
-    },
-    [activeSession, loadDatabaseUsers, showBanner],
-  )
-
-  const handleUpdateDatabaseUserRoles = useCallback(
-    async (user, roles) => {
-      const current = activeSession()
-      if (!current?.activeDatabase) return false
-      setDatabaseUsersBusy(true)
-      setDatabaseUsers((value) => ({ ...value, error: null }))
-      try {
-        await api.updateDatabaseUserRoles({
-          connectionId: current.connectionId,
-          database: current.activeDatabase,
-          user: user.name,
-          roles,
-        })
-        await loadDatabaseUsers(current.connectionId, current.activeDatabase)
-        showBanner('success', `Updated roles for “${user.name}”.`)
-        return true
-      } catch (error) {
-        setDatabaseUsers((value) => ({ ...value, error: error.message }))
-        return false
-      } finally {
-        setDatabaseUsersBusy(false)
-      }
-    },
-    [activeSession, loadDatabaseUsers, showBanner],
-  )
-
-  const handleDropDatabaseUser = useCallback(
-    async (user) => {
-      const current = activeSession()
-      if (!current?.activeDatabase) return false
-      setDatabaseUsersBusy(true)
-      setDatabaseUsers((value) => ({ ...value, error: null }))
-      try {
-        await api.dropDatabaseUser({
-          connectionId: current.connectionId,
-          database: current.activeDatabase,
-          user: user.name,
-        })
-        await loadDatabaseUsers(current.connectionId, current.activeDatabase)
-        showBanner('success', `Dropped database user “${user.name}”.`)
-        return true
-      } catch (error) {
-        setDatabaseUsers((value) => ({ ...value, error: error.message }))
-        return false
-      } finally {
-        setDatabaseUsersBusy(false)
-      }
-    },
-    [activeSession, loadDatabaseUsers, showBanner],
   )
 
   const handleSelectTable = useCallback(
@@ -988,256 +823,95 @@ export default function App() {
     [seedEditor],
   )
 
-  const refreshSavedQueries = useCallback(async () => {
-    const current = activeSession()
-    if (!current?.activeDatabase) return
-    try {
-      const items = await api.listSavedQueries(current.connectionId, current.activeDatabase)
-      setSavedQueries(items)
-      setSavedQueriesError(null)
-    } catch (error) {
-      setSavedQueriesError(error.message)
-    }
-  }, [activeSession])
+  const {
+    databaseUsersOpen,
+    databaseUsers,
+    databaseUsersBusy,
+    handleOpenDatabaseUsers,
+    handleCloseDatabaseUsers,
+    handleRefreshDatabaseUsers,
+    handleCreateDatabaseUser,
+    handleUpdateDatabaseUserRoles,
+    handleDropDatabaseUser,
+  } = useDatabaseUsers({ activeSession, showBanner })
+
+  const {
+    savedQueriesOpen,
+    setSavedQueriesOpen,
+    savedQueries,
+    savedQueriesLoading,
+    savedQueriesError,
+    saveQueryDialog,
+    setSaveQueryDialog,
+    queryRenameTarget,
+    setQueryRenameTarget,
+    queryDeleteTarget,
+    setQueryDeleteTarget,
+    queryBusy,
+    handleSaveQuery,
+    handleSaveQuerySubmit,
+    handleOpenSavedQueries,
+    handleOpenSavedQuery,
+    handleRenameSavedQuery,
+    handleDeleteSavedQuery,
+  } = useSavedQueries({
+    activeConnectionId,
+    scopeDatabase,
+    screen,
+    activeSession,
+    sessionsRef,
+    showBanner,
+    openTab,
+    updateTab,
+  })
+
+  const {
+    history,
+    handleOpenQueryHistory,
+    handleOpenHistoryItem,
+    handleDeleteHistoryItem,
+    handleClearHistory,
+    handleCloseHistory,
+  } = useQueryHistory({ activeSession, showBanner, openTab })
+
+  const {
+    tablePrompt,
+    setTablePrompt,
+    dropTarget,
+    setDropTarget,
+    tableBusy,
+    pinnedTables,
+    handleRenameTable,
+    handleTogglePin,
+    handleCloneTable,
+    handleTruncateTable,
+    handleDropTable,
+    handleTablePromptConfirm,
+    handleDropConfirm,
+  } = useTableOperations({
+    activeSession,
+    openTab,
+    patchSession,
+    showBanner,
+    loadTables,
+    loadColumns,
+  })
 
   useEffect(() => {
-    if (screen !== 'workspace' || !activeConnectionId || !scopeDatabase) {
-      setSavedQueries([])
-      setSavedQueriesError(null)
-      setSavedQueriesLoading(false)
-      return undefined
-    }
-
-    let cancelled = false
-    setSavedQueriesLoading(true)
-    setSavedQueriesError(null)
-    api
-      .listSavedQueries(activeConnectionId, scopeDatabase)
-      .then((items) => {
-        if (!cancelled) setSavedQueries(items)
-      })
-      .catch((error) => {
-        if (!cancelled) setSavedQueriesError(error.message)
-      })
-      .finally(() => {
-        if (!cancelled) setSavedQueriesLoading(false)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [activeConnectionId, scopeDatabase, screen])
-
-  const handleSaveQuery = useCallback(async () => {
-    const current = activeSession()
-    if (!current || !current.activeDatabase) {
-      showBanner('warn', 'Open a connection and pick a database before saving a query.')
-      return
-    }
-
-    const tab = current.tabs.find((item) => item.id === current.activeTabId)
-    if (!tab || tab.kind !== 'query') return
-
-    const sql = sqlRef.current
-    if (!sql.trim()) {
-      showBanner('warn', 'Write a query before saving it.')
-      return
-    }
-
-    if (tab.savedQueryId) {
-      setQueryBusy(true)
-      try {
-        const saved = await api.saveSavedQuery({
-          id: tab.savedQueryId,
-          connectionId: current.connectionId,
-          database: current.activeDatabase,
-          name: tab.savedQueryName,
-          sql,
-        })
-        updateTab(current.connectionId, tab.id, {
-          savedQueryId: saved.id,
-          savedQueryName: saved.name,
-          title: saved.name,
-        })
-        await refreshSavedQueries()
-        showBanner('success', `Saved “${saved.name}”.`)
-      } catch (error) {
-        if (error.code === 'SAVED_QUERY_MISSING') {
-          updateTab(current.connectionId, tab.id, { savedQueryId: null, savedQueryName: null })
-        }
-        showBanner('error', error.message)
-      } finally {
-        setQueryBusy(false)
-      }
-      return
-    }
-
-    setSaveQueryDialog({
-      tabId: tab.id,
-      sql,
-      initialName: /^Query \d+$/.test(tab.title) ? '' : tab.title,
-      existingNames: savedQueries.map((item) => item.name),
-    })
-  }, [activeSession, refreshSavedQueries, savedQueries, showBanner, updateTab])
-
-  const handleSaveQuerySubmit = useCallback(
-    async (name) => {
-      const pending = saveQueryDialog
-      const current = activeSession()
-      if (!pending || !current || !current.activeDatabase) return
-
-      setQueryBusy(true)
-      try {
-        const saved = await api.saveSavedQuery({
-          connectionId: current.connectionId,
-          database: current.activeDatabase,
-          name,
-          sql: pending.sql,
-        })
-        updateTab(current.connectionId, pending.tabId, {
-          savedQueryId: saved.id,
-          savedQueryName: saved.name,
-          title: saved.name,
-        })
-        setSaveQueryDialog(null)
-        await refreshSavedQueries()
-        showBanner('success', `Saved “${saved.name}” to ${current.activeDatabase}.`)
-      } catch (error) {
-        setSaveQueryDialog((prev) => (prev ? { ...prev, error: error.message } : prev))
-      } finally {
-        setQueryBusy(false)
-      }
-    },
-    [activeSession, refreshSavedQueries, saveQueryDialog, showBanner, updateTab],
-  )
-
-  const handleOpenSavedQueries = useCallback(() => {
-    const current = activeSession()
-    if (!current || !current.activeDatabase) {
-      showBanner('warn', 'Open a connection and pick a database to see its saved queries.')
-      return
-    }
-    setSavedQueriesOpen(true)
-    refreshSavedQueries()
-  }, [activeSession, refreshSavedQueries, showBanner])
-
-  const loadHistory = useCallback(async (connectionId, database) => {
-    setHistory((prev) => ({ ...prev, loading: true, error: null }))
-    try {
-      const items = await api.listQueryHistory(connectionId, database)
-      setHistory((prev) => ({ ...prev, items, loading: false }))
-    } catch (error) {
-      setHistory((prev) => ({ ...prev, loading: false, error: error.message }))
-    }
-  }, [])
-
-  const handleOpenQueryHistory = useCallback(() => {
-    const current = activeSession()
-    if (!current || !current.activeDatabase) {
-      showBanner('warn', 'Open a connection and pick a database to see its query history.')
-      return
-    }
-    setHistory({ open: true, items: [], loading: true, error: null })
-    loadHistory(current.connectionId, current.activeDatabase)
-  }, [activeSession, loadHistory, showBanner])
-
-  const handleOpenHistoryItem = useCallback(
-    (item) => {
-      const current = activeSession()
-      if (!current) return
-      setHistory((prev) => ({ ...prev, open: false }))
-      openTab(current.connectionId, 'History', item.sql)
-    },
-    [activeSession, openTab],
-  )
-
-  const handleDeleteHistoryItem = useCallback(
-    async (item) => {
-      try {
-        await api.deleteQueryHistory(item.id)
-        setHistory((prev) => ({ ...prev, items: prev.items.filter((entry) => entry.id !== item.id) }))
-      } catch (error) {
-        showBanner('error', error.message)
-      }
-    },
-    [showBanner],
-  )
-
-  const handleClearHistory = useCallback(async () => {
-    const current = activeSession()
-    if (!current?.activeDatabase) return
-    try {
-      await api.clearQueryHistory(current.connectionId, current.activeDatabase)
-      setHistory((prev) => ({ ...prev, items: [] }))
-    } catch (error) {
-      showBanner('error', error.message)
-    }
-  }, [activeSession, showBanner])
-
-  const handleOpenSavedQuery = useCallback(
-    (item) => {
-      const current = activeSession()
-      if (!current || !current.activeDatabase) return
-      if (
-        item.connectionId !== current.connectionId ||
-        item.database.toLowerCase() !== current.activeDatabase.toLowerCase()
-      ) {
-        showBanner('warn', 'This saved query belongs to another connection or database.')
-        return
-      }
-      setSavedQueriesOpen(false)
-      openTab(current.connectionId, item.name, item.sql, null, { id: item.id, name: item.name })
-      showBanner('success', `Opened “${item.name}”.`)
-    },
-    [activeSession, openTab, showBanner],
-  )
-
-  const handleRenameSavedQuery = useCallback(
-    async (name) => {
-      const target = queryRenameTarget
-      if (!target) return
-
-      setQueryBusy(true)
-      try {
-        const saved = await api.renameSavedQuery({ id: target.id, name })
-        const current = sessionsRef.current[target.connectionId]
-        for (const tab of current?.tabs ?? []) {
-          if (tab.savedQueryId !== saved.id) continue
-          updateTab(target.connectionId, tab.id, { savedQueryName: saved.name, title: saved.name })
-        }
-        setQueryRenameTarget(null)
-        await refreshSavedQueries()
-        showBanner('success', `Renamed saved query to “${saved.name}”.`)
-      } catch (error) {
-        setQueryRenameTarget((prev) => (prev ? { ...prev, error: error.message } : prev))
-      } finally {
-        setQueryBusy(false)
-      }
-    },
-    [queryRenameTarget, refreshSavedQueries, showBanner, updateTab],
-  )
-
-  const handleDeleteSavedQuery = useCallback(async () => {
-    const target = queryDeleteTarget
-    if (!target) return
-
-    setQueryBusy(true)
-    try {
-      await api.deleteSavedQuery(target.id)
-      const current = sessionsRef.current[target.connectionId]
-      for (const tab of current?.tabs ?? []) {
-        if (tab.savedQueryId !== target.id) continue
-        updateTab(target.connectionId, tab.id, { savedQueryId: null, savedQueryName: null })
-      }
-      setQueryDeleteTarget(null)
-      await refreshSavedQueries()
-      showBanner('success', `Deleted “${target.name}”.`)
-    } catch (error) {
-      showBanner('error', error.message)
-    } finally {
-      setQueryBusy(false)
-    }
-  }, [queryDeleteTarget, refreshSavedQueries, showBanner, updateTab])
+    if (screen !== 'connections') return
+    setSavedQueriesOpen(false)
+    setSaveQueryDialog(null)
+    setQueryRenameTarget(null)
+    setQueryDeleteTarget(null)
+    handleCloseHistory()
+  }, [
+    screen,
+    handleCloseHistory,
+    setQueryDeleteTarget,
+    setQueryRenameTarget,
+    setSaveQueryDialog,
+    setSavedQueriesOpen,
+  ])
 
   const loadRelations = useCallback(
     async (tabId, table) => {
@@ -1721,122 +1395,6 @@ export default function App() {
     [activeSession, openDesignTab, showBanner, updateTab],
   )
 
-  const handleRenameTable = useCallback((table) => {
-    setTablePrompt({ kind: 'rename', table })
-  }, [])
-
-  const handleTogglePin = useCallback((table) => {
-    const key = `${table.schema}.${table.name}`
-    setPinnedTables((prev) => (prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]))
-  }, [])
-
-  const handleCloneTable = useCallback(
-    async (table) => {
-      const current = activeSession()
-      if (!current) {
-        showBanner('warn', 'Open a connection before cloning a table.')
-        return
-      }
-      if (!current.activeDatabase) {
-        showBanner('warn', 'Select a database before cloning a table.')
-        return
-      }
-
-      try {
-        const structure = await api.tableStructure(
-          current.connectionId,
-          current.activeDatabase,
-          table.schema,
-          table.name,
-        )
-        const copyName = `${table.name}_copy`
-        const sql = generateCreateTable(cloneDesign(structure, copyName))
-        openTab(current.connectionId, copyName, sql)
-        patchSession(current.connectionId, { selectedTable: `${structure.schema}.${copyName}` })
-      } catch (error) {
-        showBanner('error', error.message)
-      }
-    },
-    [activeSession, openTab, patchSession, showBanner],
-  )
-
-  const handleTruncateTable = useCallback((table) => {
-    setTablePrompt({ kind: 'truncate', table })
-  }, [])
-
-  const handleDropTable = useCallback((table) => {
-    setDropTarget(table)
-  }, [])
-
-  const handleTablePromptConfirm = useCallback(
-    async (value) => {
-      const current = activeSession()
-      const prompt = tablePrompt
-      if (!current || !prompt || !current.activeDatabase) return
-
-      const table = prompt.table
-      if (prompt.kind === 'truncate' && value !== table.name) {
-        showBanner('warn', `Type “${table.name}” to confirm the truncate.`)
-        return
-      }
-
-      const statement =
-        prompt.kind === 'rename'
-          ? `EXEC sp_rename N'${qualifiedName(table)}', N'${value.replace(/'/g, "''")}';`
-          : `TRUNCATE TABLE ${qualifiedName(table)};`
-
-      setTableBusy(true)
-      try {
-        await api.runQuery({
-          connectionId: current.connectionId,
-          database: current.activeDatabase,
-          sql: statement,
-        })
-        const nextName = prompt.kind === 'rename' ? value : table.name
-        showBanner('success', prompt.kind === 'rename' ? `Renamed to ${value}.` : `Truncated ${table.name}.`)
-        patchSession(current.connectionId, { selectedTable: `${table.schema}.${nextName}` })
-        if (prompt.kind === 'rename') {
-          const previousKey = `${table.schema}.${table.name}`
-          setPinnedTables((prev) =>
-            prev.map((item) => (item === previousKey ? `${table.schema}.${value}` : item)),
-          )
-        }
-        setTablePrompt(null)
-        await loadTables(current.connectionId, current.activeDatabase)
-        await loadColumns(current.connectionId, current.activeDatabase)
-      } catch (error) {
-        showBanner('error', error.message)
-      } finally {
-        setTableBusy(false)
-      }
-    },
-    [activeSession, loadTables, loadColumns, patchSession, showBanner, tablePrompt],
-  )
-
-  const handleDropConfirm = useCallback(async () => {
-    const current = activeSession()
-    if (!current || !dropTarget || !current.activeDatabase) return
-
-    setTableBusy(true)
-    try {
-      await api.runQuery({
-        connectionId: current.connectionId,
-        database: current.activeDatabase,
-        sql: `DROP TABLE ${qualifiedName(dropTarget)};`,
-      })
-      showBanner('success', `Dropped ${dropTarget.schema}.${dropTarget.name}.`)
-      patchSession(current.connectionId, { selectedTable: null })
-      setPinnedTables((prev) => prev.filter((item) => item !== `${dropTarget.schema}.${dropTarget.name}`))
-      setDropTarget(null)
-      await loadTables(current.connectionId, current.activeDatabase)
-      await loadColumns(current.connectionId, current.activeDatabase)
-    } catch (error) {
-      showBanner('error', error.message)
-    } finally {
-      setTableBusy(false)
-    }
-  }, [activeSession, dropTarget, loadTables, loadColumns, patchSession, showBanner])
-
   const handleDesignGenerate = useCallback(
     (sql) => {
       const current = activeSession()
@@ -2214,147 +1772,38 @@ export default function App() {
     [activeSession, handleSelectTab],
   )
 
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (event.key === 'F1') {
-        event.preventDefault()
-        setShortcutsOpen((value) => !value)
-        return
-      }
+  const hasDialog =
+    Boolean(dialog) ||
+    Boolean(tablePrompt) ||
+    Boolean(dropTarget) ||
+    Boolean(deleteTarget) ||
+    Boolean(databaseDrop) ||
+    databaseUsersOpen ||
+    Boolean(runGuard) ||
+    Boolean(saveQueryDialog) ||
+    Boolean(queryRenameTarget) ||
+    Boolean(queryDeleteTarget) ||
+    savedQueriesOpen ||
+    history.open ||
+    shortcutsOpen ||
+    settingsOpen
 
-      const target = event.target
-      const inEditor = Boolean(target?.closest?.('.monaco-editor'))
-      const tagName = target?.tagName
-      const isFormField =
-        !inEditor &&
-        (tagName === 'INPUT' ||
-          tagName === 'TEXTAREA' ||
-          tagName === 'SELECT' ||
-          Boolean(target?.isContentEditable))
-      const hasDialog =
-        Boolean(dialog) ||
-        Boolean(tablePrompt) ||
-        Boolean(dropTarget) ||
-        Boolean(deleteTarget) ||
-        Boolean(databaseDrop) ||
-        databaseUsersOpen ||
-        Boolean(runGuard) ||
-        Boolean(saveQueryDialog) ||
-        Boolean(queryRenameTarget) ||
-        Boolean(queryDeleteTarget) ||
-        savedQueriesOpen ||
-        history.open ||
-        shortcutsOpen ||
-        settingsOpen
-
-      if (!event.ctrlKey && !event.metaKey) {
-        if (event.key === 'F5' && !hasDialog && !isFormField) {
-          event.preventDefault()
-          handleRun()
-        }
-        return
-      }
-
-      if (event.altKey) return
-
-      if (event.key === 'Enter') {
-        if (inEditor || hasDialog || isFormField) return
-        event.preventDefault()
-        handleRun()
-        return
-      }
-
-      if (isFormField || hasDialog) return
-
-      if (event.key.toLowerCase() === 's' && !event.shiftKey) {
-        event.preventDefault()
-        handleSaveQuery()
-        return
-      }
-
-      if (event.key.toLowerCase() === 'n' && !event.shiftKey) {
-        event.preventDefault()
-        setDialog({ mode: 'create' })
-        return
-      }
-
-      if (event.key.toLowerCase() === 'o' && !event.shiftKey) {
-        event.preventDefault()
-        openConnectionScreen()
-        return
-      }
-
-      if (event.key === ',') {
-        event.preventDefault()
-        setSettingsOpen(true)
-        return
-      }
-
-      if (screen !== 'workspace') return
-
-      const key = event.key.toLowerCase()
-
-      if (key === 'w') {
-        event.preventDefault()
-        handleCloseActiveTab()
-        return
-      }
-
-      if (key === 't') {
-        event.preventDefault()
-        handleNewTab()
-        return
-      }
-
-      if (key === 'r') {
-        event.preventDefault()
-        handleReRun()
-        return
-      }
-
-      if (event.key === 'Tab') {
-        event.preventDefault()
-        handleCycleTab(event.shiftKey ? -1 : 1)
-        return
-      }
-
-      if (/^[1-9]$/.test(event.key)) {
-        event.preventDefault()
-        handleSelectTabIndex(Number(event.key) - 1)
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [
-    deleteTarget,
-    dialog,
-    dropTarget,
-    databaseDrop,
-    databaseUsersOpen,
-    handleCloseActiveTab,
-    handleCycleTab,
-    handleNewTab,
-    handleReRun,
+  useKeyboardShortcuts({
+    screen,
+    hasDialog,
+    shortcutsOpen,
+    setShortcutsOpen,
+    setSettingsOpen,
+    setDialog,
     handleRun,
     handleSaveQuery,
-    handleEditConfirmApply,
-    handleEditConfirmClose,
-    handleEditConfirmCopy,
-    handleEditConfirmDiscard,
-    handleSelectTabIndex,
     openConnectionScreen,
-    queryDeleteTarget,
-    queryRenameTarget,
-    runGuard,
-    saveQueryDialog,
-    savedQueriesOpen,
-    history.open,
-    screen,
-    settingsOpen,
-    shortcutsOpen,
-    tablePrompt,
-  ])
+    handleCloseActiveTab,
+    handleNewTab,
+    handleReRun,
+    handleCycleTab,
+    handleSelectTabIndex,
+  })
 
   const session = activeConnectionId ? sessions[activeConnectionId] || null : null
   const completionCatalog = useMemo(
@@ -2606,7 +2055,7 @@ export default function App() {
         onOpen={handleOpenHistoryItem}
         onDelete={handleDeleteHistoryItem}
         onClear={handleClearHistory}
-        onClose={() => setHistory((prev) => ({ ...prev, open: false }))}
+        onClose={handleCloseHistory}
       />
 
       <SaveQueryDialog

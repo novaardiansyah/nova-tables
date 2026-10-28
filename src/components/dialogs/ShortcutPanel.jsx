@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import Icon from './Icon.jsx'
+import Icon from '../common/Icon.jsx'
 
 const GROUPS = [
   {

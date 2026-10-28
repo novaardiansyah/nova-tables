@@ -1,4 +1,4 @@
-import { environmentById } from '../environments.js'
+import { environmentById } from '../../environments.js'
 
 const TONE_CLASSES = {
   success: 'bg-success/10 text-success',

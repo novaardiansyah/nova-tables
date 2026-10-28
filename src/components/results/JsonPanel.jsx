@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import Icon from './Icon.jsx'
+import Icon from '../common/Icon.jsx'
 import JsonView from './JsonView.jsx'
 
 export const JSON_PANEL_DEFAULT_WIDTH = 360

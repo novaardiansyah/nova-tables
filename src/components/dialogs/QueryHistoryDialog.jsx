@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import Icon, { Spinner } from './Icon.jsx'
+import Icon, { Spinner } from '../common/Icon.jsx'
 
 function preview(sql) {
   const line = String(sql || '').replace(/\s+/g, ' ').trim()

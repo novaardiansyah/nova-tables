@@ -1,12 +1,28 @@
-import { app, safeStorage } from 'electron'
+import { app } from 'electron'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import sqlite from 'node-sqlite3-wasm'
+import {
+  decryptImportPayload,
+  decryptPassword,
+  encryptExportPayload,
+  encryptPassword,
+} from './cryptoStore.js'
+import {
+  byName,
+  folderSubtreeIds,
+  normalizeOrder,
+  ORDER_META_KEY,
+  orderRank,
+  readMeta,
+  readOrder,
+  removeTreeOrderEntries,
+  writeMeta,
+} from './treeOrder.js'
 
 const SCHEMA_VERSION = 2
 const SYSTEM_DATABASES = ['master', 'model', 'msdb', 'tempdb']
-const ORDER_META_KEY = 'tree_order'
 const MAX_FOLDER_DEPTH = 8
 const ENVIRONMENTS = ['local', 'staging', 'production']
 const { Database } = sqlite
@@ -18,25 +34,6 @@ const sessionPasswords = new Map()
 function getDbFile() {
   if (!dbFile) dbFile = path.join(app.getPath('userData'), 'nova-tables.db')
   return dbFile
-}
-
-function encryptPassword(plain) {
-  if (!plain) return null
-  try {
-    if (!safeStorage.isEncryptionAvailable()) return null
-    return safeStorage.encryptString(plain).toString('base64')
-  } catch {
-    return null
-  }
-}
-
-function decryptPassword(cipher) {
-  if (!cipher) return null
-  try {
-    return safeStorage.decryptString(Buffer.from(cipher, 'base64'))
-  } catch {
-    return null
-  }
 }
 
 function createSchema(handle) {
@@ -109,57 +106,6 @@ function ensureSchema(handle) {
   } catch {
     handle.run("ALTER TABLE connections ADD COLUMN environment TEXT NOT NULL DEFAULT ''")
   }
-}
-
-function readMeta(handle, key) {
-  const row = handle.get('SELECT value FROM meta WHERE key = ?', key)
-  return row ? row.value : null
-}
-
-function writeMeta(handle, key, value) {
-  handle.run('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', [
-    key,
-    String(value),
-  ])
-}
-
-function byName(left, right) {
-  return String(left.name).localeCompare(String(right.name))
-}
-
-function readOrder(handle) {
-  const raw = readMeta(handle, ORDER_META_KEY)
-  if (!raw) return { connections: [], folders: [] }
-  try {
-    const parsed = JSON.parse(raw)
-    return {
-      connections: Array.isArray(parsed.connections) ? parsed.connections.map(String) : [],
-      folders: Array.isArray(parsed.folders) ? parsed.folders.map(String) : [],
-    }
-  } catch {
-    return { connections: [], folders: [] }
-  }
-}
-
-function orderRank(handle, key) {
-  const order = readOrder(handle)[key]
-  return new Map(order.map((id, index) => [id, index]))
-}
-
-function normalizeOrder(handle, table, ids) {
-  const rows = handle.all(`SELECT id, name FROM ${table}`)
-  const known = new Set(rows.map((row) => row.id))
-  const ordered = []
-  for (const id of Array.isArray(ids) ? ids : []) {
-    const key = String(id)
-    if (!known.has(key) || ordered.includes(key)) continue
-    ordered.push(key)
-  }
-  const rest = rows
-    .filter((row) => !ordered.includes(row.id))
-    .sort((left, right) => String(left.name).localeCompare(String(right.name)))
-    .map((row) => row.id)
-  return [...ordered, ...rest]
 }
 
 function restrictPermissions(file) {
@@ -368,13 +314,6 @@ export function deleteConnection(id) {
   return deleteConnections([id]).length > 0
 }
 
-function removeTreeOrderEntries(handle, connectionIds, folderIds) {
-  const order = readOrder(handle)
-  const nextConnections = order.connections.filter((id) => !connectionIds.includes(id))
-  const nextFolders = order.folders.filter((id) => !folderIds.includes(id))
-  writeMeta(handle, ORDER_META_KEY, JSON.stringify({ connections: nextConnections, folders: nextFolders }))
-}
-
 export function deleteConnections(ids) {
   const handle = getDb()
   const requested = (Array.isArray(ids) ? ids : [ids]).map(String)
@@ -396,18 +335,6 @@ export function deleteConnections(ids) {
 
   for (const id of removed) sessionPasswords.delete(id)
   return removed
-}
-
-function folderSubtreeIds(handle, ids) {
-  const found = new Set()
-  const queue = [...ids]
-  while (queue.length > 0) {
-    const id = queue.shift()
-    if (found.has(id) || !folderExists(handle, id)) continue
-    found.add(id)
-    for (const row of handle.all('SELECT id FROM folders WHERE parent_id = ?', [id])) queue.push(row.id)
-  }
-  return found
 }
 
 export function deleteFolders(ids) {
@@ -437,83 +364,6 @@ export function deleteFolders(ids) {
 
   for (const id of connectionIds) sessionPasswords.delete(id)
   return { folderIds, connectionIds }
-}
-
-const EXPORT_KDF_ITERATIONS = 100000
-
-function encryptExportPayload(payload, password) {
-  const salt = crypto.randomBytes(16)
-  const iv = crypto.randomBytes(12)
-  const key = crypto.pbkdf2Sync(password, salt, EXPORT_KDF_ITERATIONS, 32, 'sha256')
-  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)
-  const raw = JSON.stringify(payload)
-  const encrypted = Buffer.concat([cipher.update(raw, 'utf8'), cipher.final()])
-  const tag = cipher.getAuthTag()
-
-  return JSON.stringify({
-    version: 1,
-    app: 'nova-tables',
-    kdf: 'pbkdf2',
-    algorithm: 'aes-256-gcm',
-    iterations: EXPORT_KDF_ITERATIONS,
-    salt: salt.toString('base64'),
-    iv: iv.toString('base64'),
-    tag: tag.toString('base64'),
-    data: encrypted.toString('base64'),
-  }, null, 2)
-}
-
-function decryptImportPayload(fileContent, password) {
-  let container
-  try {
-    container = typeof fileContent === 'string' ? JSON.parse(fileContent) : fileContent
-  } catch {
-    const error = new Error('File is not a valid JSON document')
-    error.code = 'INVALID_FORMAT'
-    throw error
-  }
-
-  if (!container?.salt || !container?.iv || !container?.tag || !container?.data) {
-    const error = new Error('Invalid or unrecognized export file format')
-    error.code = 'INVALID_FORMAT'
-    throw error
-  }
-
-  const salt = Buffer.from(container.salt, 'base64')
-  const iv = Buffer.from(container.iv, 'base64')
-  const tag = Buffer.from(container.tag, 'base64')
-  const data = Buffer.from(container.data, 'base64')
-  const iterations = Number(container.iterations) || EXPORT_KDF_ITERATIONS
-
-  const key = crypto.pbkdf2Sync(password, salt, iterations, 32, 'sha256')
-  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv)
-  decipher.setAuthTag(tag)
-
-  let decrypted
-  try {
-    decrypted = Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8')
-  } catch {
-    const error = new Error('Incorrect password or corrupted file')
-    error.code = 'INVALID_PASSWORD'
-    throw error
-  }
-
-  let parsed
-  try {
-    parsed = JSON.parse(decrypted)
-  } catch {
-    const error = new Error('Decrypted content is not valid JSON')
-    error.code = 'INVALID_FORMAT'
-    throw error
-  }
-
-  if (!parsed || !Array.isArray(parsed.connections)) {
-    const error = new Error('No connections found in export file')
-    error.code = 'INVALID_FORMAT'
-    throw error
-  }
-
-  return parsed
 }
 
 function exportFolderChain(folderId, folderById) {

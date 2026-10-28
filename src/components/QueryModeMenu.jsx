@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import Icon from './Icon.jsx'
+import Icon from './common/Icon.jsx'
 import { EXECUTION_MODES, getModeById } from '../queryModes.js'
 
 const TONE_CLASS = {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import ContextMenu from './ContextMenu.jsx'
-import Icon, { BrandMark, Spinner } from './Icon.jsx'
+import ContextMenu from './common/ContextMenu.jsx'
+import Icon, { BrandMark, Spinner } from './common/Icon.jsx'
 
 export const SIDEBAR_DEFAULT_WIDTH = 272
 const SIDEBAR_MIN_WIDTH = 200

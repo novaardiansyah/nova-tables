@@ -27,12 +27,9 @@ import {
 } from './connectionStore.js'
 import {
   connect,
-  createDatabaseUser,
   describeResult,
   disconnectConnection,
   dropDatabase,
-  dropDatabaseUser,
-  listDatabaseUsers,
   listDatabases,
   listColumns,
   listModules,
@@ -43,8 +40,13 @@ import {
   tableRelations,
   tableStructure,
   testConnection,
-  updateDatabaseUserRoles,
 } from './sqlServer.js'
+import {
+  createDatabaseUser,
+  dropDatabaseUser,
+  listDatabaseUsers,
+  updateDatabaseUserRoles,
+} from './databaseUsers.js'
 import { toErrorPayload } from './serialize.js'
 
 const ok = (data) => ({ ok: true, ...(data || {}) })

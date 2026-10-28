@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import EnvironmentBadge from './EnvironmentBadge.jsx'
-import Icon from './Icon.jsx'
+import EnvironmentBadge from '../common/EnvironmentBadge.jsx'
+import Icon from '../common/Icon.jsx'
 
 function byName(left, right) {
   return String(left.name).localeCompare(String(right.name))

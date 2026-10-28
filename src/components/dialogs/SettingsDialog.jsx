@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import Icon, { Spinner } from './Icon.jsx'
-import Select from './Select.jsx'
+import Icon, { Spinner } from '../common/Icon.jsx'
+import Select from '../common/Select.jsx'
 import {
   APP_FONT_SIZE_MAX,
   DEFAULT_SETTINGS,
@@ -11,7 +11,7 @@ import {
   TIMEZONES,
   applySettings,
   normalizeSettings,
-} from '../settings.js'
+} from '../../settings.js'
 
 const THEME_OPTIONS = THEMES.map((theme) => ({ value: theme.id, label: theme.label }))
 

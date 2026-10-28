@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import Icon from './Icon.jsx'
-import Select from './Select.jsx'
+import Icon from '../common/Icon.jsx'
+import Select from '../common/Select.jsx'
 import {
   FILTER_LOGICS,
   FILTER_OPERATORS,
   buildFilterWhere,
   filterOperatorById,
-} from '../filters.js'
+} from '../../filters.js'
 
 const LOGIC_OPTIONS = FILTER_LOGICS.map((item) => ({ value: item.id, label: item.label }))
 const OPERATOR_OPTIONS = FILTER_OPERATORS.map((item) => ({ value: item.id, label: item.label }))

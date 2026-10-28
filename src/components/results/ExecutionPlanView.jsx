@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import Icon from './Icon.jsx'
+import Icon from '../common/Icon.jsx'
 
 function OperatorCard({ node, selected, onSelect }) {
   const isSelected = selected?.nodeId === node.nodeId

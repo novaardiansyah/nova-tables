@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { monaco } from '../monaco.js'
-import ConfirmDialog from './ConfirmDialog.jsx'
+import { monaco } from '../../monaco.js'
+import ConfirmDialog from '../common/ConfirmDialog.jsx'
 
 export default function QueryGuardDialog({ open, sql, onCancel, onConfirm }) {
   const text = String(sql || '').trim()

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import Icon, { Spinner } from './Icon.jsx'
-import Select from './Select.jsx'
+import Icon, { Spinner } from '../common/Icon.jsx'
+import Select from '../common/Select.jsx'
 
 const EMPTY_STATE = { status: 'idle', users: [], roles: [], logins: [], error: null }
 

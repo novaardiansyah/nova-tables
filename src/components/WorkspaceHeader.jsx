@@ -1,6 +1,6 @@
-import Icon, { Spinner } from './Icon.jsx'
+import Icon, { Spinner } from './common/Icon.jsx'
 import QueryModeMenu from './QueryModeMenu.jsx'
-import Select from './Select.jsx'
+import Select from './common/Select.jsx'
 
 export default function WorkspaceHeader({
   session,

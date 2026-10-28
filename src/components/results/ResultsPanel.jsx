@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Icon, { Spinner } from './Icon.jsx'
-import ContextMenu from './ContextMenu.jsx'
+import Icon, { Spinner } from '../common/Icon.jsx'
+import ContextMenu from '../common/ContextMenu.jsx'
 import FilterDialog from './FilterDialog.jsx'
 import ResultGrid from './ResultGrid.jsx'
 import ValueInspectorDialog from './ValueInspectorDialog.jsx'
 import ExecutionPlanView from './ExecutionPlanView.jsx'
-import { cleanText, formatDuration, formatNumber, jsonRecords, sqlInsertRows } from '../resultFormats.js'
-import { editEditableColumns, editHasKeys } from '../edits.js'
+import { cleanText, formatDuration, formatNumber, jsonRecords, sqlInsertRows } from '../../resultFormats.js'
+import { editEditableColumns, editHasKeys } from '../../edits.js'
 
 const SPECIAL_OPTIONS = [
   { id: 'null', label: 'NULL', value: null },

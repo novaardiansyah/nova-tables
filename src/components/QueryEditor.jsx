@@ -3,7 +3,7 @@ import Editor from '@monaco-editor/react'
 import { editorThemeName } from '../monaco.js'
 import { setCompletionCatalog } from '../completions.js'
 import { queryFontOptions, subscribeSettings } from '../settings.js'
-import { Spinner } from './Icon.jsx'
+import { Spinner } from './common/Icon.jsx'
 
 const EDITOR_OPTIONS = {
   minimap: { enabled: false },
