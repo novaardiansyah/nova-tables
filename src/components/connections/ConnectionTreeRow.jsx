@@ -8,6 +8,7 @@ export function ConnectionRow({
   depth,
   connectingId,
   openIds,
+  isLastConnected = false,
   selectedConnectionIds,
   selectedCount,
   drag,
@@ -82,9 +83,22 @@ export function ConnectionRow({
               <span className="truncate text-[length:var(--app-text-12)] text-text">{connection.name}</span>
               <span className="flex shrink-0 items-center gap-1.5">
                 <EnvironmentBadge environment={connection.environment} />
+                {isLastConnected ? (
+                  <span
+                    title="Last connected session"
+                    className="flex shrink-0 items-center gap-1 rounded-full bg-accent/10 px-1.5 py-px text-[length:var(--app-text-9)] font-medium leading-[calc(var(--app-text-9)+4px)] text-accent"
+                  >
+                    <span className="h-1 w-1 rounded-full bg-current" />
+                    Recent
+                  </span>
+                ) : null}
                 {isOpen ? (
-                  <span className="shrink-0 rounded border border-success/30 bg-success/10 px-1 text-[length:var(--app-text-9)] font-semibold uppercase tracking-wide text-success">
-                    open
+                  <span
+                    title="Session is open"
+                    className="flex shrink-0 items-center gap-1 rounded-full bg-success/10 px-1.5 py-px text-[length:var(--app-text-9)] font-medium leading-[calc(var(--app-text-9)+4px)] text-success"
+                  >
+                    <span className="h-1 w-1 rounded-full bg-current" />
+                    Open
                   </span>
                 ) : null}
               </span>

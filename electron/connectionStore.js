@@ -65,6 +65,7 @@ function createSchema(handle) {
       encrypt INTEGER NOT NULL DEFAULT 1,
       trust_server_certificate INTEGER NOT NULL DEFAULT 1,
       password_cipher TEXT,
+      last_connected_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -106,6 +107,11 @@ function ensureSchema(handle) {
   } catch {
     handle.run("ALTER TABLE connections ADD COLUMN environment TEXT NOT NULL DEFAULT ''")
   }
+  try {
+    handle.get('SELECT last_connected_at FROM connections LIMIT 1')
+  } catch {
+    handle.run('ALTER TABLE connections ADD COLUMN last_connected_at TEXT')
+  }
 }
 
 function restrictPermissions(file) {
@@ -145,6 +151,7 @@ function toConnection(row) {
     encrypt: row.encrypt !== 0,
     trustServerCertificate: row.trust_server_certificate !== 0,
     passwordCipher: row.password_cipher ?? null,
+    lastConnectedAt: row.last_connected_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -163,6 +170,7 @@ function toPublic(row) {
     encrypt: row.encrypt !== false,
     trustServerCertificate: row.trustServerCertificate !== false,
     hasPassword: Boolean(row.passwordCipher) || sessionPasswords.has(row.id),
+    lastConnectedAt: row.lastConnectedAt ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }
@@ -249,6 +257,26 @@ export function setPassword(id, plain) {
   ])
 }
 
+export function recordLastConnected(id) {
+  const handle = getDb()
+  const now = new Date().toISOString()
+  handle.run('UPDATE connections SET last_connected_at = ? WHERE id = ?', [now, id])
+  writeMeta(handle, 'last_connected_id', id)
+}
+
+export function getLastConnectedId() {
+  const handle = getDb()
+  const metaId = readMeta(handle, 'last_connected_id')
+  if (metaId) {
+    const exists = handle.get('SELECT 1 FROM connections WHERE id = ?', metaId)
+    if (exists) return metaId
+  }
+  const row = handle.get(
+    'SELECT id FROM connections WHERE last_connected_at IS NOT NULL ORDER BY last_connected_at DESC LIMIT 1',
+  )
+  return row ? row.id : null
+}
+
 export function hasStoredPassword(id) {
   const connection = readConnection(id)
   if (!connection) return false
@@ -288,8 +316,8 @@ export function saveConnection(input = {}) {
   handle.run(
     `INSERT INTO connections (
       id, name, host, port, username, database_name, folder_id, environment,
-      encrypt, trust_server_certificate, password_cipher, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      encrypt, trust_server_certificate, password_cipher, last_connected_at, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       fields.name,
@@ -301,6 +329,7 @@ export function saveConnection(input = {}) {
       fields.environment,
       fields.encrypt ? 1 : 0,
       fields.trustServerCertificate ? 1 : 0,
+      null,
       null,
       now,
       now,
@@ -327,6 +356,10 @@ export function deleteConnections(ids) {
       removed.push(id)
     }
     if (removed.length > 0) removeTreeOrderEntries(handle, removed, [])
+    const lastId = readMeta(handle, 'last_connected_id')
+    if (lastId && removed.includes(lastId)) {
+      writeMeta(handle, 'last_connected_id', '')
+    }
     handle.exec('COMMIT')
   } catch (error) {
     handle.exec('ROLLBACK')
@@ -356,6 +389,10 @@ export function deleteFolders(ids) {
     }
     handle.run(`DELETE FROM folders WHERE id IN (${folderMarks})`, folderIds)
     removeTreeOrderEntries(handle, connectionIds, folderIds)
+    const lastId = readMeta(handle, 'last_connected_id')
+    if (lastId && connectionIds.includes(lastId)) {
+      writeMeta(handle, 'last_connected_id', '')
+    }
     handle.exec('COMMIT')
   } catch (error) {
     handle.exec('ROLLBACK')

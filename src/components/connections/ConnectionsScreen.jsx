@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
 import ContextMenu from '../common/ContextMenu.jsx'
+import EnvironmentBadge from '../common/EnvironmentBadge.jsx'
 import ExportConnectionsDialog from './ExportConnectionsDialog.jsx'
-import Icon, { BrandMark } from '../common/Icon.jsx'
+import Icon, { BrandMark, Spinner } from '../common/Icon.jsx'
 import ImportConnectionsDialog from './ImportConnectionsDialog.jsx'
 import PromptDialog from '../common/PromptDialog.jsx'
 import { api } from '../../api.js'
@@ -14,12 +15,28 @@ import {
 } from './connectionTreeUtils.js'
 import { ConnectionRow, FolderRow } from './ConnectionTreeRow.jsx'
 
+function formatRelativeTime(dateString) {
+  if (!dateString) return null
+  const date = new Date(dateString)
+  if (Number.isNaN(date.getTime())) return null
+  const seconds = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000))
+  if (seconds < 60) return 'Just now'
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.round(hours / 24)
+  if (days < 30) return `${days}d ago`
+  return date.toLocaleDateString()
+}
+
 export default function ConnectionsScreen({
   connections,
   folders,
   openIds,
   connectingId,
   appVersion,
+  lastConnectedId,
   onOpen,
   onNewConnection,
   onEditConnection,
@@ -51,6 +68,34 @@ export default function ConnectionsScreen({
   const [bulkDelete, setBulkDelete] = useState(null)
   const [bulkBusy, setBulkBusy] = useState(false)
   const [actionMoveMenu, setActionMoveMenu] = useState(null)
+  const [viewTab, setViewTab] = useState('all')
+
+  const effectiveLastConnectedId = useMemo(() => {
+    if (lastConnectedId && connections.some((c) => c.id === lastConnectedId)) {
+      return lastConnectedId
+    }
+    const withTimestamp = connections
+      .filter((c) => c.lastConnectedAt)
+      .sort((a, b) => b.lastConnectedAt.localeCompare(a.lastConnectedAt))
+    return withTimestamp[0]?.id || null
+  }, [connections, lastConnectedId])
+
+  const lastConnection = useMemo(() => {
+    if (!effectiveLastConnectedId) return null
+    return connections.find((c) => c.id === effectiveLastConnectedId) || null
+  }, [connections, effectiveLastConnectedId])
+
+  const recentConnections = useMemo(() => {
+    return connections
+      .filter((c) => c.lastConnectedAt || c.id === effectiveLastConnectedId)
+      .sort((a, b) => {
+        if (a.id === effectiveLastConnectedId) return -1
+        if (b.id === effectiveLastConnectedId) return 1
+        const timeA = a.lastConnectedAt ? new Date(a.lastConnectedAt).getTime() : 0
+        const timeB = b.lastConnectedAt ? new Date(b.lastConnectedAt).getTime() : 0
+        return timeB - timeA
+      })
+  }, [connections, effectiveLastConnectedId])
 
   const flatFolders = useMemo(() => folderTree(folders), [folders])
   const connectionOrder = useMemo(() => connections.map((item) => item.id), [connections])
@@ -563,6 +608,7 @@ export default function ConnectionsScreen({
       depth={depth}
       connectingId={connectingId}
       openIds={openIds}
+      isLastConnected={connection.id === effectiveLastConnectedId}
       selectedConnectionIds={selectedConnectionIds}
       selectedCount={selectedCount}
       drag={drag}
@@ -663,30 +709,64 @@ export default function ConnectionsScreen({
         onDrop={handleRootDrop}
       >
         <div className="mx-auto w-full max-w-3xl">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex items-center justify-between gap-4">
             <div>
               <h1 className="text-[length:var(--app-text-15)] font-semibold text-text-strong">Connections</h1>
               <p className="mt-0.5 text-[length:var(--app-text-11)] text-text-muted">
                 {connections.length} saved · Click to open, drag handle to organize
               </p>
             </div>
-            {folders.length > 0 ? (
-              <div className="flex items-center gap-1 text-[length:var(--app-text-11)] text-text-faint">
-                <button
-                  type="button"
-                  onClick={() => setOpenFolders(new Set(folders.map((f) => f.id)))}
-                  className="rounded px-1.5 py-0.5 hover:bg-panel hover:text-text"
-                >
-                  Expand all
-                </button>
-                <span>·</span>
-                <button
-                  type="button"
-                  onClick={() => setOpenFolders(new Set())}
-                  className="rounded px-1.5 py-0.5 hover:bg-panel hover:text-text"
-                >
-                  Collapse all
-                </button>
+            {!isEmpty ? (
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setViewTab('all')}
+                    className={`rounded-md px-2.5 py-1 text-[length:var(--app-text-11)] font-medium transition-colors ${
+                      viewTab === 'all'
+                        ? 'bg-panel text-text-strong shadow-sm'
+                        : 'text-text-muted hover:text-text'
+                    }`}
+                  >
+                    All ({connections.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewTab('recent')}
+                    className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[length:var(--app-text-11)] font-medium transition-colors ${
+                      viewTab === 'recent'
+                        ? 'bg-panel text-text-strong shadow-sm'
+                        : 'text-text-muted hover:text-text'
+                    }`}
+                  >
+                    Recent
+                    {recentConnections.length > 0 ? (
+                      <span className="rounded-full bg-accent/15 px-1.5 py-0.5 text-[length:var(--app-text-9)] font-semibold text-accent">
+                        {recentConnections.length}
+                      </span>
+                    ) : null}
+                  </button>
+                </div>
+
+                {viewTab === 'all' && folders.length > 0 ? (
+                  <div className="flex items-center gap-1 text-[length:var(--app-text-11)] text-text-faint">
+                    <button
+                      type="button"
+                      onClick={() => setOpenFolders(new Set(folders.map((f) => f.id)))}
+                      className="rounded px-1.5 py-0.5 hover:bg-panel hover:text-text"
+                    >
+                      Expand all
+                    </button>
+                    <span>·</span>
+                    <button
+                      type="button"
+                      onClick={() => setOpenFolders(new Set())}
+                      className="rounded px-1.5 py-0.5 hover:bg-panel hover:text-text"
+                    >
+                      Collapse all
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -705,17 +785,183 @@ export default function ConnectionsScreen({
                 New connection
               </button>
             </div>
-          ) : (
-            <div
-              className={`rounded-xl border border-line bg-panel p-2 transition-colors ${
-                dropTarget?.kind === 'root' ? 'ring-2 ring-accent' : ''
-              }`}
-            >
-              <div className="space-y-px">
-                {rootConnections.map((conn) => renderConnectionItem(conn, 0))}
-                {rootFolders.map((folder) => renderFolderItem(folder, 0))}
+          ) : viewTab === 'recent' ? (
+            recentConnections.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-line-strong py-16 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-tint/[0.04] text-text-faint">
+                  <Icon name="history" size={24} />
+                </div>
+                <p className="mt-3 text-[length:var(--app-text-13)] font-medium text-text">No recent connections</p>
+                <p className="mt-1 max-w-sm text-[length:var(--app-text-11)] leading-[calc(var(--app-text-12)+6px)] text-text-muted">
+                  Connect to a Microsoft SQL Server database to see your session history here.
+                </p>
+                <button type="button" className="btn-soft mt-4" onClick={() => setViewTab('all')}>
+                  View all connections
+                </button>
               </div>
-            </div>
+            ) : (
+              <div className="rounded-xl border border-line bg-panel p-2">
+                <div className="space-y-px">
+                  {recentConnections.map((conn) => {
+                    const isConnecting = connectingId === conn.id
+                    const isOpen = openIds.includes(conn.id)
+                    const isSelected = selectedConnectionIds.has(conn.id)
+                    return (
+                      <div
+                        key={conn.id}
+                        className={`group/row flex items-center gap-2 rounded-md px-2.5 py-2 transition-colors ${
+                          isSelected ? 'bg-accent/[0.08]' : 'hover:bg-tint/[0.04]'
+                        }`}
+                        onContextMenu={(event) => openRowMenu(event, 'connection', conn)}
+                      >
+                        <button
+                          type="button"
+                          disabled={isConnecting}
+                          onClick={(event) => {
+                            if (applyModifierClick(event, 'connection', conn.id)) return
+                            onOpen(conn)
+                          }}
+                          className="flex min-w-0 flex-1 items-center gap-2.5 text-left disabled:opacity-70"
+                          title={
+                            isOpen
+                              ? `Switch to ${conn.name}`
+                              : `Connect to ${conn.name} (${conn.host}:${conn.port})`
+                          }
+                        >
+                          {isConnecting ? (
+                            <Spinner size={12} className="shrink-0 text-accent" />
+                          ) : (
+                            <span
+                              className={`h-[7px] w-[7px] shrink-0 rounded-full ${
+                                isOpen ? 'bg-success shadow-[0_0_6px_rgba(52,211,153,0.6)]' : 'bg-line-strong'
+                              }`}
+                            />
+                          )}
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-2">
+                              <span className="truncate text-[length:var(--app-text-12)] font-medium text-text">
+                                {conn.name}
+                              </span>
+                              <span className="flex shrink-0 items-center gap-1.5">
+                                <EnvironmentBadge environment={conn.environment} />
+                                {isOpen ? (
+                                  <span
+                                    title="Session is open"
+                                    className="flex shrink-0 items-center gap-1 rounded-full bg-success/10 px-1.5 py-px text-[length:var(--app-text-9)] font-medium leading-[calc(var(--app-text-9)+4px)] text-success"
+                                  >
+                                    <span className="h-1 w-1 rounded-full bg-current" />
+                                    Open
+                                  </span>
+                                ) : null}
+                              </span>
+                            </span>
+                            <span className="block truncate text-[length:var(--app-text-10)] leading-[calc(var(--app-text-12)+4px)] text-text-faint">
+                              {conn.host}:{conn.port}
+                              {conn.database ? ` · ${conn.database}` : ''}
+                              {conn.lastConnectedAt ? ` · ${formatRelativeTime(conn.lastConnectedAt)}` : ''}
+                            </span>
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn-soft h-7 shrink-0 px-2.5 text-[length:var(--app-text-11)]"
+                          disabled={isConnecting}
+                          onClick={() => onOpen(conn)}
+                        >
+                          {isConnecting ? (
+                            <Spinner size={12} />
+                          ) : (
+                            <Icon name={isOpen ? 'chevron-right' : 'play'} size={12} />
+                          )}
+                          {isOpen ? 'Open' : 'Connect'}
+                        </button>
+
+                        <button
+                          type="button"
+                          className={`icon-btn h-6 w-6 shrink-0 transition-opacity ${
+                            menu?.kind === 'connection' && menu.item.id === conn.id
+                              ? 'opacity-100'
+                              : 'opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100'
+                          }`}
+                          title="Connection actions"
+                          aria-label={`Actions for ${conn.name}`}
+                          onClick={(event) => openRowMenu(event, 'connection', conn)}
+                        >
+                          <Icon name="more-horizontal" size={13} />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          ) : (
+            <>
+              {lastConnection ? (
+                <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-line bg-panel p-3.5 transition-colors">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
+                      <Icon name="history" size={17} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="flex shrink-0 items-center gap-1 rounded-full bg-accent/10 px-1.5 py-px text-[length:var(--app-text-9)] font-medium leading-[calc(var(--app-text-9)+4px)] text-accent">
+                          <span className="h-1 w-1 rounded-full bg-current" />
+                          Recent connection
+                        </span>
+                        <EnvironmentBadge environment={lastConnection.environment} />
+                        {lastConnection.lastConnectedAt ? (
+                          <span className="text-[length:var(--app-text-10)] text-text-faint">
+                            · {formatRelativeTime(lastConnection.lastConnectedAt)}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="truncate text-[length:var(--app-text-13)] font-semibold text-text-strong">
+                          {lastConnection.name}
+                        </span>
+                        <span className="truncate text-[length:var(--app-text-11)] text-text-muted">
+                          {lastConnection.host}:{lastConnection.port}
+                          {lastConnection.database ? ` · ${lastConnection.database}` : ''}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-primary shrink-0"
+                    disabled={connectingId === lastConnection.id}
+                    onClick={() => onOpen(lastConnection)}
+                    title={
+                      openIds.includes(lastConnection.id)
+                        ? `Switch to ${lastConnection.name}`
+                        : `Quick connect to ${lastConnection.name}`
+                    }
+                  >
+                    {connectingId === lastConnection.id ? (
+                      <Spinner size={13} />
+                    ) : openIds.includes(lastConnection.id) ? (
+                      <Icon name="chevron-right" size={13} />
+                    ) : (
+                      <Icon name="play" size={13} />
+                    )}
+                    {openIds.includes(lastConnection.id) ? 'Open session' : 'Quick Connect'}
+                  </button>
+                </div>
+              ) : null}
+
+              <div
+                className={`rounded-xl border border-line bg-panel p-2 transition-colors ${
+                  dropTarget?.kind === 'root' ? 'ring-2 ring-accent' : ''
+                }`}
+              >
+                <div className="space-y-px">
+                  {rootConnections.map((conn) => renderConnectionItem(conn, 0))}
+                  {rootFolders.map((folder) => renderFolderItem(folder, 0))}
+                </div>
+              </div>
+            </>
           )}
         </div>
 

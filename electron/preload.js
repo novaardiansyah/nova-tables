@@ -9,6 +9,7 @@ function subscribe(channel, handler) {
 contextBridge.exposeInMainWorld('nova', {
   connections: {
     list: () => ipcRenderer.invoke('connections:list'),
+    lastConnected: () => ipcRenderer.invoke('connections:last-connected'),
     save: (input) => ipcRenderer.invoke('connections:save', input),
     remove: (id) => ipcRenderer.invoke('connections:delete', id),
     move: (input) => ipcRenderer.invoke('connections:move', input),

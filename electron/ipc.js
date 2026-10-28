@@ -11,6 +11,7 @@ import {
   deleteQueryHistoryItem,
   deleteSavedQuery,
   exportConnections,
+  getLastConnectedId,
   importConnections,
   listConnections,
   listFolders,
@@ -64,6 +65,8 @@ function handle(channel, handler) {
 
 export function registerIpcHandlers() {
   handle('connections:list', () => ({ connections: listConnections() }))
+
+  handle('connections:last-connected', () => ({ lastConnectedId: getLastConnectedId() }))
 
   handle('connections:save', (input) => ({ connection: saveConnection(input) }))
 

@@ -180,6 +180,7 @@ export default function App() {
   const [folders, setFolders] = useState([])
   const [sessions, setSessions] = useState({})
   const [activeConnectionId, setActiveConnectionId] = useState(null)
+  const [lastConnectedId, setLastConnectedId] = useState(null)
   const [screen, setScreen] = useState('connections')
   const [query, setQuery] = useState({ id: 0, value: STARTER_SQL })
   const [banner, setBanner] = useState(null)
@@ -306,6 +307,13 @@ export default function App() {
         if (!cancelled) setFolders(list)
       })
       .catch((error) => showBanner('error', error.message))
+
+    api
+      .getLastConnectedId()
+      .then((id) => {
+        if (!cancelled) setLastConnectedId(id)
+      })
+      .catch(() => {})
 
     api
       .appInfo()
@@ -442,6 +450,13 @@ export default function App() {
       try {
         const result = await api.connect({ id: connection.id })
         const database = pickDatabase(result.databases, result.database)
+
+        setLastConnectedId(connection.id)
+        setConnections((prev) =>
+          prev.map((c) =>
+            c.id === connection.id ? { ...c, lastConnectedAt: new Date().toISOString() } : c,
+          ),
+        )
 
         tabIdRef.current += 1
         const tab = createTab(`tab-${tabIdRef.current}`, queryTitle(1), STARTER_SQL)
@@ -1637,6 +1652,7 @@ export default function App() {
       const result = await api.deleteTree({ connectionIds, folderIds })
       setConnections(result.connections)
       setFolders(result.folders)
+      setLastConnectedId((prev) => (prev && result.connectionIds.includes(prev) ? null : prev))
       for (const id of result.connectionIds) {
         if (sessionsRef.current[id]) await closeSession(id)
       }
@@ -1709,12 +1725,14 @@ export default function App() {
 
   const handleReloadConnections = useCallback(async () => {
     try {
-      const [nextFolders, nextConnections] = await Promise.all([
+      const [nextFolders, nextConnections, nextLastId] = await Promise.all([
         api.listFolders(),
         api.listConnections(),
+        api.getLastConnectedId().catch(() => null),
       ])
       setFolders(nextFolders)
       setConnections(nextConnections)
+      if (nextLastId) setLastConnectedId(nextLastId)
     } catch (error) {
       showBanner('error', error.message)
     }
@@ -2008,6 +2026,7 @@ export default function App() {
           openIds={Object.keys(sessions)}
           connectingId={connectingId}
           appVersion={appVersion}
+          lastConnectedId={lastConnectedId}
           onOpen={handleConnect}
           onNewConnection={() => setDialog({ mode: 'create' })}
           onEditConnection={(connection) => setDialog({ mode: 'edit', connection })}

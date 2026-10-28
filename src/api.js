@@ -31,6 +31,9 @@ export const api = {
   listConnections: async () =>
     (await call(() => bridge().connections.list())).connections,
 
+  getLastConnectedId: async () =>
+    (await call(() => bridge().connections.lastConnected())).lastConnectedId,
+
   saveConnection: async (input) =>
     (await call(() => bridge().connections.save(input))).connection,
 

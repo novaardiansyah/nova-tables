@@ -5,6 +5,7 @@ import {
   setPassword,
   isSystemDatabase,
   readSettings,
+  recordLastConnected,
 } from './connectionStore.js'
 import { toPlainValue } from './serialize.js'
 
@@ -191,6 +192,7 @@ export async function connect({ id, password }) {
   const baseDatabase = connection.database || 'master'
   const pool = await createPool(connection, resolved, baseDatabase)
   runtimeConnections.set(id, { connection, password: resolved, pool })
+  recordLastConnected(id)
 
   let databases = []
   let info = { serverName: connection.host, productVersion: '', edition: '' }
