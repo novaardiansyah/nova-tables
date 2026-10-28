@@ -35,6 +35,7 @@ function buildConfig(connection, password, database) {
       trustServerCertificate: connection.trustServerCertificate !== false,
       enableArithAbort: true,
       appName: 'Nova Tables',
+      useUTC: false,
     },
   }
 }
