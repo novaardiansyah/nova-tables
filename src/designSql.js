@@ -126,8 +126,8 @@ export function generateAlterTable(original, design) {
     if (!draftOriginalNames.has(name)) droppedColumns.push(name)
   }
 
-  const originalPrimary = (original?.primaryKey ?? [])[0] ?? null
-  const originalPrimaryColumns = originalPrimary?.columns ?? []
+  const originalPrimaryColumns = original?.primaryKey ?? []
+  const originalPrimaryKeyName = original?.primaryKeyName ?? null
   const primaryChanged = !sameColumns(originalPrimaryColumns, design.primaryKey ?? [])
 
   const originalForeign = new Map((original?.foreignKeys ?? []).map((key) => [key.name, key]))
@@ -159,8 +159,8 @@ export function generateAlterTable(original, design) {
       statements.push(`ALTER TABLE ${table} DROP CONSTRAINT ${quoteIdentifier(name)};`)
     }
   }
-  if (primaryChanged && originalPrimary) {
-    statements.push(`ALTER TABLE ${table} DROP CONSTRAINT ${quoteIdentifier(originalPrimary.name)};`)
+  if (primaryChanged && originalPrimaryKeyName) {
+    statements.push(`ALTER TABLE ${table} DROP CONSTRAINT ${quoteIdentifier(originalPrimaryKeyName)};`)
   }
 
   for (const name of droppedColumns) {
