@@ -8,6 +8,7 @@ import {
   FONT_SIZE_MAX,
   FONT_SIZE_MIN,
   THEMES,
+  TIMEZONES,
   applySettings,
   normalizeSettings,
 } from '../settings.js'
@@ -16,12 +17,14 @@ const THEME_OPTIONS = THEMES.map((theme) => ({ value: theme.id, label: theme.lab
 
 const FONT_OPTIONS = FONT_FAMILIES.map((family) => ({ value: family.id, label: family.label }))
 
+const TIMEZONE_OPTIONS = TIMEZONES.map((tz) => ({ value: tz.id, label: tz.label }))
+
 function Row({ label, hint, children }) {
   return (
-    <div className="grid grid-cols-[170px_minmax(0,1fr)] items-center gap-4 py-2">
-      <div className="min-w-0">
-        <p className="truncate text-[length:var(--app-text-12)] text-text">{label}</p>
-        {hint ? <p className="text-[length:var(--app-text-11)] text-text-muted">{hint}</p> : null}
+    <div className="grid grid-cols-[240px_minmax(0,1fr)] items-center gap-4 py-2.5">
+      <div className="min-w-0 pr-2">
+        <p className="text-[length:var(--app-text-12)] font-medium text-text">{label}</p>
+        {hint ? <p className="text-[length:var(--app-text-11)] text-text-muted leading-relaxed">{hint}</p> : null}
       </div>
       <div className="flex min-w-0 items-center justify-end gap-2">{children}</div>
     </div>
@@ -151,14 +154,14 @@ export default function SettingsDialog({ open, settings, onClose, onSave }) {
         if (event.target === event.currentTarget && !saving) handleCancel()
       }}
     >
-      <div className="max-h-[92vh] w-full max-w-xl animate-fade-in overflow-y-auto overflow-x-hidden rounded-xl border border-line-strong bg-surface shadow-2xl shadow-black/70">
+      <div className="max-h-[92vh] w-full max-w-2xl animate-fade-in overflow-y-auto overflow-x-hidden rounded-xl border border-line-strong bg-surface shadow-2xl shadow-black/70">
         <div className="flex items-center gap-3 border-b border-line px-5 py-4">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-soft text-accent">
             <Icon name="settings" size={16} />
           </span>
           <div className="flex-1">
             <h2 className="text-[length:var(--app-text-14)] font-semibold text-text-strong">Preferences</h2>
-            <p className="text-[length:var(--app-text-11)] text-text-muted">Theme and typography for the workspace.</p>
+            <p className="text-[length:var(--app-text-11)] text-text-muted">Preferences for workspace appearance, query execution, and typography.</p>
           </div>
           <button type="button" className="icon-btn" onClick={handleCancel} title="Close" disabled={saving}>
             <Icon name="x" size={15} />
@@ -168,7 +171,7 @@ export default function SettingsDialog({ open, settings, onClose, onSave }) {
         <form onSubmit={handleSubmit} className="space-y-5 px-5 py-4">
           <section>
             <p className="field-label">Appearance</p>
-            <Row label="Color theme">
+            <Row label="Color theme" hint="Workspace color palette">
               <Select
                 value={draft.theme}
                 options={THEME_OPTIONS}
@@ -184,7 +187,7 @@ export default function SettingsDialog({ open, settings, onClose, onSave }) {
 
           <section className="border-t border-line pt-4">
             <p className="field-label">App</p>
-            <Row label="Font" hint="Sidebar, tabs, headers and dialogs">
+            <Row label="Font" hint="Sidebar, tabs, headers, and dialogs">
               <div className="flex items-center gap-2">
                 <Select
                   value={draft.appFontFamily}
@@ -209,7 +212,7 @@ export default function SettingsDialog({ open, settings, onClose, onSave }) {
 
           <section className="border-t border-line pt-4">
             <p className="field-label">Result grid</p>
-            <Row label="Font">
+            <Row label="Font" hint="Grid cell typography in query results">
               <div className="flex items-center gap-2">
                 <Select
                   value={draft.gridFontFamily}
@@ -230,11 +233,23 @@ export default function SettingsDialog({ open, settings, onClose, onSave }) {
                 />
               </div>
             </Row>
+            <Row label="Timezone" hint="Display timezone for query datetime results">
+              <Select
+                value={draft.timezone}
+                options={TIMEZONE_OPTIONS}
+                onChange={update('timezone')}
+                icon="clock"
+                placeholder="Select timezone"
+                emptyLabel="No timezones"
+                panelAlign="right"
+                className="w-60"
+              />
+            </Row>
           </section>
 
           <section className="border-t border-line pt-4">
             <p className="field-label">JSON viewer</p>
-            <Row label="Font">
+            <Row label="Font" hint="Side panel formatted JSON display">
               <div className="flex items-center gap-2">
                 <Select
                   value={draft.jsonFontFamily}
@@ -259,7 +274,7 @@ export default function SettingsDialog({ open, settings, onClose, onSave }) {
 
           <section className="border-t border-line pt-4">
             <p className="field-label">Query editor</p>
-            <Row label="Font" hint="SQL editor and its line numbers">
+            <Row label="Font" hint="SQL editor and line numbers">
               <div className="flex items-center gap-2">
                 <Select
                   value={draft.queryFontFamily}
@@ -280,7 +295,7 @@ export default function SettingsDialog({ open, settings, onClose, onSave }) {
                 />
               </div>
             </Row>
-            <Row label="Word wrap" hint="Wrap long SQL lines instead of scrolling sideways">
+            <Row label="Word wrap" hint="Wrap long SQL lines instead of scrolling horizontally">
               <span className="text-[length:var(--app-text-11)] text-text-muted">
                 {draft.queryWordWrap ? 'On' : 'Off'}
               </span>

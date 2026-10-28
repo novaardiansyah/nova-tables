@@ -35,8 +35,32 @@ const APP_BASE_SIZE = 13
 const APP_LADDER = [9, 10, 11, 12, 13, 14, 15]
 const listeners = new Set()
 
+export const TIMEZONES = [
+  { id: 'UTC', label: 'UTC (GMT+0)' },
+  { id: 'Asia/Jakarta', label: 'Asia/Jakarta (GMT+7)' },
+  { id: 'Asia/Makassar', label: 'Asia/Makassar (GMT+8)' },
+  { id: 'Asia/Jayapura', label: 'Asia/Jayapura (GMT+9)' },
+  { id: 'Asia/Singapore', label: 'Singapore (GMT+8)' },
+  { id: 'Asia/Bangkok', label: 'Bangkok (GMT+7)' },
+  { id: 'Asia/Tokyo', label: 'Tokyo (GMT+9)' },
+  { id: 'Asia/Hong_Kong', label: 'Hong Kong (GMT+8)' },
+  { id: 'Asia/Seoul', label: 'Seoul (GMT+9)' },
+  { id: 'Asia/Shanghai', label: 'Shanghai (GMT+8)' },
+  { id: 'Asia/Kolkata', label: 'Kolkata (GMT+5:30)' },
+  { id: 'Asia/Dubai', label: 'Dubai (GMT+4)' },
+  { id: 'Europe/London', label: 'London (GMT+0)' },
+  { id: 'Europe/Paris', label: 'Paris (GMT+1)' },
+  { id: 'Europe/Berlin', label: 'Berlin (GMT+1)' },
+  { id: 'America/New_York', label: 'New York (GMT-5)' },
+  { id: 'America/Chicago', label: 'Chicago (GMT-6)' },
+  { id: 'America/Denver', label: 'Denver (GMT-7)' },
+  { id: 'America/Los_Angeles', label: 'Los Angeles (GMT-8)' },
+  { id: 'Australia/Sydney', label: 'Sydney (GMT+10)' },
+]
+
 export const DEFAULT_SETTINGS = {
   theme: 'nova',
+  timezone: 'UTC',
   appFontSize: 12,
   appFontFamily: 'system',
   gridFontSize: 12,
@@ -59,11 +83,16 @@ function normalizeFontFamily(value, fallback) {
   return FONT_FAMILIES.some((family) => family.id === value) ? value : fallback
 }
 
+function normalizeTimezone(value, fallback) {
+  return TIMEZONES.some((tz) => tz.id === value) ? value : fallback
+}
+
 export function normalizeSettings(input) {
   const source = input && typeof input === 'object' ? input : {}
 
   return {
     theme: THEMES.some((theme) => theme.id === source.theme) ? source.theme : DEFAULT_SETTINGS.theme,
+    timezone: normalizeTimezone(source.timezone, DEFAULT_SETTINGS.timezone),
     appFontSize: normalizeFontSize(source.appFontSize, DEFAULT_SETTINGS.appFontSize, APP_FONT_SIZE_MAX),
     appFontFamily: normalizeFontFamily(source.appFontFamily, DEFAULT_SETTINGS.appFontFamily),
     gridFontSize: normalizeFontSize(source.gridFontSize, DEFAULT_SETTINGS.gridFontSize),

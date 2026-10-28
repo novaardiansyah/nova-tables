@@ -4,6 +4,7 @@ import {
   getPassword,
   setPassword,
   isSystemDatabase,
+  readSettings,
 } from './connectionStore.js'
 import { toPlainValue } from './serialize.js'
 
@@ -1030,7 +1031,7 @@ function columnNames(recordset) {
   return firstRow ? Object.keys(firstRow) : []
 }
 
-function serializeResultSets(recordsets) {
+function serializeResultSets(recordsets, timezone = 'UTC') {
   let truncated = false
 
   const resultSets = (recordsets || []).map((recordset) => {
@@ -1043,7 +1044,7 @@ function serializeResultSets(recordsets) {
       columns: names.map((name) => ({ name })),
       rows: limited.map((row) =>
         names.map((name) => {
-          const value = toPlainValue(row[name])
+          const value = toPlainValue(row[name], timezone)
           if (typeof value === 'boolean') return value ? 1 : 0
           return value
         }),
@@ -1063,6 +1064,8 @@ export async function runQuery({ connectionId, database, sql: text }) {
   const started = Date.now()
 
   try {
+    const settings = readSettings()
+    const timezone = settings?.timezone || 'UTC'
     const request = pool.request()
     const messages = []
     request.on('info', (info) => {
@@ -1073,7 +1076,7 @@ export async function runQuery({ connectionId, database, sql: text }) {
     })
 
     const result = await request.batch(statement)
-    const { resultSets, truncated } = serializeResultSets(result.recordsets)
+    const { resultSets, truncated } = serializeResultSets(result.recordsets, timezone)
     const rowsAffected = (result.rowsAffected || []).map((count) => Number(count) || 0)
     for (const count of rowsAffected) messages.push({ type: 'rows', count })
 

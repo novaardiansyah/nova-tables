@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { EXECUTION_MODES, executionGuard, getModeById, isReadOnlyQuery } from '../src/queryModes.js'
+import { DEFAULT_SETTINGS, TIMEZONES, normalizeSettings } from '../src/settings.js'
+import { formatDate, toPlainValue } from '../electron/serialize.js'
 
 assert.equal(EXECUTION_MODES.length, 3)
 assert.deepEqual(
@@ -27,4 +29,14 @@ assert.equal(executionGuard('unknown', 'SELECT 1'), null)
 assert.equal(getModeById('nope').id, 'silent')
 assert.equal(getModeById('alert').label, 'Full Alert Mode')
 
-console.log('queryModes self-check passed')
+assert.equal(DEFAULT_SETTINGS.timezone, 'UTC')
+assert.ok(TIMEZONES.some((tz) => tz.id === 'Asia/Jakarta'))
+assert.equal(normalizeSettings({ timezone: 'Asia/Jakarta' }).timezone, 'Asia/Jakarta')
+assert.equal(normalizeSettings({ timezone: 'invalid-tz' }).timezone, 'UTC')
+
+const testDate = new Date('2026-03-30T14:30:00.123Z')
+assert.equal(formatDate(testDate, 'UTC'), '2026-03-30 14:30:00.123')
+assert.equal(formatDate(testDate, 'Asia/Jakarta'), '2026-03-30 21:30:00.123')
+assert.equal(toPlainValue(testDate, 'Asia/Jakarta'), '2026-03-30 21:30:00.123')
+
+console.log('self-check passed')

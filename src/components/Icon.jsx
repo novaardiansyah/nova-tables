@@ -256,6 +256,12 @@ const ICONS = {
       <path d="M12 7v5l3 2" />
     </>
   ),
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </>
+  ),
   lock: (
     <>
       <rect x="4" y="10.5" width="16" height="10.5" rx="2" />
