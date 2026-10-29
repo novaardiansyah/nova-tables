@@ -1,5 +1,10 @@
 # Nova Tables
 
+> [!WARNING]
+> **Project Closed & Development Discontinued**
+>
+> This repository and project are officially closed and development has been discontinued. Starting from version **v2.0.0**, the project has been moved to a new repository: [https://github.com/novaardiansyah/nova-tables-rust](https://github.com/novaardiansyah/nova-tables-rust). All future development and technology migration will take place there.
+
 Hi Future Developer,
 
 Welcome to **Nova Tables**, a modern desktop SQL client for **Microsoft SQL Server**. It brings your
