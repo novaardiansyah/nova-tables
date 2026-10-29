@@ -23,10 +23,12 @@ export default function ResultsPanel({
   onCopyText,
   editSource,
   edits = {},
+  deletingRows = [],
   onCellChange,
   onSetCellValue,
   onDeleteRows,
   onConfirmOpen,
+  onDeleteConfirmOpen,
   onApplyFilter,
   onActiveDataChange,
   onExport,
@@ -384,7 +386,13 @@ export default function ResultsPanel({
       items.push({
         id: 'delete-rows',
         label: 'Delete',
-        onSelect: () => onDeleteRows(selectionBounds.rowStart, selectionBounds.rowEnd),
+        onSelect: () => {
+          const rowIndexes = []
+          for (let r = selectionBounds.rowStart; r <= selectionBounds.rowEnd; r += 1) {
+            rowIndexes.push(r)
+          }
+          onDeleteRows(rowIndexes)
+        },
       })
     }
 
@@ -565,6 +573,17 @@ export default function ResultsPanel({
               {changeCount} change{changeCount === 1 ? '' : 's'}
             </button>
           ) : null}
+          {status === 'success' && deletingRows.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => onDeleteConfirmOpen?.()}
+              title="Apply pending deletes"
+              className="flex h-6 items-center gap-1 rounded bg-danger/15 px-1.5 text-[length:var(--app-text-10)] font-medium text-danger transition-colors hover:bg-danger/25"
+            >
+              <Icon name="trash" size={10} />
+              {deletingRows.length} deleting
+            </button>
+          ) : null}
           {status === 'error' && error?.code ? (
             <span className="font-mono text-[length:var(--app-text-10)] text-text-faint">{error.code}</span>
           ) : null}
@@ -616,6 +635,9 @@ export default function ResultsPanel({
                   onCellChange={onCellChange}
                   onStartEdit={() => setEditMode(true)}
                   onInspectCell={openInspector}
+                  deleteMode={deletingRows.length > 0}
+                  deletingRows={deletingRows}
+                  onDeleteRows={deletable ? onDeleteRows : undefined}
                 />
               </div>
             </div>

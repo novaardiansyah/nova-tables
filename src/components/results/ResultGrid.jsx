@@ -93,6 +93,9 @@ export default function ResultGrid({
   onCellChange,
   onStartEdit,
   onInspectCell,
+  deleteMode = false,
+  deletingRows = [],
+  onDeleteRows,
 }) {
   const [sort, setSort] = useState(null)
   const [active, setActive] = useState(null)
@@ -358,6 +361,31 @@ export default function ResultGrid({
     }
   }, [endFrameDrag, frameDragging, handleFrameMove])
 
+  useEffect(() => {
+    if (!bounds || active || !onDeleteRows) return
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Delete') return
+      const target = event.target
+      if (
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.tagName === 'SELECT' ||
+        target?.isContentEditable ||
+        target?.closest?.('.monaco-editor')
+      ) {
+        return
+      }
+      event.preventDefault()
+      const rowIndexes = []
+      for (let r = bounds.rowStart; r <= bounds.rowEnd; r += 1) {
+        rowIndexes.push(r)
+      }
+      onDeleteRows(rowIndexes)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [active, bounds, onDeleteRows])
+
   const commitEdit = (value) => {
     if (!active || !onCellChange) return
     const range = editRange(active, bounds)
@@ -465,12 +493,21 @@ export default function ResultGrid({
           </thead>
           <tbody>
             {visibleRows.map(({ row, origIndex }, visibleIdx) => (
-              <tr key={origIndex} className={`group ${rowSelected(origIndex) ? 'bg-tint/[0.04]' : ''}`}>
+              <tr
+                key={origIndex}
+                className={`group ${rowSelected(origIndex) ? 'bg-tint/[0.04]' : ''} ${
+                  deleteMode && deletingRows.includes(origIndex) ? 'bg-danger/[0.08]' : ''
+                }`}
+              >
                 <td
                   onMouseDown={(event) => handleRowHeaderMouseDown(event, origIndex)}
                   onMouseEnter={() => handleRowHeaderMouseEnter(origIndex)}
                   className={`sticky left-0 z-10 cursor-pointer border-b border-r border-line px-2 py-[5px] text-right font-mono text-[length:calc(var(--grid-font-size)-2px)] text-text-faint group-hover:bg-row-hover ${
-                    rowSelected(origIndex) ? 'bg-tint/[0.04]' : 'bg-surface'
+                    deleteMode && deletingRows.includes(origIndex)
+                      ? 'bg-danger/[0.10]'
+                      : rowSelected(origIndex)
+                        ? 'bg-tint/[0.04]'
+                        : 'bg-surface'
                   }`}
                 >
                   {visibleIdx + 1}
@@ -490,7 +527,15 @@ export default function ResultGrid({
                       title={dirty ? 'Pending update' : undefined}
                       className={`relative whitespace-nowrap border-b border-line/70 px-3 py-[5px] group-hover:bg-row-hover ${
                         numericColumns[colIndex] ? 'text-right tabular-nums' : ''
-                      } ${inSelection(origIndex, colIndex) ? 'bg-accent/[0.12]' : dirty ? 'bg-warning/[0.08]' : ''} ${
+                      } ${
+                        deleteMode && deletingRows.includes(origIndex)
+                          ? 'bg-danger/[0.06]'
+                          : inSelection(origIndex, colIndex)
+                            ? 'bg-accent/[0.12]'
+                            : dirty
+                              ? 'bg-warning/[0.08]'
+                              : ''
+                      } ${
                         editable && columnEditable(colIndex) ? 'cursor-text' : ''
                       }`}
                     >

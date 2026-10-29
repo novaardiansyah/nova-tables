@@ -4,7 +4,7 @@ import { DEFAULT_SETTINGS, applySettings } from './settings.js'
 import { csvRecords, jsonRecords, quoteIdentifier, sqlLiteral } from './resultFormats.js'
 import { buildFilteredSql, buildFilterWhere } from './filters.js'
 import {
-  buildDeleteStatements,
+  buildDeleteStatementsForRows,
   buildEditSource,
   buildQueryEditSource,
   buildUpdateStatements,
@@ -40,6 +40,7 @@ import StatusBar from './components/common/StatusBar.jsx'
 import TabBar from './components/TabBar.jsx'
 import TableDesigner from './components/designer/TableDesigner.jsx'
 import UpdateConfirmDialog from './components/results/UpdateConfirmDialog.jsx'
+import DeleteConfirmDialog from './components/results/DeleteConfirmDialog.jsx'
 import WorkspaceHeader from './components/WorkspaceHeader.jsx'
 
 const STARTER_SQL = `-- Nova Tables
@@ -77,6 +78,7 @@ function createTab(id, title, sql, editSource = null, savedQuery = null) {
     relations: [],
     editSource,
     edits: {},
+    deletingRows: [],
     lastExecutedSql: null,
   }
 }
@@ -204,6 +206,8 @@ export default function App() {
   const [runGuard, setRunGuard] = useState(null)
   const [editConfirmOpen, setEditConfirmOpen] = useState(false)
   const [editConfirmTarget, setEditConfirmTarget] = useState(null)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState(null)
 
   const scopeDatabase = activeConnectionId
     ? sessions[activeConnectionId]?.activeDatabase ?? null
@@ -645,6 +649,7 @@ export default function App() {
         state: { status: 'running', result: null, error: null },
         activeSet: 0,
         edits: {},
+        deletingRows: [],
         lastExecutedSql: sql,
       }
       const source = tab?.editSource && tab.editSource.sql === sql ? tab.editSource : null
@@ -732,6 +737,11 @@ export default function App() {
       setEditConfirmOpen(true)
       return
     }
+    if (tab && tab.deletingRows && tab.deletingRows.length > 0) {
+      setDeleteConfirmTarget({ type: 'run', sql })
+      setDeleteConfirmOpen(true)
+      return
+    }
     runWithGuard(sql, current.activeTabId)
   }, [activeSession, runWithGuard, showBanner])
 
@@ -747,6 +757,11 @@ export default function App() {
     if (Object.keys(tab.edits || {}).length > 0) {
       setEditConfirmTarget({ type: 'run', sql })
       setEditConfirmOpen(true)
+      return
+    }
+    if (tab && tab.deletingRows && tab.deletingRows.length > 0) {
+      setDeleteConfirmTarget({ type: 'run', sql })
+      setDeleteConfirmOpen(true)
       return
     }
     if (!sql || !sql.trim()) {
@@ -1195,26 +1210,36 @@ export default function App() {
   )
 
   const handleDeleteRows = useCallback(
-    (rowStart, rowEnd) => {
+    (startOrIndexes, maybeEnd) => {
       const target = activeQueryTab()
       if (!target) return
       const { connectionId, tab } = target
       const resultSet = tabResultSet(tab)
-      const statements = buildDeleteStatements(tab.editSource, resultSet, rowStart, rowEnd)
-      if (!statements.length) return
-      const count = statements.length
-      const table = tab.editSource?.tables[0]?.table ?? 'rows'
-      openTab(
-        connectionId,
-        `Delete ${table}`,
-        `${editSqlHeader(tab.editSource)}${statements.join('\n\n')}\n`,
-      )
-      showBanner(
-        'warn',
-        `Delete preview for ${count} row${count === 1 ? '' : 's'} is not executed. Review and run it manually.`,
-      )
+      if (
+        !tab.editSource ||
+        tab.editSource.tables.length !== 1 ||
+        !resultSet
+      ) {
+        return
+      }
+      let rowIndexes = []
+      if (Array.isArray(startOrIndexes)) {
+        rowIndexes = startOrIndexes
+      } else if (typeof startOrIndexes === 'number') {
+        const start = startOrIndexes
+        const end = typeof maybeEnd === 'number' ? maybeEnd : start
+        for (let i = start; i <= end; i += 1) {
+          rowIndexes.push(i)
+        }
+      }
+      if (rowIndexes.length === 0) return
+      const existing = tab.deletingRows || []
+      const merged = Array.from(new Set([...existing, ...rowIndexes]))
+      updateTab(connectionId, tab.id, {
+        deletingRows: merged,
+      })
     },
-    [activeQueryTab, openTab, showBanner],
+    [activeQueryTab, updateTab],
   )
 
   const handleRunUpdate = useCallback(
@@ -1230,7 +1255,7 @@ export default function App() {
           recordHistory: true,
         })
         const tab = current.tabs.find((item) => item.id === current.activeTabId)
-        if (tab) updateTab(current.connectionId, tab.id, { edits: {} })
+        if (tab) updateTab(current.connectionId, tab.id, { edits: {}, deletingRows: [] })
         showBanner('success', 'Changes applied to the database.')
         return true
       } catch (error) {
@@ -1493,6 +1518,11 @@ export default function App() {
         setEditConfirmOpen(true)
         return
       }
+      if (active && active.deletingRows && active.deletingRows.length > 0) {
+        setDeleteConfirmTarget({ type: 'switch-tab', tabId })
+        setDeleteConfirmOpen(true)
+        return
+      }
       syncLiveSql(current.connectionId, current.activeTabId)
       patchSession(current.connectionId, { activeTabId: tabId })
       seedEditor(next.sql)
@@ -1510,6 +1540,11 @@ export default function App() {
       if (tab && Object.keys(tab.edits || {}).length > 0) {
         setEditConfirmTarget({ type: 'close-tab', tabId })
         setEditConfirmOpen(true)
+        return
+      }
+      if (tab && tab.deletingRows && tab.deletingRows.length > 0) {
+        setDeleteConfirmTarget({ type: 'close-tab', tabId })
+        setDeleteConfirmOpen(true)
         return
       }
 
@@ -1606,6 +1641,100 @@ export default function App() {
   const handleEditConfirmClose = useCallback(() => {
     setEditConfirmOpen(false)
     setEditConfirmTarget(null)
+  }, [])
+
+  const handleDeleteConfirmApply = useCallback(async () => {
+    const target = deleteConfirmTarget
+    const current = activeSession()
+    if (!current) return
+    const tab = current.tabs.find((item) => item.id === current.activeTabId)
+    let sql = ''
+    if (tab) {
+      try {
+        sql = `${editSqlHeader(tab.editSource)}${buildDeleteStatementsForRows(tab.editSource, tabResultSet(tab), tab.deletingRows || []).join('\n\n')}\n`
+      } catch {
+        sql = ''
+      }
+    }
+    const ok = await handleRunUpdate(sql)
+    if (!ok) return
+    setDeleteConfirmOpen(false)
+    setDeleteConfirmTarget(null)
+    if (tab) updateTab(current.connectionId, tab.id, { deletingRows: [] })
+    if (target?.type === 'switch-tab') {
+      const next = current.tabs.find((item) => item.id === target.tabId)
+      if (next) {
+        syncLiveSql(current.connectionId, current.activeTabId)
+        patchSession(current.connectionId, { activeTabId: target.tabId })
+        seedEditor(next.sql)
+      }
+    } else if (target?.type === 'close-tab') {
+      handleCloseTab(target.tabId)
+    } else if (target?.type === 'run') {
+      const runSql = target.sql ?? ''
+      if (runSql.trim()) runWithGuard(runSql, current.activeTabId)
+    }
+  }, [
+    activeSession,
+    deleteConfirmTarget,
+    handleRunUpdate,
+    updateTab,
+    syncLiveSql,
+    patchSession,
+    seedEditor,
+    handleCloseTab,
+    runWithGuard,
+  ])
+
+  const handleDeleteConfirmDiscard = useCallback(() => {
+    const target = deleteConfirmTarget
+    const current = activeSession()
+    if (!current) return
+    const tab = current.tabs.find((item) => item.id === current.activeTabId)
+    if (tab) updateTab(current.connectionId, tab.id, { deletingRows: [] })
+    setDeleteConfirmOpen(false)
+    setDeleteConfirmTarget(null)
+    if (target?.type === 'close-tab') {
+      handleCloseTab(target.tabId)
+    } else if (target?.type === 'switch-tab') {
+      const next = current?.tabs.find((item) => item.id === target.tabId)
+      if (next) {
+        syncLiveSql(current.connectionId, current.activeTabId)
+        patchSession(current.connectionId, { activeTabId: target.tabId })
+        seedEditor(next.sql)
+      }
+    } else if (target?.type === 'run') {
+      const runSql = target.sql ?? ''
+      if (runSql.trim()) runWithGuard(runSql, current.activeTabId)
+    }
+  }, [
+    activeSession,
+    deleteConfirmTarget,
+    updateTab,
+    handleCloseTab,
+    syncLiveSql,
+    patchSession,
+    seedEditor,
+    runWithGuard,
+  ])
+
+  const handleDeleteConfirmCopy = useCallback(async () => {
+    const current = activeSession()
+    if (!current) return
+    const tab = current.tabs.find((item) => item.id === current.activeTabId)
+    if (!tab) return
+    let sql = ''
+    try {
+      sql = `${editSqlHeader(tab.editSource)}${buildDeleteStatementsForRows(tab.editSource, tabResultSet(tab), tab.deletingRows || []).join('\n\n')}\n`
+    } catch {
+      sql = ''
+    }
+    await handleCopyText(sql, 'Copied DELETE query to clipboard.')
+  }, [activeSession, handleCopyText])
+
+  const handleDeleteConfirmClose = useCallback(() => {
+    setDeleteConfirmOpen(false)
+    setDeleteConfirmTarget(null)
   }, [])
 
   const handleNewTab = useCallback(() => {
@@ -1804,7 +1933,9 @@ export default function App() {
     savedQueriesOpen ||
     history.open ||
     shortcutsOpen ||
-    settingsOpen
+    settingsOpen ||
+    editConfirmOpen ||
+    deleteConfirmOpen
 
   useKeyboardShortcuts({
     screen,
@@ -1842,6 +1973,14 @@ export default function App() {
       return ''
     }
   }, [editConfirmOpen, activeTab])
+  const confirmDeleteSql = useMemo(() => {
+    if (!deleteConfirmOpen || !activeTab) return ''
+    try {
+      return `${editSqlHeader(activeTab.editSource)}${buildDeleteStatementsForRows(activeTab.editSource, tabResultSet(activeTab), activeTab.deletingRows || []).join('\n\n')}\n`
+    } catch {
+      return ''
+    }
+  }, [deleteConfirmOpen, activeTab])
   const running = activeTab?.state.status === 'running'
   const activeDatabaseInfo = session
     ? (session.databases ?? []).find((database) => database.name === session.activeDatabase) ?? null
@@ -1979,11 +2118,16 @@ export default function App() {
                   onCopyText={handleCopyText}
                   editSource={activeTab?.editSource ?? null}
                   edits={activeTab?.edits ?? {}}
+                  deletingRows={activeTab?.deletingRows ?? []}
                   onCellChange={handleCellChange}
                   onSetCellValue={handleSetCellValue}
                   onConfirmOpen={() => {
                     setEditConfirmTarget(null)
                     setEditConfirmOpen(true)
+                  }}
+                  onDeleteConfirmOpen={() => {
+                    setDeleteConfirmTarget(null)
+                    setDeleteConfirmOpen(true)
                   }}
                   onDeleteRows={handleDeleteRows}
                   onApplyFilter={handleApplyFilter}
@@ -2137,6 +2281,16 @@ export default function App() {
         onApply={handleEditConfirmApply}
         onCopyQuery={handleEditConfirmCopy}
         onDiscard={handleEditConfirmDiscard}
+      />
+
+      <DeleteConfirmDialog
+        open={deleteConfirmOpen}
+        changeCount={activeTab ? (activeTab.deletingRows || []).length : 0}
+        sql={confirmDeleteSql}
+        onClose={handleDeleteConfirmClose}
+        onApply={handleDeleteConfirmApply}
+        onCopyQuery={handleDeleteConfirmCopy}
+        onDiscard={handleDeleteConfirmDiscard}
       />
 
       <ConfirmDialog

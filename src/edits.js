@@ -229,6 +229,24 @@ export function buildUpdateStatements(editSource, resultSet, edits) {
   return statements
 }
 
+export function buildDeleteStatementsForRows(editSource, resultSet, rowIndexes) {
+  if (!editSource || !resultSet) return []
+  const target = editSource.tables[0]
+  if (!target) return []
+  const positions = keyPositions(target, columnIndexes(resultSet))
+  if (!positions) return []
+
+  const statements = []
+  for (const rowIndex of rowIndexes) {
+    const row = resultSet.rows[rowIndex]
+    if (!row) continue
+    statements.push(
+      `DELETE FROM ${quoteIdentifier(target.schema)}.${quoteIdentifier(target.table)}\n WHERE ${rowCondition(target.primaryKey, positions, row)};`,
+    )
+  }
+  return statements
+}
+
 export function buildDeleteStatements(editSource, resultSet, rowStart, rowEnd) {
   if (!editSource || !resultSet) return []
   const target = editSource.tables[0]
