@@ -39,6 +39,8 @@ export default function WorkspaceHeader({
             options={options}
             onChange={onSelectDatabase}
             disabled={options.length === 0}
+            searchable
+            searchPlaceholder="Search database…"
           />
           <span className="inline-flex" title={manageUsersHint}>
             <button
