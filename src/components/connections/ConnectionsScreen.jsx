@@ -59,6 +59,7 @@ export default function ConnectionsScreen({
   const [dropTarget, setDropTarget] = useState(null)
   const [exportTarget, setExportTarget] = useState(null)
   const [exportBusy, setExportBusy] = useState(false)
+  const [exportError, setExportError] = useState(null)
   const [importFile, setImportFile] = useState(null)
   const [importBusy, setImportBusy] = useState(false)
   const [importError, setImportError] = useState(null)
@@ -452,10 +453,12 @@ export default function ConnectionsScreen({
         ? [...selectedConnectionIds]
         : connections.map((conn) => conn.id))
     setExportTarget(ids)
+    setExportError(null)
   }
 
   const handleExportConfirm = async (selectedIds, password) => {
     setExportBusy(true)
+    setExportError(null)
     try {
       const result = await api.exportConnections(selectedIds, password)
       if (result.saved) {
@@ -463,6 +466,7 @@ export default function ConnectionsScreen({
         onNotify?.('success', `Exported ${result.count} connection(s) successfully.`)
       }
     } catch (error) {
+      setExportError(error.message)
       onNotify?.('error', error.message)
     } finally {
       setExportBusy(false)
@@ -1110,7 +1114,16 @@ export default function ConnectionsScreen({
           folders={folders}
           selectedIds={exportTarget}
           busy={exportBusy}
-          onCancel={() => setExportTarget(null)}
+          error={exportError}
+          onClose={() => {
+            setExportTarget(null)
+            setExportError(null)
+          }}
+          onCancel={() => {
+            setExportTarget(null)
+            setExportError(null)
+          }}
+          onExport={handleExportConfirm}
           onConfirm={handleExportConfirm}
         />
       ) : null}
@@ -1125,7 +1138,12 @@ export default function ConnectionsScreen({
             setImportFile(null)
             setImportError(null)
           }}
+          onCancel={() => {
+            setImportFile(null)
+            setImportError(null)
+          }}
           onImport={handleImportConfirm}
+          onConfirm={handleImportConfirm}
         />
       ) : null}
     </div>

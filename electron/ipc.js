@@ -1,4 +1,4 @@
-import { app, clipboard, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import {
@@ -53,6 +53,10 @@ import { toErrorPayload } from './serialize.js'
 const ok = (data) => ({ ok: true, ...(data || {}) })
 const fail = (error) => ({ ok: false, error: toErrorPayload(error) })
 
+function activeWindow() {
+  return BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0] || null
+}
+
 function handle(channel, handler) {
   ipcMain.handle(channel, async (_event, payload) => {
     try {
@@ -79,23 +83,31 @@ export function registerIpcHandlers() {
 
   handle('connections:export', async ({ connectionIds, password }) => {
     const { content, count } = exportConnections(connectionIds, password)
-    const { canceled, filePath } = await dialog.showSaveDialog({
+    const win = activeWindow()
+    const options = {
       defaultPath: 'nova-tables-connections.json',
       filters: [{ name: 'Nova Tables Connections (*.json)', extensions: ['json'] }],
-    })
+    }
+    const { canceled, filePath } = win
+      ? await dialog.showSaveDialog(win, options)
+      : await dialog.showSaveDialog(options)
     if (canceled || !filePath) return { saved: false, canceled: true }
     await fs.promises.writeFile(filePath, content, 'utf8')
     return { saved: true, filePath, count }
   })
 
   handle('connections:select-import-file', async () => {
-    const { canceled, filePaths } = await dialog.showOpenDialog({
+    const win = activeWindow()
+    const options = {
       properties: ['openFile'],
       filters: [
         { name: 'Nova Tables Connections (*.json)', extensions: ['json'] },
         { name: 'All Files (*.*)', extensions: ['*'] },
       ],
-    })
+    }
+    const { canceled, filePaths } = win
+      ? await dialog.showOpenDialog(win, options)
+      : await dialog.showOpenDialog(options)
     if (canceled || !filePaths?.length) return { canceled: true }
     const filePath = filePaths[0]
     const content = await fs.promises.readFile(filePath, 'utf8')
@@ -215,10 +227,14 @@ export function registerIpcHandlers() {
   })
 
   handle('file:save', async ({ defaultPath, filters, content }) => {
-    const { canceled, filePath } = await dialog.showSaveDialog({
+    const win = activeWindow()
+    const options = {
       defaultPath,
       filters: filters || [{ name: 'All Files', extensions: ['*'] }],
-    })
+    }
+    const { canceled, filePath } = win
+      ? await dialog.showSaveDialog(win, options)
+      : await dialog.showSaveDialog(options)
     if (canceled || !filePath) return { saved: false, canceled: true }
     await fs.promises.writeFile(filePath, content, 'utf8')
     return { saved: true, filePath }

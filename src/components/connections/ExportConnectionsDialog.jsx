@@ -38,13 +38,20 @@ export default function ExportConnectionsDialog({
   folders = [],
   selectedIds = [],
   busy = false,
+  error: externalError = null,
   onClose,
+  onCancel,
   onExport,
+  onConfirm,
 }) {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState(null)
+
+  const handleClose = onClose || onCancel
+  const handleExport = onExport || onConfirm
+  const displayError = externalError || error
 
   useEffect(() => {
     if (!open) return
@@ -57,11 +64,11 @@ export default function ExportConnectionsDialog({
   useEffect(() => {
     if (!open) return undefined
     const handleKeyDown = (event) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape' && !busy) handleClose?.()
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [open, onClose])
+  }, [open, busy, handleClose])
 
   const targets = useMemo(() => {
     const ids = new Set(selectedIds)
@@ -98,7 +105,7 @@ export default function ExportConnectionsDialog({
       return
     }
     setError(null)
-    onExport(targets.map((connection) => connection.id), password)
+    handleExport?.(targets.map((connection) => connection.id), password)
   }
 
   const renderFolder = (folder, depth) => {
@@ -149,7 +156,7 @@ export default function ExportConnectionsDialog({
               password. Change the selection on the connections screen.
             </p>
           </div>
-          <button type="button" className="icon-btn h-6 w-6" onClick={onClose} disabled={busy}>
+          <button type="button" className="icon-btn h-6 w-6" onClick={handleClose} disabled={busy}>
             <Icon name="x" size={13} />
           </button>
         </div>
@@ -218,13 +225,13 @@ export default function ExportConnectionsDialog({
             </div>
           </div>
 
-          {error ? (
-            <p className="text-[length:var(--app-text-11)] text-danger">{error}</p>
+          {displayError ? (
+            <p className="text-[length:var(--app-text-11)] text-danger">{displayError}</p>
           ) : null}
         </div>
 
         <div className="flex justify-end gap-2 border-t border-line px-5 py-3.5">
-          <button type="button" className="btn-soft" onClick={onClose} disabled={busy}>
+          <button type="button" className="btn-soft" onClick={handleClose} disabled={busy}>
             Cancel
           </button>
           <button type="submit" className="btn-primary" disabled={targets.length === 0 || !password || busy}>
